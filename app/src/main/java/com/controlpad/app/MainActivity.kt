@@ -40,6 +40,18 @@ class MainActivity : BaseActivity() {
             text = "연결 설정"
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         })
+        header.addView(Button(this).apply {
+            text = "불러오기"
+            setOnClickListener {
+                // 파일 형식을 json 으로만 제한하면 파일 앱에 따라 고를 수 없는 경우가 있어 모든 파일을 보여 준다.
+                runCatching {
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(
+                        Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), REQ_IMPORT,
+                    )
+                }.onFailure { toast("파일을 고를 수 있는 앱이 없습니다") }
+            }
+        })
         header.addView(Button(this).apply { text = "＋ 새 레이아웃"; setOnClickListener { newLayout() } })
         root.addView(header)
 
@@ -95,7 +107,7 @@ class MainActivity : BaseActivity() {
                 text = "⋮"
                 setOnClickListener { v ->
                     PopupMenu(this@MainActivity, v).apply {
-                        menu.add("이름 변경"); menu.add("복제"); menu.add("삭제")
+                        menu.add("이름 변경"); menu.add("복제"); menu.add("파일로 저장"); menu.add("삭제")
                         setOnMenuItemClickListener { item ->
                             when (item.title) {
                                 "이름 변경" -> askName("이름 변경", l.name) { l.name = it; LayoutStore.save(this@MainActivity, l); refresh() }
@@ -103,6 +115,18 @@ class MainActivity : BaseActivity() {
                                     val c = PadLayout(name = l.name + " 복사본", slide = l.slide,
                                         buttons = l.buttons.map { it.copy() }.toMutableList())
                                     LayoutStore.save(this@MainActivity, c); refresh()
+                                }
+                                "파일로 저장" -> {
+                                    exporting = l
+                                    runCatching {
+                                        @Suppress("DEPRECATION")
+                                        startActivityForResult(
+                                            Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                                                .setType("application/json")
+                                                .putExtra(Intent.EXTRA_TITLE, LayoutFile.fileName(l.name)),
+                                            REQ_EXPORT,
+                                        )
+                                    }.onFailure { toast("파일을 저장할 수 있는 앱이 없습니다") }
                                 }
                                 "삭제" -> AlertDialog.Builder(this@MainActivity)
                                     .setMessage("'${l.name}' 레이아웃을 삭제할까요?")
@@ -115,6 +139,44 @@ class MainActivity : BaseActivity() {
                 }
             }, LinearLayout.LayoutParams(dp(56), -2))
             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }
+    }
+
+    private var exporting: PadLayout? = null
+
+    private fun toast(text: String) = android.widget.Toast.makeText(this, text, android.widget.Toast.LENGTH_LONG).show()
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) return
+        when (requestCode) {
+            REQ_EXPORT -> {
+                val l = exporting ?: return
+                exporting = null
+                runCatching {
+                    contentResolver.openOutputStream(uri)!!.use { it.write(LayoutFile.export(l).toByteArray()) }
+                }.onSuccess { toast("'${l.name}' 레이아웃을 파일로 저장했습니다") }
+                    .onFailure { toast("파일로 저장하지 못했습니다") }
+            }
+            REQ_IMPORT -> {
+                val l = runCatching {
+                    // 레이아웃 파일은 작다. 엉뚱한 큰 파일을 골랐을 때 통째로 읽지 않도록 크기를 제한한다.
+                    val text = contentResolver.openInputStream(uri)!!.use { input ->
+                        val buf = ByteArray(LayoutFile.MAX_BYTES + 1)
+                        var n = 0
+                        while (n < buf.size) { val r = input.read(buf, n, buf.size - n); if (r < 0) break; n += r }
+                        require(n <= LayoutFile.MAX_BYTES)
+                        String(buf, 0, n)
+                    }
+                    LayoutFile.import(text)
+                }.getOrNull()
+                if (l == null) { toast("ControlPad 레이아웃 파일이 아닙니다"); return }
+                LayoutStore.save(this, l)
+                refresh()
+                toast("'${l.name}' 레이아웃을 불러왔습니다")
+            }
         }
     }
 
@@ -137,5 +199,10 @@ class MainActivity : BaseActivity() {
         AlertDialog.Builder(this).setTitle(title).setView(edit)
             .setPositiveButton("확인") { _, _ -> done(edit.text.toString().trim().ifEmpty { initial }) }
             .setNegativeButton("취소", null).show()
+    }
+
+    companion object {
+        private const val REQ_EXPORT = 1
+        private const val REQ_IMPORT = 2
     }
 }

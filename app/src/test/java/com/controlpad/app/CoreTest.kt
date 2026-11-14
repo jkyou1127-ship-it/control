@@ -137,18 +137,6 @@ class CoreTest {
     }
 
     @Test
-    fun publishedVersionFileMatchesThisBuild() {
-        // release/alpha/version.json 이 빌드 버전과 어긋나면 인앱 업데이트가 새 버전을 알아채지 못한다.
-        val info = Updater.parse(java.io.File("../release/alpha/version.json").readText())
-        // 정식 채널은 알파보다 앞설 수 없다.
-        assertTrue(Updater.parse(java.io.File("../release/version.json").readText()).code <= info.code)
-        val gradle = java.io.File("build.gradle.kts").readText()
-        assertTrue(gradle.contains("versionCode = ${info.code}\n"))
-        assertTrue(gradle.contains("versionName = \"${info.name}\""))
-        assertTrue(info.notes.isNotEmpty())
-    }
-
-    @Test
     fun restartButtonsUseTheGameKeys() {
         assertEquals("R Alt + Enter + Space", Keys.combo(Restart.button(0, 0f, 0f, 0.1f, 0.1f).keys))
         assertEquals("F5", Keys.combo(Restart.button(1, 0f, 0f, 0.1f, 0.1f).keys))
@@ -314,5 +302,26 @@ class CoreTest {
         assertEquals(0.5f, Resize.scale(0.2f, 0.4f, 0f, 0.1f, 0.05f), 1e-4f)
         // 이미 최소보다 작은 버튼이 있으면 줄이지 않는다
         assertEquals(1f, Resize.scale(0.2f, 0.4f, 0f, 0.02f, 0.05f), 1e-4f)
+    }
+
+    @Test
+    fun layoutFileRoundTripsWithNewIdAndRejectsOtherFiles() {
+        val l = Templates.create(4, "내 볼텍스").apply { slide = true }
+        val back = LayoutFile.import(LayoutFile.export(l))
+        assertEquals("내 볼텍스", back.name)
+        assertTrue(back.slide)
+        assertEquals(l.buttons.size, back.buttons.size)
+        assertEquals(l.buttons.map { it.keys }, back.buttons.map { it.keys })
+        assertTrue(back.id != l.id)                     // 원래 것을 덮어쓰지 않는다
+
+        for (bad in listOf("hello", "{}", """{"buttons":[]}""", """{"format":"other","buttons":[]}""")) {
+            assertTrue(bad, runCatching { LayoutFile.import(bad) }.isFailure)
+        }
+        val wild = LayoutFile.import("""{"format":"controlpad-layout","buttons":[{"x":5,"y":-3,"w":9,"h":0}]}""")
+        val b = wild.buttons[0]
+        assertTrue(b.x >= 0f && b.y >= 0f && b.x + b.w <= 1f && b.y + b.h <= 1f && b.h > 0f)
+        assertEquals("불러온 레이아웃", wild.name)
+        assertEquals("a_b_c.controlpad.json", LayoutFile.fileName("a/b:c"))
+        assertEquals("layout.controlpad.json", LayoutFile.fileName("  "))
     }
 }

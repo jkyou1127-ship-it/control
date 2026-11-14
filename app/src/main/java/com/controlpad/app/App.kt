@@ -30,6 +30,33 @@ open class BaseActivity : Activity() {
         window.navigationBarColor = t.bg
     }
 
+    /** 글자를 입력하는 화면은 키보드가 올라온 만큼도 비운다. 편집·실행 화면은 크기가 흔들리지 않게 끈다. */
+    protected open val avoidKeyboard = true
+
+    /**
+     * Android 15 이상을 대상으로 빌드하면 화면이 상태 표시줄·내비게이션 바 밑까지 그려진다.
+     * 내용이 가려지지 않게 그만큼 안쪽 여백을 준다(그렇지 않은 빌드에서는 여백이 0 으로 들어온다).
+     */
+    override fun setContentView(view: android.view.View) {
+        super.setContentView(view)
+        val l = view.paddingLeft; val t = view.paddingTop; val r = view.paddingRight; val b = view.paddingBottom
+        view.setOnApplyWindowInsetsListener { v, insets ->
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                var types = android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout()
+                if (avoidKeyboard) types = types or android.view.WindowInsets.Type.ime()
+                val i = insets.getInsets(types)
+                v.setPadding(l + i.left, t + i.top, r + i.right, b + i.bottom)
+            } else {
+                @Suppress("DEPRECATION")
+                v.setPadding(
+                    l + insets.systemWindowInsetLeft, t + insets.systemWindowInsetTop,
+                    r + insets.systemWindowInsetRight, b + insets.systemWindowInsetBottom,
+                )
+            }
+            insets
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         Link.onVisible(true)

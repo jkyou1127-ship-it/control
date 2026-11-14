@@ -423,3 +423,31 @@ object History {
     /** 실행취소로 되돌릴 수 있는 횟수. */
     const val LIMIT = 50
 }
+
+/** 레이아웃을 파일로 내보내고 불러온다(백업, 다른 기기로 옮기기, 공유). */
+object LayoutFile {
+    const val MAX_BYTES = 2 * 1024 * 1024
+    private const val FORMAT = "controlpad-layout"
+
+    fun fileName(layoutName: String): String =
+        layoutName.replace(Regex("""[\\/:*?"<>|\n\r\t]"""), "_").trim().ifEmpty { "layout" } + ".controlpad.json"
+
+    fun export(l: PadLayout): String = l.toJson().put("format", FORMAT).put("version", 1).toString(2)
+
+    /**
+     * 파일 내용을 레이아웃으로 바꾼다. 형식이 다르면 예외를 던진다.
+     * 이미 있는 레이아웃을 덮어쓰지 않도록 항상 새 id 를 준다.
+     */
+    fun import(text: String): PadLayout {
+        val o = JSONObject(text)
+        require(o.optString("format") == FORMAT && o.has("buttons"))
+        val l = PadLayout.fromJson(o.put("id", UUID.randomUUID().toString()))
+        // 손으로 고친 파일의 엉뚱한 좌표가 화면 밖 버튼을 만들지 않게 한다.
+        for (b in l.buttons) {
+            b.w = b.w.coerceIn(0.01f, 1f); b.h = b.h.coerceIn(0.01f, 1f)
+            b.x = b.x.coerceIn(0f, 1f - b.w); b.y = b.y.coerceIn(0f, 1f - b.h)
+        }
+        if (l.name.isBlank()) l.name = "불러온 레이아웃"
+        return l
+    }
+}

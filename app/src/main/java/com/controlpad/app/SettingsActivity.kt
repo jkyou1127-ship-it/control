@@ -199,23 +199,28 @@ class SettingsActivity : BaseActivity() {
             setOnCheckedChangeListener { _, on -> Link.prefs.edit().putBoolean("haptic", on).apply() }
         })
 
-        root.addView(title("업데이트"))
-        root.addView(note("현재 버전 " + Updater.installedName(this) + " · 앱을 켤 때 새 버전을 자동으로 확인합니다."))
-        root.addView(CheckBox(this).apply {
-            text = "자동 업데이트 — 앱을 켤 때 새 버전이 있으면 묻지 않고 바로 설치합니다"
-            isChecked = Updater.auto
-            setOnCheckedChangeListener { _, on -> Updater.auto = on }
-        })
-        root.addView(CheckBox(this).apply {
-            text = "알파 빌드 받기 — 최신 빌드를 바로 받습니다. 끄면 한 번 전의 빌드(정식)를 받습니다"
-            isChecked = Updater.alpha
-            setOnCheckedChangeListener { _, on ->
-                Updater.alpha = on
-                // 채널을 바꾸면 그 채널의 새 버전을 바로 확인한다.
-                Updater.check(this@SettingsActivity)
-            }
-        })
-        root.addView(Button(this).apply { text = "업데이트 확인"; setOnClickListener { Updater.check(this@SettingsActivity) } })
+        if (Updater.ENABLED) {
+            root.addView(title("업데이트"))
+            root.addView(note("현재 버전 " + Updater.installedName(this) + " · 앱을 켤 때 새 버전을 자동으로 확인합니다."))
+            root.addView(CheckBox(this).apply {
+                text = "자동 업데이트 — 앱을 켤 때 새 버전이 있으면 묻지 않고 바로 설치합니다"
+                isChecked = Updater.auto
+                setOnCheckedChangeListener { _, on -> Updater.auto = on }
+            })
+            root.addView(CheckBox(this).apply {
+                text = "알파 빌드 받기 — 최신 빌드를 바로 받습니다. 끄면 한 번 전의 빌드(정식)를 받습니다"
+                isChecked = Updater.alpha
+                setOnCheckedChangeListener { _, on ->
+                    Updater.alpha = on
+                    // 채널을 바꾸면 그 채널의 새 버전을 바로 확인한다.
+                    Updater.check(this@SettingsActivity)
+                }
+            })
+            root.addView(Button(this).apply { text = "업데이트 확인"; setOnClickListener { Updater.check(this@SettingsActivity) } })
+        } else {
+            root.addView(title("버전"))
+            root.addView(note("현재 버전 " + Updater.installedName(this) + " · 업데이트는 Play 스토어에서 받습니다."))
+        }
 
         scroll = ScrollView(this).apply { addView(root) }
         setContentView(scroll)

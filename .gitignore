@@ -5,3 +5,7 @@ local.properties
 *.iml
 .kotlin/
 __pycache__/
+# 스토어 업로드 키와 그 비밀번호. 절대 커밋하지 않는다.
+play-signing.properties
+play-upload.keystore
+play/

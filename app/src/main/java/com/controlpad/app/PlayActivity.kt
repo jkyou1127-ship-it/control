@@ -15,6 +15,7 @@ import android.view.WindowManager
 
 /** 전체 화면 컨트롤러. 뒤로 가기로 나간다. */
 class PlayActivity : BaseActivity() {
+    override val avoidKeyboard = false
     private var view: PlayView? = null
     private val ui = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
@@ -43,10 +44,17 @@ class PlayActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            window.insetsController?.let {
+                it.hide(android.view.WindowInsets.Type.systemBars())
+                it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        }
         Link.setActive(true)
         ui.post(tick)
     }

@@ -27,6 +27,7 @@ import kotlin.math.roundToInt
 
 /** 빈 곳을 드래그해 버튼을 그리고, 옮기고, 크기를 바꾸고, 키를 지정하는 화면. */
 class EditorActivity : BaseActivity() {
+    override val avoidKeyboard = false
     private lateinit var pad: PadLayout
     private lateinit var view: EditorView
 
@@ -175,6 +176,10 @@ class EditorActivity : BaseActivity() {
         tool("실행") {
             LayoutStore.save(this, pad)
             startActivity(Intent(this, PlayActivity::class.java).putExtra("id", pad.id))
+        }
+        tool("저장") {
+            LayoutStore.save(this, pad)
+            android.widget.Toast.makeText(this, "저장했습니다", android.widget.Toast.LENGTH_SHORT).show()
         }
         tool("완료") { finish() }
 
