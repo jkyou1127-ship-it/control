@@ -63,7 +63,7 @@ class EditorActivity : BaseActivity() {
         tool("＋추가") {
             val names = adds.keys.toTypedArray()
             AlertDialog.Builder(this).setTitle("추가")
-                .setItems(names) { _, which -> adds[names[which]]?.invoke() }
+                .setItems(names) { _, which -> checkpoint(); adds[names[which]]?.invoke() }
                 .show()
         }
         add("노브 (사운드 볼텍스 · KSM)") {
@@ -132,6 +132,23 @@ class EditorActivity : BaseActivity() {
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
+        tool("↶ 취소") { step(undo, redo, "되돌릴 것이 없습니다") }
+        tool("↷ 다시") { step(redo, undo, "다시 실행할 것이 없습니다") }
+        tool("숨김") {
+            // 겹쳐 있는 버튼 밑의 것을 고치기 쉽게, 편집 화면에서만 잠깐 안 보이게 한다. 레이아웃 자체는 바뀌지 않는다.
+            val toast = { t: String -> android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_SHORT).show() }
+            when {
+                view.selection.isNotEmpty() -> {
+                    val n = view.selection.size
+                    view.hidden += view.selection
+                    view.selection.clear()
+                    toast("${n}개를 숨겼습니다. 아무것도 선택하지 않고 '숨김'을 누르면 다시 나타납니다")
+                }
+                view.hidden.isNotEmpty() -> { view.hidden.clear(); toast("숨긴 버튼을 모두 표시했습니다") }
+                else -> toast("숨길 버튼을 먼저 선택하세요")
+            }
+            view.invalidate()
+        }
         tool("속성") {
             val sel = view.selection.toList()
             when {
@@ -144,6 +161,7 @@ class EditorActivity : BaseActivity() {
             val sel = view.selection.toList()
             if (sel.isEmpty()) hint()
             else {
+                checkpoint()
                 val copies = sel.map { it.copy().apply { x = min(x + 0.03f, 1f - w); y = min(y + 0.03f, 1f - h) } }
                 pad.buttons += copies
                 view.selection.clear(); view.selection += copies
@@ -152,7 +170,7 @@ class EditorActivity : BaseActivity() {
         }
         tool("삭제") {
             if (view.selection.isEmpty()) hint()
-            else { pad.buttons.removeAll(view.selection); view.selection.clear(); view.invalidate() }
+            else { checkpoint(); pad.buttons.removeAll(view.selection); view.selection.clear(); view.invalidate() }
         }
         tool("실행") {
             LayoutStore.save(this, pad)
@@ -167,6 +185,7 @@ class EditorActivity : BaseActivity() {
         root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
 
+        view.onBeforeChange = { checkpoint() }
         view.onCreated = { editButton(it, isNew = true) }
         view.onEdit = { editButton(it) }
     }
@@ -174,6 +193,36 @@ class EditorActivity : BaseActivity() {
     override fun onPause() {
         super.onPause()
         if (::pad.isInitialized) LayoutStore.save(this, pad)
+    }
+
+    // 실행취소: 바꾸기 직전의 레이아웃을 통째로 저장해 둔다.
+    private val undo = ArrayDeque<String>()
+    private val redo = ArrayDeque<String>()
+
+    /** 레이아웃을 바꾸기 직전에 부른다. */
+    private fun checkpoint() {
+        val now = pad.toJson().toString()
+        if (undo.lastOrNull() == now) return      // 아무것도 바뀌지 않은 채 또 부른 경우
+        undo.addLast(now)
+        if (undo.size > History.LIMIT) undo.removeFirst()
+        redo.clear()
+    }
+
+    private fun restore(json: String) {
+        val saved = PadLayout.fromJson(org.json.JSONObject(json))
+        pad.buttons.clear(); pad.buttons += saved.buttons
+        view.selection.clear(); view.hidden.clear()
+        view.invalidate()
+    }
+
+    /** from 에서 하나 꺼내 그 상태로 돌아가고, 지금 상태는 to 에 넣는다. */
+    private fun step(from: ArrayDeque<String>, to: ArrayDeque<String>, empty: String) {
+        val now = pad.toJson().toString()
+        // 바뀐 것이 없는 기록은 건너뛴다.
+        while (from.isNotEmpty() && from.last() == now) from.removeLast()
+        if (from.isEmpty()) { android.widget.Toast.makeText(this, empty, android.widget.Toast.LENGTH_SHORT).show(); return }
+        to.addLast(now)
+        restore(from.removeLast())
     }
 
     private fun hint() = android.widget.Toast.makeText(this, "먼저 버튼을 눌러 선택하세요", android.widget.Toast.LENGTH_SHORT).show()
@@ -255,6 +304,7 @@ class EditorActivity : BaseActivity() {
         AlertDialog.Builder(this).setTitle(if (isNew) "새 노브" else "노브 속성")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
+                checkpoint()
                 b.knobOut = out.selectedItemPosition
                 b.sens = (sens.progress + 1).toFloat()
                 b.keys = left; b.keys2 = right
@@ -302,6 +352,7 @@ class EditorActivity : BaseActivity() {
         AlertDialog.Builder(this).setTitle(if (isNew) "새 $what" else "$what 속성")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
+                checkpoint()
                 b.sens = (sens.progress + 1).toFloat()
                 b.mode = if (tap.isChecked) PadButton.PAD_TAP else PadButton.PAD_NO_TAP
                 b.label = label.text.toString().trim()
@@ -386,6 +437,7 @@ class EditorActivity : BaseActivity() {
         AlertDialog.Builder(this).setTitle(if (isNew) "새 버튼" else "버튼 속성")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
+                checkpoint()
                 b.keys = keys; b.label = label.text.toString().trim(); b.mode = mode.selectedItemPosition
                 b.label2 = label2.text.toString().trim()
                 b.holdMs = PadButton.parseHold(hold.text.toString())
@@ -448,6 +500,7 @@ class EditorActivity : BaseActivity() {
         AlertDialog.Builder(this).setTitle(if (isNew) "새 표시 버튼" else "표시 버튼 속성")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
+                checkpoint()
                 b.target = target.selectedItemPosition + 1
                 b.mode = if (mode.selectedItemPosition == 1) PadButton.MODE_HOLD else PadButton.MODE_TOGGLE
                 b.label = label.text.toString().trim(); b.color = color; b.textColor = textColor; b.pressColor = pressColor
@@ -515,6 +568,7 @@ class EditorActivity : BaseActivity() {
         AlertDialog.Builder(this).setTitle("${sel.size}개 한꺼번에 바꾸기")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
+                checkpoint()
                 for (b in sel) {
                     val g = group.selectedItemPosition - 1
                     // 표시 버튼을 자기가 여는 그룹에 넣으면 누를 수 없게 되므로 건너뛴다.
@@ -604,12 +658,25 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         get() = selection.lastOrNull()
         set(v) { selection.clear(); if (v != null) selection += v }
 
+    /** 편집 화면에서만 잠깐 숨긴 버튼들. 그리지도 않고 잡히지도 않지만 레이아웃에는 그대로 있다. */
+    val hidden = HashSet<PadButton>()
+
+    private fun hitAt(x: Float, y: Float) = pad.buttons.lastOrNull { it !in hidden && it.contains(x / width, y / height) }
+
     /** 켜면 버튼을 눌러 선택에 더하거나 빼고, 손가락으로 훑고 지나간 버튼들을 선택한다. */
     var multi = false
         set(on) { field = on; if (!on && selection.size > 1) selected = selection.last() }
     var snap = true
     var onCreated: (PadButton) -> Unit = {}
     var onEdit: (PadButton) -> Unit = {}
+
+    /** 드래그로 버튼을 옮기거나 크기를 바꾸거나 새로 만들기 직전에 한 번 불린다(실행취소용). */
+    var onBeforeChange: () -> Unit = {}
+    private var changed = false
+
+    private fun beforeChange() {
+        if (!changed) { changed = true; onBeforeChange() }
+    }
 
     private val painter = PadPainter(ctx)
     private val rect = RectF()
@@ -673,8 +740,12 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             c.drawText("빈 곳을 손가락으로 드래그해서 버튼을 그리세요", width / 2f, height / 2f, hintPaint)
         }
         for (b in pad.buttons) {
+            if (b in hidden) continue
             painter.draw(c, b, rectOf(b), false, b in selection, alt = 2)
             if (b.group > 0) painter.badge(c, rectOf(b), "그룹 ${b.group}")
+        }
+        if (hidden.isNotEmpty()) {
+            c.drawText("숨긴 버튼 ${hidden.size}개 — '숨김'을 누르면 다시 표시", width / 2f, hintPaint.textSize * 1.4f, hintPaint)
         }
         if (selection.isNotEmpty()) {
             // 크기 조절 손잡이. 여러 개를 선택했으면 전체를 감싸는 영역의 모서리에 둔다.
@@ -696,7 +767,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         val y = e.y.coerceIn(0f, height.toFloat())
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                downX = x; downY = y; curX = x; curY = y; moved = false
+                downX = x; downY = y; curX = x; curY = y; moved = false; changed = false
                 val corner = if (selection.isEmpty()) null else selectionBox(rect)
                 if (corner != null && abs(x - corner.right * width) < handle * 1.4f &&
                     abs(y - corner.bottom * height) < handle * 1.4f
@@ -704,7 +775,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                     remember()
                     drag = Drag.RESIZE
                 } else {
-                    val hit = pad.buttons.lastOrNull { it.contains(x / width, y / height) }
+                    val hit = hitAt(x, y)
                     hitButton = hit
                     if (multi && (hit == null || hit !in selection)) {
                         // 다중 선택: 선택되지 않은 곳에서 시작하면 손가락이 지나가는 버튼을 차례로 선택한다.
@@ -728,14 +799,16 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                 if (abs(x - downX) > slop || abs(y - downY) > slop) moved = true
                 when (drag) {
                     Drag.DRAW -> { curX = snapPx(x); curY = snapPx(y) }
-                    Drag.SLIDE -> pad.buttons.lastOrNull { it.contains(x / width, y / height) }?.let { selection += it }
+                    Drag.SLIDE -> hitAt(x, y)?.let { selection += it }
                     Drag.MOVE -> if (moved && starts.isNotEmpty()) {
+                        beforeChange()
                         // 선택된 것들이 함께 움직이되, 어느 것도 화면 밖으로 나가지 않게 한다.
                         val dx = (snapPx(x - downX) / width).coerceIn(-box.left, 1f - box.right)
                         val dy = (snapPx(y - downY) / height).coerceIn(-box.top, 1f - box.bottom)
                         for ((b, s) in starts) { b.x = s[0] + dx; b.y = s[1] + dy }
                     }
                     Drag.RESIZE -> if (starts.isNotEmpty()) {
+                        beforeChange()
                         // 선택 전체를 왼쪽 위 모서리를 기준으로 같은 비율로 늘리거나 줄인다.
                         val sx = Resize.scale(box.left, box.width(), snapPx(x) / width, starts.values.minOf { it[2] }, minSize / width)
                         val sy = Resize.scale(box.top, box.height(), snapPx(y) / height, starts.values.minOf { it[3] }, minSize / height)
@@ -757,6 +830,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                         if (w >= minSize && h >= minSize) {
                             val b = PadButton(l / width, t / height, w / width, h / height,
                                 color = PadButton.PALETTE[pad.buttons.size % PadButton.PALETTE.size])
+                            beforeChange()
                             pad.buttons += b
                             selected = b
                             onCreated(b)

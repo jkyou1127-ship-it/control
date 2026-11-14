@@ -32,8 +32,14 @@ open class BaseActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        Link.onVisible(true)
         if (shownTheme != Themes.revision) { recreate(); return }   // 설정에서 테마를 바꾸고 돌아온 경우
         Link.ensure()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Link.onVisible(false)
     }
 }
 

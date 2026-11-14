@@ -25,6 +25,7 @@ object Link {
     const val MODE_UDP = 1
     const val DEFAULT_PORT = 34555
     private const val HEARTBEAT_MS = 50L
+    private const val IDLE_PING_MS = 700L
 
     private lateinit var app: Context
     // 입력을 보내는 스레드는 화면 그리기보다 먼저 돌도록 우선순위를 높인다.
@@ -37,7 +38,8 @@ object Link {
     @Volatile var udp: UdpLink? = null
         private set
     @Volatile private var lastReport = ByteArray(KeyState.REPORT_SIZE)
-    private var active = false
+    @Volatile private var active = false
+    private var visible = 0     // 지금 보이는 앱 화면 수
 
     val prefs: SharedPreferences get() = app.getSharedPreferences("link", Context.MODE_PRIVATE)
     val mode: Int get() = prefs.getInt("mode", MODE_BT)
@@ -110,18 +112,29 @@ object Link {
     private val heartbeat = object : Runnable {
         override fun run() {
             // UDP 는 유실될 수 있으므로 현재 상태를 주기적으로 다시 보낸다.
+            // 연주 중이 아닐 때도 가끔 보내서, PC 가 응답하는지(연결 상태)를 계속 확인한다.
             runCatching { udp?.send(lastReport) }
-            runCatching { udp?.sendMouse(0, 0, 0, mouseButtons) }
-            worker.postDelayed(this, HEARTBEAT_MS)
+            if (active) runCatching { udp?.sendMouse(0, 0, 0, mouseButtons) }
+            worker.postDelayed(this, if (active) HEARTBEAT_MS else IDLE_PING_MS)
         }
+    }
+
+    private fun reschedule() {
+        worker.removeCallbacks(heartbeat)
+        if (active || visible > 0) worker.post(heartbeat)
+    }
+
+    /** 앱 화면이 보이는 동안에는 연결 확인을 계속한다. 화면마다 보일 때와 가려질 때 부른다. */
+    fun onVisible(on: Boolean) {
+        visible = (visible + if (on) 1 else -1).coerceAtLeast(0)
+        reschedule()
     }
 
     /** 연주 화면이 떠 있는 동안만 켠다. */
     fun setActive(on: Boolean) {
         if (on == active) return
         active = on
-        worker.removeCallbacks(heartbeat)
-        if (on) worker.post(heartbeat)
+        reschedule()
         lowLatencyWifi(on && mode == MODE_UDP)
     }
 
@@ -177,6 +190,7 @@ class BtHid(private val ctx: Context) {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, reg: Boolean) {
             registered = reg
             if (!reg) { host = null; return }
+            adoptConnected()
             // 마지막으로 쓰던 PC 에 자동으로 다시 붙는다.
             val addr = Link.prefs.getString("btAddr", null) ?: return
             val dev = runCatching { adapter?.bondedDevices?.firstOrNull { it.address == addr } }.getOrNull()
@@ -228,11 +242,22 @@ class BtHid(private val ctx: Context) {
         if (!ok) runCatching { h.registerApp(sdp, null, null, ctx.mainExecutor, callback) }
     }
 
+    /**
+     * PC 쪽에서 먼저 연결했거나 연결 알림을 놓친 경우, 이미 붙어 있는 PC 를 찾아 연결된 것으로 맞춘다.
+     * 이걸 하지 않으면 실제로는 연결되어 있는데 '연결 대기 중'으로 보인다.
+     */
+    private fun adoptConnected() {
+        if (host != null) return
+        val d = runCatching { hid?.connectedDevices?.firstOrNull() }.getOrNull() ?: return
+        host = d
+        Link.prefs.edit().putString("btAddr", d.address).apply()
+    }
+
     /** 앱이 뒤로 가면 시스템이 등록을 풀어버리므로, 화면이 앞으로 올 때마다 다시 확인한다. */
     fun ensure() {
         val a = adapter
         if (a == null || !Link.btPermitted(ctx) || !a.isEnabled) return
-        if (hid != null) { register(); return }
+        if (hid != null) { register(); if (registered) adoptConnected(); return }
         if (proxyRequested) return
         val ok = runCatching { a.getProfileProxy(ctx, listener, BluetoothProfile.HID_DEVICE) }.getOrDefault(false)
         proxyRequested = ok
@@ -286,6 +311,7 @@ class BtHid(private val ctx: Context) {
             !a.isEnabled -> "블루투스가 꺼져 있습니다"
             unsupported -> "이 기기는 블루투스 키보드 기능(HID)을 지원하지 않습니다"
             host != null -> "연결됨: " + (runCatching { host?.name }.getOrNull() ?: "PC")
+            registered && run { adoptConnected(); host != null } -> "연결됨: " + (runCatching { host?.name }.getOrNull() ?: "PC")
             registered -> "PC 연결 대기 중"
             else -> "블루투스 키보드 준비 중…"
         }
@@ -343,7 +369,7 @@ class UdpLink(val host: String, val port: Int) {
     private val sentAt = java.util.concurrent.atomic.AtomicLongArray(64)   // 순번 % 64 → 보낸 시각(ns)
     @Volatile private var closed = false
 
-    val alive: Boolean get() = lastAck != 0L && SystemClock.elapsedRealtime() - lastAck < 1500
+    val alive: Boolean get() = lastAck != 0L && SystemClock.elapsedRealtime() - lastAck < 2500
 
     init {
         Thread({

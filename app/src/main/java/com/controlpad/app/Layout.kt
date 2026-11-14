@@ -418,3 +418,8 @@ object Resize {
         return ((target - origin) / size).coerceIn(lowest, maxOf(lowest, highest))
     }
 }
+
+object History {
+    /** 실행취소로 되돌릴 수 있는 횟수. */
+    const val LIMIT = 50
+}
