@@ -1,5 +1,5 @@
 {
-  "versionCode": 17,
-  "versionName": "2.2.1",
-  "notes": "알파 빌드 받기를 켜도 업데이트가 오지 않던 문제를 고쳤습니다."
+  "versionCode": 19,
+  "versionName": "2.2.2",
+  "notes": "색 고르기 창이 잘리던 문제를 고쳤습니다."
 }

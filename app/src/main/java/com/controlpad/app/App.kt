@@ -258,13 +258,20 @@ fun pickColor(a: Activity, initial: Int, done: (Int) -> Unit) {
     val box = android.widget.LinearLayout(a).apply {
         orientation = android.widget.LinearLayout.VERTICAL; setPadding(m, a.dp(12), m, 0)
     }
+    // 가로 화면은 세로가 짧으므로 미리보기와 색 코드를 한 줄에 놓고, 그래도 넘치면 스크롤되게 한다.
     val preview = android.view.View(a)
-    val hex = android.widget.TextView(a).apply { gravity = android.view.Gravity.CENTER; setPadding(0, a.dp(6), 0, a.dp(6)) }
-    box.addView(preview, android.widget.LinearLayout.LayoutParams(-1, a.dp(56)))
-    box.addView(hex)
+    val hex = android.widget.TextView(a).apply { textSize = 16f; setPadding(a.dp(12), 0, 0, 0) }
+    val head = android.widget.LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+    head.addView(preview, android.widget.LinearLayout.LayoutParams(0, a.dp(40), 1f))
+    head.addView(hex)
+    box.addView(head)
     val bars = listOf("빨강" to Color.red(initial), "초록" to Color.green(initial), "파랑" to Color.blue(initial)).map { (name, v) ->
-        box.addView(android.widget.TextView(a).apply { text = name })
-        android.widget.SeekBar(a).apply { max = 255; progress = v }.also { box.addView(it) }
+        val row = android.widget.LinearLayout(a).apply { gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(0, a.dp(8), 0, 0) }
+        row.addView(android.widget.TextView(a).apply { text = name; minWidth = a.dp(44) })
+        val bar = android.widget.SeekBar(a).apply { max = 255; progress = v }
+        row.addView(bar, android.widget.LinearLayout.LayoutParams(0, a.dp(40), 1f))
+        box.addView(row)
+        bar
     }
     fun color() = Color.rgb(bars[0].progress, bars[1].progress, bars[2].progress)
     fun show() {
@@ -277,9 +284,10 @@ fun pickColor(a: Activity, initial: Int, done: (Int) -> Unit) {
         override fun onStartTrackingTouch(s: android.widget.SeekBar?) {}
         override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
     })
-    android.app.AlertDialog.Builder(a).setTitle("색 고르기").setView(box)
+    android.app.AlertDialog.Builder(a).setTitle("색 고르기")
+        .setView(android.widget.ScrollView(a).apply { addView(box) })
         .setPositiveButton("확인") { _, _ -> done(color()) }
-        .setNegativeButton("취소", null).show()
+        .setNegativeButton("취소", null).show().wide()
 }
 
 /** 설정 화면에서 지금 테마로 버튼이 어떻게 보이는지 보여 준다. */
@@ -315,25 +323,26 @@ class FlowLayout(ctx: Context) : android.view.ViewGroup(ctx) {
 
     /** 주어진 폭 안에서 자식들의 위치를 정하고 전체 높이를 돌려준다. place 가 참이면 실제로 배치한다. */
     private fun arrange(width: Int, place: Boolean): Int {
-        var x = 0
-        var y = 0
+        val right = width - paddingRight
+        var x = paddingLeft
+        var y = paddingTop
         var rowHeight = 0
         for (i in 0 until childCount) {
             val c = getChildAt(i)
             if (c.visibility == GONE) continue
-            if (x > 0 && x + c.measuredWidth > width) { x = 0; y += rowHeight + gap; rowHeight = 0 }
+            if (x > paddingLeft && x + c.measuredWidth > right) { x = paddingLeft; y += rowHeight + gap; rowHeight = 0 }
             if (place) c.layout(x, y, x + c.measuredWidth, y + c.measuredHeight)
             x += c.measuredWidth + gap
             rowHeight = maxOf(rowHeight, c.measuredHeight)
         }
-        return y + rowHeight
+        return y + rowHeight + paddingBottom
     }
 
     override fun onMeasure(widthSpec: Int, heightSpec: Int) {
         val unbounded = MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED
         val width = if (unbounded) resources.displayMetrics.widthPixels else MeasureSpec.getSize(widthSpec)
         for (i in 0 until childCount) {
-            measureChild(getChildAt(i), MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), heightSpec)
+            measureChild(getChildAt(i), MeasureSpec.makeMeasureSpec(width - paddingLeft - paddingRight, MeasureSpec.AT_MOST), heightSpec)
         }
         setMeasuredDimension(width, arrange(width, false))
     }

@@ -437,6 +437,7 @@ class EditorActivity : BaseActivity() {
         }
         show()
         row.addView(swatch, LinearLayout.LayoutParams(dp(32), dp(32)).apply { rightMargin = dp(10) })
+        text.setSingleLine(); text.ellipsize = android.text.TextUtils.TruncateAt.END
         row.addView(text, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(Button(this).apply {
             this.text = "고르기"
