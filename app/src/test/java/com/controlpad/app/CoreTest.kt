@@ -153,4 +153,30 @@ class CoreTest {
         assertEquals(Restart.SDVX, Templates.create(4, "t").buttons.first { it.label == "RESTART" }.keys)
         for (i in 1..2) assertEquals(Restart.F5, Templates.create(i, "t").buttons.first { it.label == "RESTART" }.keys)
     }
+
+    @Test
+    fun builtInThemesAreDistinctAndReadable() {
+        assertEquals(14, Themes.all.size)
+        assertEquals(Themes.all.size, Themes.all.map { it.name }.toSet().size)
+        for (t in Themes.all) {
+            // 글자가 배경과 충분히 구분되어야 하고, 밝은 테마 표시는 실제 배경 밝기와 맞아야 한다.
+            assertTrue(t.name, kotlin.math.abs(Themes.luminance(t.text) - Themes.luminance(t.bg)) > 0.45f)
+            assertEquals(t.name, t.light, Themes.luminance(t.bg) > 0.5f)
+        }
+    }
+
+    @Test
+    fun customThemePicksLightOrDarkFromBackground() {
+        val dark = Themes.custom(0xFF101020.toInt(), 0xFFFFFFFF.toInt(), 1f, 2f, false)
+        assertFalse(dark.light)
+        assertEquals(0xFF000000.toInt(), dark.base)
+        val light = Themes.custom(0xFFF0F0F0.toInt(), 0xFF000000.toInt(), 1f, 2f, true)
+        assertTrue(light.light)
+        assertEquals(0xFFFFFFFF.toInt(), light.base)
+        assertTrue(light.colorText)
+        // 목록 항목 배경은 배경색에서 글자색 쪽으로 조금 이동한 색
+        assertTrue(Themes.luminance(dark.card) > Themes.luminance(dark.bg))
+        assertTrue(Themes.luminance(light.card) < Themes.luminance(light.bg))
+        assertEquals(0xFF7F7F7F.toInt(), Themes.mix(0xFF000000.toInt(), 0xFFFFFFFF.toInt(), 0.5f))
+    }
 }

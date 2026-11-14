@@ -23,6 +23,7 @@ import android.widget.Toast
 /** PC 와 연결하는 방법을 고르고 연결한다. */
 class SettingsActivity : BaseActivity() {
     private lateinit var status: TextView
+    private lateinit var scroll: ScrollView
     private lateinit var btBox: LinearLayout
     private lateinit var udpBox: LinearLayout
     private lateinit var devices: LinearLayout
@@ -106,22 +107,56 @@ class SettingsActivity : BaseActivity() {
         })
         root.addView(udpBox)
 
-        root.addView(title("컨트롤러 테마"))
+        root.addView(title("테마"))
         root.addView(android.widget.Spinner(this).apply {
             adapter = android.widget.ArrayAdapter(
-                this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, Themes.all.map { it.name },
+                this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, Themes.names,
             )
             setSelection(Themes.index)
             onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(p: android.widget.AdapterView<*>?, v: android.view.View?, pos: Int, id: Long) {
                     if (pos == Themes.index) return
+                    // 커스텀을 처음 고르면 쓰고 있던 테마에서 시작한다.
+                    if (pos == Themes.all.size && !Themes.hasCustom) Themes.copyToCustom(Themes.current)
                     Themes.index = pos
-                    recreate()   // 이 화면에도 바로 반영
+                    reload()
                 }
                 override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
             }
         })
-        root.addView(note("앱 전체의 배경과 글자색, 컨트롤러의 버튼 모양이 바뀝니다."))
+        root.addView(ThemePreview(this), LinearLayout.LayoutParams(-1, dp(110)).apply { topMargin = dp(8) })
+        if (Themes.isCustom) {
+            fun colorButton(label: String, get: () -> Int, set: (Int) -> Unit) = Button(this).apply {
+                text = label + "  " + "#%06X".format(get() and 0xFFFFFF)
+                setOnClickListener { pickColor(this@SettingsActivity, get()) { set(it); reload() } }
+            }
+            root.addView(colorButton("배경색", { Themes.customBg }, { Themes.customBg = it }))
+            root.addView(colorButton("글자색", { Themes.customText }, { Themes.customText = it }))
+            fun slider(label: (Int) -> String, max: Int, value: Int, set: (Int) -> Unit) {
+                val text = TextView(this).apply { setPadding(0, dp(8), 0, 0) }
+                val bar = android.widget.SeekBar(this).apply { this.max = max; progress = value.coerceIn(0, max) }
+                text.text = label(bar.progress)
+                bar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(s: android.widget.SeekBar?, p: Int, fromUser: Boolean) { text.text = label(p) }
+                    override fun onStartTrackingTouch(s: android.widget.SeekBar?) {}
+                    override fun onStopTrackingTouch(s: android.widget.SeekBar?) { set(bar.progress); reload() }
+                })
+                root.addView(text); root.addView(bar)
+            }
+            // 진하기 10~160%, 테두리 0.5~5dp
+            slider({ "버튼 색 진하기: ${it * 10 + 10}%" }, 15, ((Themes.customStrength * 100).toInt() - 10) / 10) {
+                Themes.customStrength = (it * 10 + 10) / 100f
+            }
+            slider({ "테두리 굵기: ${(it + 1) * 0.5f}" }, 9, (Themes.customStroke / 0.5f).toInt() - 1) {
+                Themes.customStroke = (it + 1) * 0.5f
+            }
+            root.addView(CheckBox(this).apply {
+                text = "글자를 버튼 색으로 표시 (네온 느낌)"; isChecked = Themes.customColorText
+                setOnCheckedChangeListener { _, on -> Themes.customColorText = on; reload() }
+            })
+        } else {
+            root.addView(note("맨 아래 '커스텀'을 고르면 배경색, 글자색, 버튼 진하기, 테두리를 직접 정할 수 있습니다."))
+        }
 
         root.addView(title("기타"))
         root.addView(CheckBox(this).apply {
@@ -143,7 +178,9 @@ class SettingsActivity : BaseActivity() {
         })
         root.addView(Button(this).apply { text = "업데이트 확인"; setOnClickListener { Updater.check(this@SettingsActivity) } })
 
-        setContentView(ScrollView(this).apply { addView(root) })
+        scroll = ScrollView(this).apply { addView(root) }
+        setContentView(scroll)
+        if (keepScroll >= 0) scroll.post { scroll.scrollTo(0, keepScroll); keepScroll = -1 }
 
         group.check(if (Link.mode == Link.MODE_BT) 1 else 2)
         showMode()
@@ -154,6 +191,12 @@ class SettingsActivity : BaseActivity() {
             Link.ensure()
         }
         if (Link.mode == Link.MODE_BT) askBtPermission()
+    }
+
+    /** 테마가 바뀌었을 때 화면을 다시 만든다. 보고 있던 위치는 유지한다. */
+    private fun reload() {
+        keepScroll = scroll.scrollY
+        recreate()
     }
 
     private fun showMode() {
@@ -209,5 +252,9 @@ class SettingsActivity : BaseActivity() {
     override fun onPause() {
         super.onPause()
         ui.removeCallbacks(tick)
+    }
+
+    companion object {
+        private var keepScroll = -1
     }
 }

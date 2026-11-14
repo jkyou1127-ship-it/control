@@ -182,22 +182,7 @@ class EditorActivity : BaseActivity() {
         val label = EditText(this).apply { setText(b.label); setSingleLine() }
         box.addView(label)
 
-        val swatches = FlowLayout(this).apply { setPadding(0, dp(8), 0, 0) }
-        fun paint() {
-            for (i in 0 until swatches.childCount) {
-                val c = PadButton.PALETTE[i]
-                swatches.getChildAt(i).background = GradientDrawable().apply {
-                    setColor(c); cornerRadius = dp(6).toFloat()
-                    if (c == color) setStroke(dp(3), Themes.current.text)
-                }
-            }
-        }
-        for (c in PadButton.PALETTE) {
-            swatches.addView(View(this).apply { setOnClickListener { color = c; paint() } },
-                android.view.ViewGroup.LayoutParams(dp(40), dp(40)))
-        }
-        paint()
-        box.addView(swatches, LinearLayout.LayoutParams(-1, -2))
+        box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
 
         AlertDialog.Builder(this).setTitle(if (isNew) "새 노브" else "노브 속성")
             .setView(ScrollView(this).apply { addView(box) })
@@ -291,22 +276,7 @@ class EditorActivity : BaseActivity() {
         val oval = CheckBox(this).apply { text = "원형 버튼"; isChecked = b.shape == PadButton.SHAPE_OVAL }
         box.addView(oval)
 
-        val swatches = FlowLayout(this).apply { setPadding(0, dp(8), 0, 0) }
-        fun paint() {
-            for (i in 0 until swatches.childCount) {
-                val c = PadButton.PALETTE[i]
-                swatches.getChildAt(i).background = GradientDrawable().apply {
-                    setColor(c); cornerRadius = dp(6).toFloat()
-                    if (c == color) setStroke(dp(3), Themes.current.text)
-                }
-            }
-        }
-        for (c in PadButton.PALETTE) {
-            swatches.addView(View(this).apply { setOnClickListener { color = c; paint() } },
-                android.view.ViewGroup.LayoutParams(dp(40), dp(40)))
-        }
-        paint()
-        box.addView(swatches, LinearLayout.LayoutParams(-1, -2))
+        box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
 
         AlertDialog.Builder(this).setTitle(if (isNew) "새 버튼" else "버튼 속성")
             .setView(ScrollView(this).apply { addView(box) })
@@ -318,6 +288,37 @@ class EditorActivity : BaseActivity() {
             }
             .setNegativeButton("취소", null)
             .show().wide()
+    }
+
+    /** 기본 색 8개와, 원하는 색을 직접 고르는 ＋ 칸. */
+    private fun colorRow(initial: Int, onPick: (Int) -> Unit): View {
+        var color = initial
+        val row = FlowLayout(this).apply { setPadding(0, dp(8), 0, 0) }
+        val plus = TextView(this).apply { text = "＋"; gravity = Gravity.CENTER; textSize = 18f }
+        fun paint() {
+            for (i in PadButton.PALETTE.indices) {
+                val c = PadButton.PALETTE[i]
+                row.getChildAt(i).background = GradientDrawable().apply {
+                    setColor(c); cornerRadius = dp(6).toFloat()
+                    if (c == color) setStroke(dp(3), Themes.current.text)
+                }
+            }
+            val custom = color !in PadButton.PALETTE
+            plus.background = GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                if (custom) setColor(color)
+                setStroke(dp(if (custom) 3 else 1), Themes.current.text)
+            }
+            plus.setTextColor(if (custom && Themes.luminance(color) > 0.5f) Color.BLACK else Themes.current.text)
+        }
+        for (c in PadButton.PALETTE) {
+            row.addView(View(this).apply { setOnClickListener { color = c; onPick(c); paint() } },
+                android.view.ViewGroup.LayoutParams(dp(40), dp(40)))
+        }
+        plus.setOnClickListener { pickColor(this, color) { color = it; onPick(it); paint() } }
+        row.addView(plus, android.view.ViewGroup.LayoutParams(dp(40), dp(40)))
+        paint()
+        return row
     }
 
     /** 여러 키를 골라 조합(예: Ctrl + Shift + S)을 만든다. */
