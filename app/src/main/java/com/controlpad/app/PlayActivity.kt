@@ -172,8 +172,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         val nx = x / width
         val ny = y / height
         for (i in buttons.indices.reversed()) {
-            // 표시 패널은 누를 수 없으므로 건너뛴다(밑에 있는 버튼이 눌린다).
-            if (!buttons[i].isDisplay && groupVisible(buttons[i].group) && buttons[i].contains(nx, ny)) return i
+            // 표시 패널과 사진은 누를 수 없으므로 건너뛴다(밑에 있는 버튼이 눌린다).
+            if (!buttons[i].isDisplay && !buttons[i].isImage && groupVisible(buttons[i].group) && buttons[i].contains(nx, ny)) return i
         }
         return -1
     }

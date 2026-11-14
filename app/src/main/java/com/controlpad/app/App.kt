@@ -73,7 +73,9 @@ open class BaseActivity : Activity() {
 fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density + 0.5f).toInt()
 
 /** 편집 화면과 연주 화면이 같은 모양으로 버튼을 그리도록 공유한다. */
-class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
+class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.current) {
+    private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    private val src = android.graphics.Rect()
     private val density = ctx.resources.displayMetrics.density
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -122,6 +124,34 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         c.drawText(text, r.left + w / 2, r.top + 12 * density, sub)
     }
 
+    /** 사진의 가운데를 영역 비율에 맞게 잘라 낼 범위를 src 에 넣는다. */
+    private fun crop(bmp: android.graphics.Bitmap, r: RectF) {
+        val want = r.width() / r.height()
+        if (bmp.width.toFloat() / bmp.height > want) {
+            val w = (bmp.height * want).toInt().coerceAtLeast(1)
+            src.set((bmp.width - w) / 2, 0, (bmp.width + w) / 2, bmp.height)
+        } else {
+            val h = (bmp.width / want).toInt().coerceAtLeast(1)
+            src.set(0, (bmp.height - h) / 2, bmp.width, (bmp.height + h) / 2)
+        }
+    }
+
+    /** 꾸미기용 사진. 영역에 꽉 차게 늘려 그린다. editor 면 사진이 없을 때 자리 표시를 그린다. */
+    fun drawImage(c: Canvas, b: PadButton, r: RectF, selected: Boolean, editor: Boolean) {
+        val bmp = ImageStore.get(ctx, b.image)
+        if (bmp != null) c.drawBitmap(bmp, null, r, bitmapPaint)
+        if (selected || (bmp == null && editor)) {
+            stroke.color = theme.text
+            stroke.strokeWidth = density * if (selected) 3f else 1f
+            c.drawRect(r, stroke)
+        }
+        if (bmp == null && editor) {
+            sub.color = theme.text and 0x00FFFFFF or 0x88000000.toInt()
+            sub.textSize = 13f * density
+            c.drawText("사진 없음", r.centerX(), r.centerY(), sub)
+        }
+    }
+
     /** 키 입력 표시 패널. shown 은 보여 줄 글자, dim 이면 흐리게(방금 뗀 키, 편집 화면의 안내 글자). */
     fun drawDisplay(c: Canvas, b: PadButton, r: RectF, selected: Boolean, shown: String, dim: Boolean) {
         val rad = minOf(r.width(), r.height()) * 0.2f
@@ -168,6 +198,7 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         if (b.isMouse) { drawMouse(c, b, r, selected, parts); return }
         if (b.isStick) { drawStick(c, b, r, selected, 0f, 0f, 0); return }
         if (b.isDisplay) { drawDisplay(c, b, r, selected, if (alt == 2) "키 입력 표시" else "", alt == 2); return }
+        if (b.isImage) { drawImage(c, b, r, selected, alt == 2); return }
         val lit = if (b.pressColor != 0) b.pressColor else b.color      // 눌렸을 때 채우는 색
         // 눌렸을 때 글자는 채운 색의 밝기에 맞춰 검정/흰색 중 잘 보이는 쪽
         val onLit = if (b.textColor != 0) b.textColor else if (Themes.luminance(lit) > 0.5f) Color.BLACK else Color.WHITE
@@ -175,7 +206,20 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         stroke.color = if (selected) theme.text else b.color
         stroke.strokeWidth = density * if (selected) 3f else theme.stroke
         val rad = minOf(r.width(), r.height()) * 0.14f
-        if (b.shape == PadButton.SHAPE_OVAL || b.isKnob) {
+        val oval = b.shape == PadButton.SHAPE_OVAL || b.isKnob
+        val photo = if (b.image.isNotEmpty() && !b.isKnob && !b.isPad) ImageStore.get(ctx, b.image) else null
+        if (photo != null) {
+            // 사진을 버튼 모양대로 잘라 면에 채우고, 눌렸을 때는 눌림 색을 반투명하게 덮는다.
+            clip.reset()
+            if (oval) clip.addOval(r, android.graphics.Path.Direction.CW)
+            else clip.addRoundRect(r, rad, rad, android.graphics.Path.Direction.CW)
+            c.save(); c.clipPath(clip)
+            crop(photo, r)
+            c.drawBitmap(photo, src, r, bitmapPaint)
+            if (pressed) { fill.color = lit and 0x00FFFFFF or 0x88000000.toInt(); c.drawRect(r, fill) }
+            c.restore()
+            if (oval) c.drawOval(r, stroke) else c.drawRoundRect(r, rad, rad, stroke)
+        } else if (oval) {
             c.drawOval(r, fill); c.drawOval(r, stroke)
         } else {
             c.drawRoundRect(r, rad, rad, fill); c.drawRoundRect(r, rad, rad, stroke)
@@ -205,6 +249,7 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
             alt == 1 -> b.label2
             else -> b.label + "/" + b.label2
         }
+        if (photo != null && name.isEmpty()) return      // 사진이 있으면 이름을 적었을 때만 글자를 올린다
         val label = name.ifEmpty { if (b.isShow) "그룹 ${b.target}" else if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
         text.color = if (pressed) onLit else if (b.textColor != 0) b.textColor else if (theme.colorText) b.color else theme.text
         text.textSize = (r.height() * 0.3f)

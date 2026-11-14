@@ -156,7 +156,7 @@ class MainActivity : BaseActivity() {
                 val l = exporting ?: return
                 exporting = null
                 runCatching {
-                    contentResolver.openOutputStream(uri)!!.use { it.write(LayoutFile.export(l).toByteArray()) }
+                    contentResolver.openOutputStream(uri)!!.use { it.write(LayoutFile.export(l) { name -> ImageStore.read(this, name) }.toByteArray()) }
                 }.onSuccess { toast("'${l.name}' 레이아웃을 파일로 저장했습니다") }
                     .onFailure { toast("파일로 저장하지 못했습니다") }
             }
@@ -170,7 +170,7 @@ class MainActivity : BaseActivity() {
                         require(n <= LayoutFile.MAX_BYTES)
                         String(buf, 0, n)
                     }
-                    LayoutFile.import(text)
+                    LayoutFile.import(text) { name, bytes -> ImageStore.write(this, name, bytes) }
                 }.getOrNull()
                 if (l == null) { toast("ControlPad 레이아웃 파일이 아닙니다"); return }
                 LayoutStore.save(this, l)

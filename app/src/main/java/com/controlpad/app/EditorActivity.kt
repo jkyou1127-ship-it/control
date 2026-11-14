@@ -95,6 +95,18 @@ class EditorActivity : BaseActivity() {
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
+        add("사진") {
+            pickImage { name ->
+                checkpoint()
+                // 사진의 가로세로 비율대로 가운데에 놓고, 버튼들 뒤에 깔리도록 맨 뒤에 넣는다.
+                val bmp = ImageStore.get(this, name)
+                val w = 0.3f
+                val ratio = if (bmp != null) bmp.height.toFloat() / bmp.width else 1f
+                val h = (w * ratio * view.width / view.height.coerceAtLeast(1)).coerceIn(0.05f, 1f)
+                val t = PadButton(0.5f - w / 2, (0.5f - h / 2).coerceAtLeast(0f), w, h, type = PadButton.TYPE_IMAGE, image = name)
+                pad.buttons.add(0, t); view.selected = t; view.invalidate()
+            }
+        }
         add("트랙패드") {
             val t = PadButton(0.3f, 0.25f, 0.4f, 0.5f, type = PadButton.TYPE_TRACKPAD, color = PadButton.PALETTE[7])
             pad.buttons += t; view.selected = t; view.invalidate()
@@ -150,6 +162,22 @@ class EditorActivity : BaseActivity() {
         }
         tool("↶ 취소") { step(undo, redo, "되돌릴 것이 없습니다") }
         tool("↷ 다시") { step(redo, undo, "다시 실행할 것이 없습니다") }
+        tool("크기·위치") {
+            val sel = view.selection.toList()
+            if (sel.isEmpty()) hint() else editGeometry(sel)
+        }
+        tool("순서") {
+            val sel = view.selection.toList()
+            if (sel.isEmpty()) hint()
+            else AlertDialog.Builder(this).setTitle("겹치는 순서")
+                .setItems(arrayOf("맨 앞으로 (다른 것 위에)", "맨 뒤로 (다른 것 밑에)")) { _, which ->
+                    checkpoint()
+                    val keep = pad.buttons.filter { it in view.selection }      // 선택한 것들끼리의 순서는 유지
+                    pad.buttons.removeAll(keep)
+                    if (which == 0) pad.buttons.addAll(keep) else pad.buttons.addAll(0, keep)
+                    view.invalidate()
+                }.show()
+        }
         tool("숨김") {
             // 겹쳐 있는 버튼 밑의 것을 고치기 쉽게, 편집 화면에서만 잠깐 안 보이게 한다. 레이아웃 자체는 바뀌지 않는다.
             val toast = { t: String -> android.widget.Toast.makeText(this, t, android.widget.Toast.LENGTH_SHORT).show() }
@@ -393,6 +421,7 @@ class EditorActivity : BaseActivity() {
         if (b.isShow) { editShow(b, isNew); return }
         if (b.isStick) { editStick(b, isNew); return }
         if (b.isDisplay) { editDisplay(b, isNew); return }
+        if (b.isImage) { editImage(b); return }
         if (b.isKnob) { editKnob(b, isNew); return }
         if (b.isPad || b.isMouse) { editPad(b, isNew); return }
         val keys = b.keys.toMutableList()
@@ -453,6 +482,16 @@ class EditorActivity : BaseActivity() {
         val oval = CheckBox(this).apply { text = "원형 버튼"; isChecked = b.shape == PadButton.SHAPE_OVAL }
         box.addView(oval)
 
+        var image = b.image
+        val photoRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        val photoText = TextView(this)
+        fun showPhoto() { photoText.text = "버튼 사진: " + if (image.isEmpty()) "없음" else "있음" }
+        showPhoto()
+        photoRow.addView(photoText, LinearLayout.LayoutParams(0, -2, 1f))
+        photoRow.addView(Button(this).apply { text = "사진 고르기"; setOnClickListener { pickImage { image = it; showPhoto() } } })
+        photoRow.addView(Button(this).apply { text = "지우기"; setOnClickListener { image = ""; showPhoto() } })
+        box.addView(photoRow)
+
         val group = groupSpinner(b.group)
         box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
         box.addView(group)
@@ -468,6 +507,7 @@ class EditorActivity : BaseActivity() {
                 checkpoint()
                 b.keys = keys; b.label = label.text.toString().trim(); b.mode = mode.selectedItemPosition
                 b.label2 = label2.text.toString().trim()
+                b.image = image
                 b.holdMs = PadButton.parseHold(hold.text.toString())
                 b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
                 b.color = color; b.textColor = textColor; b.pressColor = pressColor
@@ -564,6 +604,118 @@ class EditorActivity : BaseActivity() {
             }
             .setNegativeButton("취소", null)
             .show().wide()
+    }
+
+    private var onImagePicked: ((String) -> Unit)? = null
+
+    /** 사진을 고르게 하고, 앱 안으로 복사한 뒤 그 이름을 넘겨준다. */
+    private fun pickImage(done: (String) -> Unit) {
+        onImagePicked = done
+        runCatching {
+            @Suppress("DEPRECATION")
+            startActivityForResult(
+                Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*"), REQ_IMAGE,
+            )
+        }.onFailure { android.widget.Toast.makeText(this, "사진을 고를 수 있는 앱이 없습니다", android.widget.Toast.LENGTH_LONG).show() }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_IMAGE) return
+        val done = onImagePicked
+        onImagePicked = null
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null || done == null) return
+        val name = ImageStore.importFrom(this, uri)
+        if (name == null) android.widget.Toast.makeText(this, "사진을 읽을 수 없습니다", android.widget.Toast.LENGTH_LONG).show()
+        else done(name)
+    }
+
+    private fun editImage(b: PadButton) {
+        val m = dp(20)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
+        box.addView(TextView(this).apply {
+            text = "꾸미기용 사진입니다. 누를 수 없고, 겹쳐 있으면 밑에 있는 버튼이 눌립니다.\n" +
+                "배경으로 쓰려면 화면 전체 크기로 늘리고 '순서 > 맨 뒤로'를 누르세요."
+        })
+        var image = b.image
+        box.addView(Button(this).apply { text = "다른 사진으로 바꾸기"; setOnClickListener { pickImage { image = it } } })
+        val group = groupSpinner(b.group)
+        box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
+        box.addView(group)
+        AlertDialog.Builder(this).setTitle("사진 속성")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인") { _, _ ->
+                checkpoint()
+                b.image = image
+                b.group = group.selectedItemPosition
+                view.invalidate()
+            }
+            .setNegativeButton("취소", null)
+            .show().wide()
+    }
+
+    /** 선택한 것의 위치와 크기를 숫자로 조금씩 바꾼다. 여러 개면 전체를 감싸는 영역을 기준으로 함께 바뀐다. */
+    private fun editGeometry(sel: List<PadButton>) {
+        checkpoint()
+        val starts = sel.map { floatArrayOf(it.x, it.y, it.w, it.h) }
+        val ox = starts.minOf { it[0] }
+        val oy = starts.minOf { it[1] }
+        // 화면 대비 % 로 보여 준다.
+        val v = floatArrayOf(
+            ox * 100, oy * 100,
+            (starts.maxOf { it[0] + it[2] } - ox) * 100, (starts.maxOf { it[1] + it[3] } - oy) * 100,
+        )
+        fun apply() {
+            val fitted = Geometry.fit(starts, floatArrayOf(v[0] / 100, v[1] / 100, v[2] / 100, v[3] / 100))
+            sel.forEachIndexed { i, b -> val f = fitted[i]; b.x = f[0]; b.y = f[1]; b.w = f[2]; b.h = f[3] }
+            view.invalidate()
+        }
+        val m = dp(16)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(4), m, 0) }
+        box.addView(TextView(this).apply { text = "화면 대비 % 입니다. 숫자를 직접 적거나 버튼으로 조금씩 바꾸세요. 격자 맞춤과 관계없이 그대로 적용됩니다." })
+        listOf("가로 위치", "세로 위치", "너비", "높이").forEachIndexed { i, name ->
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            row.addView(TextView(this).apply { text = name }, LinearLayout.LayoutParams(0, -2, 1f))
+            val field = EditText(this).apply {
+                setText("%.1f".format(v[i])); setSingleLine(); gravity = Gravity.CENTER
+                inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            }
+            var quiet = false       // 버튼으로 숫자를 바꿀 때는 글자 변경 알림을 무시한다
+            field.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    if (quiet) return
+                    v[i] = s.toString().replace(',', '.').toFloatOrNull() ?: return
+                    apply()
+                }
+            })
+            fun step(label: String, delta: Float) = Button(this).apply {
+                text = label; minWidth = dp(52); minimumWidth = dp(52); setPadding(0, 0, 0, 0)
+                setOnClickListener {
+                    v[i] = (v[i] + delta).coerceIn(0f, 100f)
+                    quiet = true; field.setText("%.1f".format(v[i])); quiet = false
+                    apply()
+                }
+            }
+            row.addView(step("−1", -1f)); row.addView(step("−0.1", -0.1f))
+            row.addView(field, LinearLayout.LayoutParams(dp(84), -2))
+            row.addView(step("+0.1", 0.1f)); row.addView(step("+1", 1f))
+            box.addView(row)
+        }
+        val dialog = AlertDialog.Builder(this).setTitle("크기·위치 세밀 조정")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인", null)
+            .setNegativeButton("취소") { _, _ ->
+                sel.forEachIndexed { i, b -> val s = starts[i]; b.x = s[0]; b.y = s[1]; b.w = s[2]; b.h = s[3] }
+                view.invalidate()
+            }
+            .show()
+        // 바뀌는 모습이 보이도록 화면을 어둡게 하지 않고 창을 아래쪽에 둔다.
+        dialog.window?.setDimAmount(0f)
+        dialog.window?.setGravity(Gravity.BOTTOM)
     }
 
     private fun groupSpinner(initial: Int) = Spinner(this).apply {
@@ -764,6 +916,10 @@ class EditorActivity : BaseActivity() {
             .setNeutralButton("모두 해제") { _, _ -> done(emptyList()) }
             .setNegativeButton("취소", null)
             .show().wide()
+    }
+
+    companion object {
+        private const val REQ_IMAGE = 3
     }
 }
 

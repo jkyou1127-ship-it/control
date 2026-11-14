@@ -388,4 +388,42 @@ class CoreTest {
         assertEquals(2, back.group)
         assertFalse(PadButton(0f, 0f, 0.1f, 0.1f).isDisplay)
     }
+
+    @Test
+    fun imagesTravelInsideLayoutFilesAndBadNamesAreDropped() {
+        val l = PadLayout(name = "사진")
+        l.buttons += PadButton(0f, 0f, 1f, 1f, type = PadButton.TYPE_IMAGE, image = "bg.jpg")
+        l.buttons += PadButton(0.1f, 0.1f, 0.2f, 0.2f, keys = mutableListOf(4), image = "face.png")
+        val files = mapOf("bg.jpg" to byteArrayOf(1, 2, 3), "face.png" to byteArrayOf(9))
+        val text = LayoutFile.export(l) { files[it] }
+
+        val saved = HashMap<String, ByteArray>()
+        val back = LayoutFile.import(text) { name, bytes -> saved[name] = bytes }
+        assertTrue(back.buttons[0].isImage)
+        assertEquals("face.png", back.buttons[1].image)
+        assertArrayEquals(byteArrayOf(1, 2, 3), saved["bg.jpg"])
+        assertArrayEquals(byteArrayOf(9), saved["face.png"])
+
+        // 다른 폴더를 가리키는 이름은 저장하지도, 버튼에 남기지도 않는다.
+        val evil = text.replace("bg.jpg", "../../evil.jpg")
+        saved.clear()
+        val safe = LayoutFile.import(evil) { name, bytes -> saved[name] = bytes }
+        assertEquals("", safe.buttons[0].image)
+        assertEquals(setOf("face.png"), saved.keys)
+        assertFalse(LayoutFile.validImageName(".hidden"))
+        assertFalse(LayoutFile.validImageName("a/b.png"))
+        assertTrue(LayoutFile.validImageName("3f2a-11.png"))
+    }
+
+    @Test
+    fun geometryFitMovesAndScalesTogether() {
+        val starts = listOf(floatArrayOf(0.2f, 0.2f, 0.1f, 0.1f), floatArrayOf(0.4f, 0.3f, 0.2f, 0.1f))
+        // 전체 영역: x 0.2~0.6, y 0.2~0.4 → 너비를 두 배로, 왼쪽으로 0.1 이동
+        val out = Geometry.fit(starts, floatArrayOf(0.1f, 0.2f, 0.8f, 0.2f))
+        assertArrayEquals(floatArrayOf(0.1f, 0.2f, 0.2f, 0.1f), out[0], 1e-5f)
+        assertArrayEquals(floatArrayOf(0.5f, 0.3f, 0.4f, 0.1f), out[1], 1e-5f)
+        // 화면 밖으로 나가는 값은 안쪽으로 맞춘다
+        val clamped = Geometry.fit(listOf(floatArrayOf(0.5f, 0.5f, 0.2f, 0.2f)), floatArrayOf(0.95f, -1f, 0.2f, 5f))[0]
+        assertArrayEquals(floatArrayOf(0.8f, 0f, 0.2f, 1f), clamped, 1e-5f)
+    }
 }

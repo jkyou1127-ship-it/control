@@ -33,7 +33,10 @@ class PadButton(
     var holdMs: Int = 1000,
     /** PC 가 한글 입력 상태일 때 보여 줄 이름. 비어 있으면 label 을 그대로 쓴다. */
     var label2: String = "",
+    /** 버튼 면에 그릴 사진(앱 저장소 안의 파일 이름). TYPE_IMAGE 에서는 보여 줄 사진. */
+    var image: String = "",
 ) {
+    val isImage: Boolean get() = type == TYPE_IMAGE
     val isShow: Boolean get() = type == TYPE_SHOW
     val isStick: Boolean get() = type == TYPE_STICK
     val isDisplay: Boolean get() = type == TYPE_DISPLAY
@@ -43,7 +46,7 @@ class PadButton(
 
     fun copy() = PadButton(
         x, y, w, h, label, keys.toMutableList(), mode, shape, color,
-        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor, holdMs, label2,
+        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor, holdMs, label2, image,
     )
 
     fun contains(px: Float, py: Float): Boolean {
@@ -62,7 +65,7 @@ class PadButton(
         .put("sens", sens.toDouble()).put("invert", invert)
         .put("group", group).put("target", target)
         .put("textColor", textColor).put("pressColor", pressColor).put("holdMs", holdMs)
-        .put("label2", label2)
+        .put("label2", label2).put("image", image)
 
     companion object {
         const val MODE_HOLD = 0    // 누르고 있는 동안 입력 (게임)
@@ -86,6 +89,7 @@ class PadButton(
         const val STICK_8WAY = 0     // 대각선으로 기울이면 두 방향 키를 함께 누른다 (mode 값)
         const val STICK_4WAY = 1     // 항상 한 방향만
         const val TYPE_DISPLAY = 6   // 지금 눌리고 있는 키를 보여 주는 패널(누를 수 없음)
+        const val TYPE_IMAGE = 7     // 꾸미기용 사진(누를 수 없음)
         const val GROUPS = 8
         const val KNOB_UNTIL_STOP = 0    // 키 방식 노브: 돌리는 동안만 누르고 멈추면 뗀다 (mode 값)
         const val KNOB_UNTIL_RELEASE = 1 // 키 방식 노브: 돌리기 시작하면 손을 뗄 때까지 계속 누른다
@@ -114,7 +118,7 @@ class PadButton(
                 o.optInt("group").coerceIn(0, GROUPS), o.optInt("target", 1).coerceIn(1, GROUPS),
                 o.optInt("textColor"), o.optInt("pressColor"),
                 o.optInt("holdMs", 1000).coerceIn(MIN_HOLD_MS, MAX_HOLD_MS),
-                o.optString("label2"),
+                o.optString("label2"), o.optString("image"),
             )
         }
     }
@@ -437,22 +441,39 @@ object History {
 
 /** 레이아웃을 파일로 내보내고 불러온다(백업, 다른 기기로 옮기기, 공유). */
 object LayoutFile {
-    const val MAX_BYTES = 2 * 1024 * 1024
+    const val MAX_BYTES = 24 * 1024 * 1024      // 사진이 함께 들어가므로 넉넉히
     private const val FORMAT = "controlpad-layout"
 
     fun fileName(layoutName: String): String =
         layoutName.replace(Regex("""[\\/:*?"<>|\n\r\t]"""), "_").trim().ifEmpty { "layout" } + ".controlpad.json"
 
-    fun export(l: PadLayout): String = l.toJson().put("format", FORMAT).put("version", 1).toString(2)
+    /** 파일 이름으로 쓸 수 있는 사진 이름인지(경로를 벗어나는 이름을 막는다). */
+    fun validImageName(name: String): Boolean = Regex("^[A-Za-z0-9_-][A-Za-z0-9._-]{0,79}$").matches(name)
+
+    /** readImage 로 읽을 수 있는 사진은 파일 안에 함께 넣는다(다른 기기에서도 보이게). */
+    fun export(l: PadLayout, readImage: (String) -> ByteArray? = { null }): String {
+        val images = JSONObject()
+        for (name in l.buttons.map { it.image }.filter { it.isNotEmpty() }.toSet()) {
+            val bytes = readImage(name) ?: continue
+            images.put(name, java.util.Base64.getEncoder().encodeToString(bytes))
+        }
+        return l.toJson().put("format", FORMAT).put("version", 1).put("images", images).toString(2)
+    }
 
     /**
      * 파일 내용을 레이아웃으로 바꾼다. 형식이 다르면 예외를 던진다.
      * 이미 있는 레이아웃을 덮어쓰지 않도록 항상 새 id 를 준다.
      */
-    fun import(text: String): PadLayout {
+    fun import(text: String, saveImage: (String, ByteArray) -> Unit = { _, _ -> }): PadLayout {
         val o = JSONObject(text)
         require(o.optString("format") == FORMAT && o.has("buttons"))
         val l = PadLayout.fromJson(o.put("id", UUID.randomUUID().toString()))
+        val images = o.optJSONObject("images")
+        for (b in l.buttons) if (!validImageName(b.image)) b.image = ""
+        if (images != null) for (name in images.keys()) {
+            if (!validImageName(name)) continue
+            runCatching { saveImage(name, java.util.Base64.getDecoder().decode(images.getString(name))) }
+        }
         // 손으로 고친 파일의 엉뚱한 좌표가 화면 밖 버튼을 만들지 않게 한다.
         for (b in l.buttons) {
             b.w = b.w.coerceIn(0.01f, 1f); b.h = b.h.coerceIn(0.01f, 1f)
@@ -494,4 +515,25 @@ object Stick {
     /** 방향 조합에 해당하는 키들. keys 는 위, 아래, 왼쪽, 오른쪽 순서다. */
     fun keysFor(mask: Int, keys: List<Int>): List<Int> =
         BITS.indices.filter { mask and BITS[it] != 0 }.mapNotNull { keys.getOrNull(it) }.filter { it > 0 }
+}
+
+/** 여러 버튼을 감싸는 영역을 새 위치·크기로 옮길 때, 각 버튼이 따라가는 계산. */
+object Geometry {
+    /**
+     * starts: 버튼들의 원래 x, y, w, h (화면 대비 비율). box: 옮긴 뒤 전체 영역의 x, y, w, h.
+     * 화면 밖으로 나가지 않게 맞춘 뒤, 각 버튼의 새 x, y, w, h 를 돌려준다.
+     */
+    fun fit(starts: List<FloatArray>, box: FloatArray): List<FloatArray> {
+        val ox = starts.minOf { it[0] }
+        val oy = starts.minOf { it[1] }
+        val ow = starts.maxOf { it[0] + it[2] } - ox
+        val oh = starts.maxOf { it[1] + it[3] } - oy
+        val w = box[2].coerceIn(0.01f, 1f)
+        val h = box[3].coerceIn(0.01f, 1f)
+        val x = box[0].coerceIn(0f, 1f - w)
+        val y = box[1].coerceIn(0f, 1f - h)
+        val sx = if (ow > 0f) w / ow else 1f
+        val sy = if (oh > 0f) h / oh else 1f
+        return starts.map { floatArrayOf(x + (it[0] - ox) * sx, y + (it[1] - oy) * sy, it[2] * sx, it[3] * sy) }
+    }
 }
