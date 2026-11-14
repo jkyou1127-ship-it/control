@@ -25,6 +25,10 @@ class PadButton(
     var group: Int = 0,
     /** TYPE_SHOW 일 때, 나타나게 할 그룹 번호. */
     var target: Int = 1,
+    /** 0 이면 테마를 따른다. */
+    var textColor: Int = 0,
+    /** 눌렸을 때 색. 0 이면 버튼 색과 같다. */
+    var pressColor: Int = 0,
 ) {
     val isShow: Boolean get() = type == TYPE_SHOW
     val isKnob: Boolean get() = type == TYPE_KNOB
@@ -33,7 +37,7 @@ class PadButton(
 
     fun copy() = PadButton(
         x, y, w, h, label, keys.toMutableList(), mode, shape, color,
-        type, keys2.toMutableList(), knobOut, sens, invert, group, target,
+        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor,
     )
 
     fun contains(px: Float, py: Float): Boolean {
@@ -51,6 +55,7 @@ class PadButton(
         .put("type", type).put("keys2", JSONArray(keys2)).put("knobOut", knobOut)
         .put("sens", sens.toDouble()).put("invert", invert)
         .put("group", group).put("target", target)
+        .put("textColor", textColor).put("pressColor", pressColor)
 
     companion object {
         const val MODE_HOLD = 0    // 누르고 있는 동안 입력 (게임)
@@ -87,6 +92,7 @@ class PadButton(
                 o.optInt("type"), MutableList(ks2.length()) { ks2.getInt(it) },
                 o.optInt("knobOut"), o.optDouble("sens", 4.0).toFloat(), o.optBoolean("invert"),
                 o.optInt("group").coerceIn(0, GROUPS), o.optInt("target", 1).coerceIn(1, GROUPS),
+                o.optInt("textColor"), o.optInt("pressColor"),
             )
         }
     }

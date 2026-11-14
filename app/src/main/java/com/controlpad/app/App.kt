@@ -91,7 +91,10 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
 
     fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f, parts: Int = 0) {
         if (b.isMouse) { drawMouse(c, b, r, selected, parts); return }
-        fill.color = if (pressed && !b.isPad) b.color else shade(b.color, if (b.isPad) 0.18f else 0.38f)
+        val lit = if (b.pressColor != 0) b.pressColor else b.color      // 눌렸을 때 채우는 색
+        // 눌렸을 때 글자는 채운 색의 밝기에 맞춰 검정/흰색 중 잘 보이는 쪽
+        val onLit = if (b.textColor != 0) b.textColor else if (Themes.luminance(lit) > 0.5f) Color.BLACK else Color.WHITE
+        fill.color = if (pressed && !b.isPad) lit else shade(b.color, if (b.isPad) 0.18f else 0.38f)
         stroke.color = if (selected) theme.text else b.color
         stroke.strokeWidth = density * if (selected) 3f else theme.stroke
         val rad = minOf(r.width(), r.height()) * 0.14f
@@ -104,7 +107,7 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         if (b.isKnob) {
             // 돌아간 정도를 보여 주는 표시점
             val rad2 = Math.toRadians(angle.toDouble() - 90)
-            fill.color = if (pressed) Color.BLACK else if (theme.colorText) theme.text else b.color
+            fill.color = if (pressed) onLit else if (theme.colorText) theme.text else b.color
             c.drawCircle(
                 r.centerX() + (Math.cos(rad2) * r.width() * 0.36).toFloat(),
                 r.centerY() + (Math.sin(rad2) * r.height() * 0.36).toFloat(),
@@ -121,7 +124,7 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
 
         val combo = if (b.isShow) "그룹 ${b.target} 표시" else if (b.isKnob) Knob.describe(b) else Keys.combo(b.keys)
         val label = b.label.ifEmpty { if (b.isShow) "그룹 ${b.target}" else if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
-        text.color = if (pressed) Color.BLACK else if (theme.colorText) b.color else theme.text
+        text.color = if (pressed) onLit else if (b.textColor != 0) b.textColor else if (theme.colorText) b.color else theme.text
         text.textSize = (r.height() * 0.3f)
             .coerceAtMost(r.width() * (if (b.isKnob) 0.9f else 1.5f) / label.length.coerceAtLeast(2))
             .coerceAtMost(if (b.isKnob) r.height() * 0.16f else Float.MAX_VALUE)

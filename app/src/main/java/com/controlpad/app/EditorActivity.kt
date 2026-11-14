@@ -47,6 +47,10 @@ class EditorActivity : BaseActivity() {
             setOnCheckedChangeListener { _, on -> view.snap = on; view.invalidate() }
         })
         bar.addView(CheckBox(this).apply {
+            text = "다중 선택"
+            setOnCheckedChangeListener { _, on -> view.multi = on; view.invalidate() }
+        })
+        bar.addView(CheckBox(this).apply {
             text = "슬라이드 입력"; isChecked = pad.slide
             setOnCheckedChangeListener { _, on -> pad.slide = on }
         })
@@ -96,14 +100,28 @@ class EditorActivity : BaseActivity() {
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
-        tool("속성") { view.selected?.let { editButton(it) } ?: hint() }
-        tool("복제") {
-            view.selected?.let {
-                val c = it.copy().apply { x = min(x + 0.03f, 1f - w); y = min(y + 0.03f, 1f - h) }
-                pad.buttons += c; view.selected = c; view.invalidate()
-            } ?: hint()
+        tool("속성") {
+            val sel = view.selection.toList()
+            when {
+                sel.isEmpty() -> hint()
+                sel.size == 1 -> editButton(sel[0])
+                else -> editMany(sel)
+            }
         }
-        tool("삭제") { view.selected?.let { pad.buttons -= it; view.selected = null; view.invalidate() } ?: hint() }
+        tool("복제") {
+            val sel = view.selection.toList()
+            if (sel.isEmpty()) hint()
+            else {
+                val copies = sel.map { it.copy().apply { x = min(x + 0.03f, 1f - w); y = min(y + 0.03f, 1f - h) } }
+                pad.buttons += copies
+                view.selection.clear(); view.selection += copies
+                view.invalidate()
+            }
+        }
+        tool("삭제") {
+            if (view.selection.isEmpty()) hint()
+            else { pad.buttons.removeAll(view.selection); view.selection.clear(); view.invalidate() }
+        }
         tool("실행") {
             LayoutStore.save(this, pad)
             startActivity(Intent(this, PlayActivity::class.java).putExtra("id", pad.id))
@@ -197,6 +215,10 @@ class EditorActivity : BaseActivity() {
         box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
         box.addView(group)
         box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
+        var textColor = b.textColor
+        var pressColor = b.pressColor
+        box.addView(optionalColor("글자색", "테마 기본", textColor) { textColor = it })
+        box.addView(optionalColor("눌렸을 때 색", "버튼 색과 같게", pressColor) { pressColor = it })
 
         AlertDialog.Builder(this).setTitle(if (isNew) "새 노브" else "노브 속성")
             .setView(ScrollView(this).apply { addView(box) })
@@ -205,7 +227,7 @@ class EditorActivity : BaseActivity() {
                 b.sens = (sens.progress + 1).toFloat()
                 b.keys = left; b.keys2 = right
                 b.invert = invert.isChecked
-                b.label = label.text.toString().trim(); b.color = color
+                b.label = label.text.toString().trim(); b.color = color; b.textColor = textColor; b.pressColor = pressColor
                 b.group = group.selectedItemPosition
                 view.invalidate()
             }
@@ -300,13 +322,17 @@ class EditorActivity : BaseActivity() {
         box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
         box.addView(group)
         box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
+        var textColor = b.textColor
+        var pressColor = b.pressColor
+        box.addView(optionalColor("글자색", "테마 기본", textColor) { textColor = it })
+        box.addView(optionalColor("눌렸을 때 색", "버튼 색과 같게", pressColor) { pressColor = it })
 
         AlertDialog.Builder(this).setTitle(if (isNew) "새 버튼" else "버튼 속성")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
                 b.keys = keys; b.label = label.text.toString().trim(); b.mode = mode.selectedItemPosition
                 b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
-                b.color = color
+                b.color = color; b.textColor = textColor; b.pressColor = pressColor
                 b.group = group.selectedItemPosition
                 view.invalidate()
             }
@@ -356,15 +382,89 @@ class EditorActivity : BaseActivity() {
         box.addView(TextView(this).apply { text = "이 버튼 자체의 표시 조건"; setPadding(0, dp(8), 0, 0) })
         box.addView(group)
         box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
+        var textColor = b.textColor
+        var pressColor = b.pressColor
+        box.addView(optionalColor("글자색", "테마 기본", textColor) { textColor = it })
+        box.addView(optionalColor("눌렸을 때 색", "버튼 색과 같게", pressColor) { pressColor = it })
 
         AlertDialog.Builder(this).setTitle(if (isNew) "새 표시 버튼" else "표시 버튼 속성")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
                 b.target = target.selectedItemPosition + 1
                 b.mode = if (mode.selectedItemPosition == 1) PadButton.MODE_HOLD else PadButton.MODE_TOGGLE
-                b.label = label.text.toString().trim(); b.color = color
+                b.label = label.text.toString().trim(); b.color = color; b.textColor = textColor; b.pressColor = pressColor
                 // 자기가 여는 그룹에 자기 자신이 들어가면 영영 누를 수 없으므로 막는다.
                 b.group = group.selectedItemPosition.let { if (it == b.target) 0 else it }
+                view.invalidate()
+            }
+            .setNegativeButton("취소", null)
+            .show().wide()
+    }
+
+    /** 고르지 않으면 기본값(0)을 쓰는 색. */
+    private fun optionalColor(title: String, defaultName: String, initial: Int, onPick: (Int) -> Unit): View {
+        var color = initial
+        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(6), 0, 0) }
+        val text = TextView(this)
+        val swatch = View(this)
+        fun show() {
+            text.text = title + ": " + if (color == 0) defaultName else "#%06X".format(color and 0xFFFFFF)
+            swatch.background = GradientDrawable().apply {
+                cornerRadius = dp(6).toFloat()
+                if (color != 0) setColor(color)
+                setStroke(dp(1), Themes.current.text)
+            }
+        }
+        show()
+        row.addView(swatch, LinearLayout.LayoutParams(dp(32), dp(32)).apply { rightMargin = dp(10) })
+        row.addView(text, LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(Button(this).apply {
+            this.text = "고르기"
+            setOnClickListener {
+                pickColor(this@EditorActivity, if (color == 0) Color.WHITE else color) { color = it; onPick(it); show() }
+            }
+        })
+        row.addView(Button(this).apply { this.text = "기본"; setOnClickListener { color = 0; onPick(0); show() } })
+        return row
+    }
+
+    /** 여러 버튼을 한꺼번에 바꾼다. 건드리지 않은 항목은 그대로 둔다. */
+    private fun editMany(sel: List<PadButton>) {
+        val m = dp(20)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
+        box.addView(TextView(this).apply { text = "선택한 ${sel.size}개에 한꺼번에 적용합니다. 바꾸지 않은 항목은 그대로 둡니다." })
+
+        box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
+        val group = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@EditorActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("변경 안 함", "항상 표시") + (1..PadButton.GROUPS).map { "그룹 $it — 표시 버튼을 눌러야 나타남" },
+            )
+        }
+        box.addView(group)
+
+        var color: Int? = null
+        var textColor: Int? = null
+        var pressColor: Int? = null
+        box.addView(TextView(this).apply { text = "버튼 색 (고르면 적용)"; setPadding(0, dp(8), 0, 0) })
+        box.addView(colorRow(0) { color = it }, LinearLayout.LayoutParams(-1, -2))
+        box.addView(optionalColor("글자색", "변경 안 함", 0) { textColor = it })
+        box.addView(optionalColor("눌렸을 때 색", "변경 안 함", 0) { pressColor = it })
+        val reset = CheckBox(this).apply { text = "글자색·눌렸을 때 색을 기본값으로 되돌리기" }
+        box.addView(reset)
+
+        AlertDialog.Builder(this).setTitle("${sel.size}개 한꺼번에 바꾸기")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인") { _, _ ->
+                for (b in sel) {
+                    val g = group.selectedItemPosition - 1
+                    // 표시 버튼을 자기가 여는 그룹에 넣으면 누를 수 없게 되므로 건너뛴다.
+                    if (g >= 0 && !(b.isShow && b.target == g)) b.group = g
+                    color?.let { b.color = it }
+                    if (reset.isChecked) { b.textColor = 0; b.pressColor = 0 }
+                    textColor?.takeIf { it != 0 }?.let { b.textColor = it }
+                    pressColor?.takeIf { it != 0 }?.let { b.pressColor = it }
+                }
                 view.invalidate()
             }
             .setNegativeButton("취소", null)
@@ -439,7 +539,15 @@ class EditorActivity : BaseActivity() {
 }
 
 class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
-    var selected: PadButton? = null
+    /** 선택된 버튼들. 다중 선택이 꺼져 있으면 많아야 하나다. */
+    val selection = LinkedHashSet<PadButton>()
+    var selected: PadButton?
+        get() = selection.lastOrNull()
+        set(v) { selection.clear(); if (v != null) selection += v }
+
+    /** 켜면 버튼을 눌러 선택에 더하거나 빼고, 빈 곳을 드래그해 범위로 선택한다. */
+    var multi = false
+        set(on) { field = on; if (!on && selection.size > 1) selected = selection.last() }
     var snap = true
     var onCreated: (PadButton) -> Unit = {}
     var onEdit: (PadButton) -> Unit = {}
@@ -457,20 +565,21 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     init {
         setBackgroundColor(theme.bg)
     }
+
     private val handle = ctx.dp(22).toFloat()
     private val minSize = ctx.dp(36).toFloat()
     private val slop = ctx.dp(8).toFloat()
 
-    private enum class Drag { NONE, DRAW, MOVE, RESIZE }
+    private enum class Drag { NONE, DRAW, MARQUEE, MOVE, RESIZE }
     private var drag = Drag.NONE
     private var downX = 0f
     private var downY = 0f
     private var curX = 0f
     private var curY = 0f
-    private var offX = 0f
-    private var offY = 0f
     private var moved = false
     private var wasSelected = false
+    private var hitButton: PadButton? = null
+    private val starts = HashMap<PadButton, Pair<Float, Float>>()   // 옮기기 시작할 때의 위치
 
     private val cell: Float get() = width / 48f
     private fun snapPx(v: Float) = if (snap) (v / cell).roundToInt() * cell else v
@@ -488,14 +597,14 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             c.drawText("빈 곳을 손가락으로 드래그해서 버튼을 그리세요", width / 2f, height / 2f, hintPaint)
         }
         for (b in pad.buttons) {
-            painter.draw(c, b, rectOf(b), false, b === selected)
+            painter.draw(c, b, rectOf(b), false, b in selection)
             if (b.group > 0) painter.badge(c, rectOf(b), "그룹 ${b.group}")
         }
-        selected?.let {
-            val r = rectOf(it)
+        if (selection.size == 1) {
+            val r = rectOf(selection.first())
             c.drawCircle(r.right, r.bottom, handle * 0.5f, handlePaint)
         }
-        if (drag == Drag.DRAW) {
+        if (drag == Drag.DRAW || drag == Drag.MARQUEE) {
             c.drawRect(min(downX, curX), min(downY, curY), max(downX, curX), max(downY, curY), drawPaint)
         }
     }
@@ -507,17 +616,22 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = x; downY = y; curX = x; curY = y; moved = false
-                val sel = selected
-                val sr = sel?.let { RectF(rectOf(it)) }
-                if (sel != null && sr != null && abs(x - sr.right) < handle * 1.4f && abs(y - sr.bottom) < handle * 1.4f) {
+                val only = if (selection.size == 1) selection.first() else null
+                val sr = only?.let { RectF(rectOf(it)) }
+                if (sr != null && abs(x - sr.right) < handle * 1.4f && abs(y - sr.bottom) < handle * 1.4f) {
                     drag = Drag.RESIZE
                 } else {
                     val hit = pad.buttons.lastOrNull { it.contains(x / width, y / height) }
+                    hitButton = hit
                     if (hit != null) {
-                        wasSelected = hit === selected
-                        selected = hit
-                        offX = x - hit.x * width; offY = y - hit.y * height
+                        wasSelected = hit in selection
+                        if (multi) selection += hit else selected = hit
+                        starts.clear()
+                        for (b in selection) starts[b] = b.x to b.y
                         drag = Drag.MOVE
+                    } else if (multi) {
+                        selection.clear()
+                        drag = Drag.MARQUEE
                     } else {
                         selected = null
                         downX = snapPx(x); downY = snapPx(y)
@@ -527,14 +641,18 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             }
             MotionEvent.ACTION_MOVE -> {
                 if (abs(x - downX) > slop || abs(y - downY) > slop) moved = true
-                val b = selected
                 when (drag) {
                     Drag.DRAW -> { curX = snapPx(x); curY = snapPx(y) }
-                    Drag.MOVE -> if (b != null && moved) {
-                        b.x = (snapPx(x - offX) / width).coerceIn(0f, 1f - b.w)
-                        b.y = (snapPx(y - offY) / height).coerceIn(0f, 1f - b.h)
+                    Drag.MARQUEE -> { curX = x; curY = y }
+                    Drag.MOVE -> if (moved && starts.isNotEmpty()) {
+                        // 선택된 것들이 함께 움직이되, 어느 것도 화면 밖으로 나가지 않게 한다.
+                        val dx = (snapPx(x - downX) / width)
+                            .coerceIn(-starts.values.minOf { it.first }, starts.minOf { 1f - it.value.first - it.key.w })
+                        val dy = (snapPx(y - downY) / height)
+                            .coerceIn(-starts.values.minOf { it.second }, starts.minOf { 1f - it.value.second - it.key.h })
+                        for ((b, s) in starts) { b.x = s.first + dx; b.y = s.second + dy }
                     }
-                    Drag.RESIZE -> if (b != null) {
+                    Drag.RESIZE -> selection.firstOrNull()?.let { b ->
                         b.w = (max(snapPx(x) - b.x * width, minSize) / width).coerceAtMost(1f - b.x)
                         b.h = (max(snapPx(y) - b.y * height, minSize) / height).coerceAtMost(1f - b.y)
                     }
@@ -544,8 +662,8 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val was = drag
                 drag = Drag.NONE
-                if (e.actionMasked == MotionEvent.ACTION_UP) {
-                    if (was == Drag.DRAW) {
+                if (e.actionMasked == MotionEvent.ACTION_UP) when (was) {
+                    Drag.DRAW -> {
                         val l = min(downX, curX); val t = min(downY, curY)
                         val w = abs(curX - downX); val h = abs(curY - downY)
                         if (w >= minSize && h >= minSize) {
@@ -555,9 +673,17 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                             selected = b
                             onCreated(b)
                         }
-                    } else if (was == Drag.MOVE && !moved && wasSelected) {
-                        selected?.let(onEdit)
                     }
+                    Drag.MARQUEE -> {
+                        val l = min(downX, curX) / width; val r = max(downX, curX) / width
+                        val t = min(downY, curY) / height; val b2 = max(downY, curY) / height
+                        selection += pad.buttons.filter { it.x < r && it.x + it.w > l && it.y < b2 && it.y + it.h > t }
+                    }
+                    Drag.MOVE -> if (!moved && wasSelected) {
+                        // 이미 선택된 버튼을 다시 누름: 다중 선택에서는 선택 해제, 아니면 속성 열기
+                        if (multi) hitButton?.let { selection -= it } else selected?.let(onEdit)
+                    }
+                    else -> {}
                 }
             }
         }

@@ -217,4 +217,15 @@ class CoreTest {
         assertEquals(PadButton.GROUPS, bad.group)     // 범위를 벗어난 값은 배열 밖을 가리키지 않게 맞춘다
         assertEquals(1, bad.target)
     }
+
+    @Test
+    fun perButtonColoursRoundTripAndDefaultToZero() {
+        val b = PadButton(0f, 0f, 0.1f, 0.1f, textColor = 0xFF112233.toInt(), pressColor = 0xFFFFEE00.toInt())
+        val back = PadButton.fromJson(JSONObject(b.toJson().toString()))
+        assertEquals(0xFF112233.toInt(), back.textColor)
+        assertEquals(0xFFFFEE00.toInt(), back.copy().pressColor)
+        val old = PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1}"""))
+        assertEquals(0, old.textColor)
+        assertEquals(0, old.pressColor)
+    }
 }
