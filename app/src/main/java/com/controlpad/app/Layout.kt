@@ -248,6 +248,12 @@ object Knob {
         return d
     }
 
+    /** 원점으로 돌아가는 애니메이션의 한 단계: 남은 각도를 줄이고, 거의 다 왔으면 0 으로 맞춘다. */
+    fun settle(angle: Float): Float {
+        val next = angle * 0.7f
+        return if (kotlin.math.abs(next) < 1f) 0f else next
+    }
+
     fun describe(b: PadButton): String = when (b.knobOut) {
         PadButton.OUT_MOUSE_X -> "마우스 X축"
         PadButton.OUT_MOUSE_Y -> "마우스 Y축"

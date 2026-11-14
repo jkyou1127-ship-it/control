@@ -188,4 +188,16 @@ class CoreTest {
         s.clear()
         assertTrue(s.pressed().isEmpty())
     }
+
+    @Test
+    fun knobIndicatorSettlesToOriginTheShortWay() {
+        // 두 바퀴 반 돌린 뒤에는 반 바퀴만 되돌아가면 된다.
+        assertEquals(180f, kotlin.math.abs(Knob.delta(0f, 900f)), 1e-3f)
+        assertEquals(-90f, Knob.delta(0f, 270f), 1e-3f)
+        var a = 170f
+        var steps = 0
+        while (a != 0f) { a = Knob.settle(a); steps++ }
+        assertTrue(steps in 5..30)        // 16ms 간격으로 약 0.1~0.5초
+        assertEquals(0f, Knob.settle(-1.2f), 0f)
+    }
 }

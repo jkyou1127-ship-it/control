@@ -1,5 +1,5 @@
 {
-  "versionCode": 12,
-  "versionName": "1.9",
-  "notes": "눌리고 있는 키 표시와 버튼의 키 이름 표시를 켜고 끌 수 있습니다 (연결 설정 > 기타)."
+  "versionCode": 13,
+  "versionName": "2.0",
+  "notes": "노브에서 손을 떼면 방향 표시점이 원점으로 돌아옵니다."
 }

@@ -72,6 +72,20 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val knobStop = Array(buttons.size) { i -> Runnable { knobKey(i, 0) } }
     private val lastAngle = HashMap<Int, Float>()       // 포인터 id → 직전 각도
 
+    /** 손을 뗀 노브의 표시점을 원점(위쪽)으로 부드럽게 되돌린다. */
+    private val knobReturn = object : Runnable {
+        override fun run() {
+            var moving = false
+            for (i in buttons.indices) {
+                if (holds[i] > 0 || knobAngle[i] == 0f) continue
+                knobAngle[i] = Knob.settle(knobAngle[i])
+                if (knobAngle[i] != 0f) moving = true
+            }
+            invalidate()
+            if (moving) taps.postDelayed(this, 16)
+        }
+    }
+
     // 트랙패드 상태 (버튼 인덱스별). 올라가 있는 손가락 수는 holds 를 같이 쓴다.
     private val density = ctx.resources.displayMetrics.density
     private val padStart = LongArray(buttons.size)      // 첫 손가락이 닿은 시각
@@ -278,13 +292,16 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             taps.removeCallbacks(knobStop[i])
             knobKey(i, 0)
             knobRem[i] = 0f
+            knobAngle[i] = Knob.delta(0f, knobAngle[i])   // 여러 바퀴 돌렸어도 가까운 쪽으로 돌아가게
+            taps.removeCallbacks(knobReturn)
+            taps.post(knobReturn)
         } else if (b.mode == PadButton.MODE_HOLD) { state.release(b.keys); send() }
     }
 
     fun releaseAll() {
         pointers.clear(); lastAngle.clear(); lastX.clear(); lastY.clear()
         mouseParts.clear(); wheelTravel.clear()
-        knobDir.fill(0); knobRem.fill(0f)
+        knobDir.fill(0); knobRem.fill(0f); knobAngle.fill(0f)
         holds.fill(0); toggled.fill(false); flash.fill(false)
         taps.removeCallbacksAndMessages(null)
         state.clear(); send()
