@@ -29,6 +29,8 @@ class PadButton(
     var textColor: Int = 0,
     /** 눌렸을 때 색. 0 이면 버튼 색과 같다. */
     var pressColor: Int = 0,
+    /** MODE_TIMED 일 때 키를 누르고 있을 시간(밀리초). */
+    var holdMs: Int = 1000,
 ) {
     val isShow: Boolean get() = type == TYPE_SHOW
     val isKnob: Boolean get() = type == TYPE_KNOB
@@ -37,7 +39,7 @@ class PadButton(
 
     fun copy() = PadButton(
         x, y, w, h, label, keys.toMutableList(), mode, shape, color,
-        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor,
+        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor, holdMs,
     )
 
     fun contains(px: Float, py: Float): Boolean {
@@ -55,12 +57,19 @@ class PadButton(
         .put("type", type).put("keys2", JSONArray(keys2)).put("knobOut", knobOut)
         .put("sens", sens.toDouble()).put("invert", invert)
         .put("group", group).put("target", target)
-        .put("textColor", textColor).put("pressColor", pressColor)
+        .put("textColor", textColor).put("pressColor", pressColor).put("holdMs", holdMs)
 
     companion object {
         const val MODE_HOLD = 0    // 누르고 있는 동안 입력 (게임)
         const val MODE_TAP = 1     // 누를 때 한 번 입력 (단축키)
         const val MODE_TOGGLE = 2  // 누를 때마다 켜짐/꺼짐
+        const val MODE_TIMED = 3   // 누르면 holdMs 동안 입력하고 스스로 뗀다
+        const val MIN_HOLD_MS = 50
+        const val MAX_HOLD_MS = 60000
+
+        /** 사용자가 적은 초 단위 값을 밀리초로 바꾼다. 못 읽으면 1초. */
+        fun parseHold(seconds: String): Int =
+            ((seconds.trim().replace(',', '.').toFloatOrNull() ?: 1f) * 1000).toInt().coerceIn(MIN_HOLD_MS, MAX_HOLD_MS)
         const val SHAPE_RECT = 0
         const val SHAPE_OVAL = 1
         const val TYPE_BUTTON = 0
@@ -93,6 +102,7 @@ class PadButton(
                 o.optInt("knobOut"), o.optDouble("sens", 4.0).toFloat(), o.optBoolean("invert"),
                 o.optInt("group").coerceIn(0, GROUPS), o.optInt("target", 1).coerceIn(1, GROUPS),
                 o.optInt("textColor"), o.optInt("pressColor"),
+                o.optInt("holdMs", 1000).coerceIn(MIN_HOLD_MS, MAX_HOLD_MS),
             )
         }
     }

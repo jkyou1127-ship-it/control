@@ -228,4 +228,16 @@ class CoreTest {
         assertEquals(0, old.textColor)
         assertEquals(0, old.pressColor)
     }
+
+    @Test
+    fun timedHoldDurationParsesAndStaysInRange() {
+        assertEquals(1500, PadButton.parseHold("1.5"))
+        assertEquals(2500, PadButton.parseHold(" 2,5 "))
+        assertEquals(1000, PadButton.parseHold(""))
+        assertEquals(PadButton.MIN_HOLD_MS, PadButton.parseHold("0"))
+        assertEquals(PadButton.MAX_HOLD_MS, PadButton.parseHold("9999"))
+        val b = PadButton(0f, 0f, 0.1f, 0.1f, mode = PadButton.MODE_TIMED, holdMs = 3000)
+        assertEquals(3000, PadButton.fromJson(JSONObject(b.toJson().toString())).copy().holdMs)
+        assertEquals(1000, PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1}""")).holdMs)
+    }
 }

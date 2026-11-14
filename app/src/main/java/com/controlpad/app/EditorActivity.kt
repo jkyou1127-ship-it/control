@@ -309,11 +309,30 @@ class EditorActivity : BaseActivity() {
         val mode = Spinner(this).apply {
             adapter = ArrayAdapter(
                 this@EditorActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("누르고 있는 동안 입력 (게임용)", "누를 때 한 번 입력 (단축키용)", "누를 때마다 켜짐/꺼짐"),
+                listOf(
+                    "누르고 있는 동안 입력 (게임용)", "누를 때 한 번 입력 (단축키용)", "누를 때마다 켜짐/꺼짐",
+                    "누르면 일정 시간 동안 입력",
+                ),
             )
             setSelection(b.mode)
         }
         box.addView(mode)
+        val holdRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        holdRow.addView(TextView(this).apply { text = "입력 유지 시간(초)  " })
+        val hold = EditText(this).apply {
+            setText((b.holdMs / 1000f).toString().removeSuffix(".0")); setSingleLine()
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            minWidth = dp(90)
+        }
+        holdRow.addView(hold)
+        box.addView(holdRow)
+        mode.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                holdRow.visibility = if (pos == PadButton.MODE_TIMED) View.VISIBLE else View.GONE
+            }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        holdRow.visibility = if (b.mode == PadButton.MODE_TIMED) View.VISIBLE else View.GONE
 
         val oval = CheckBox(this).apply { text = "원형 버튼"; isChecked = b.shape == PadButton.SHAPE_OVAL }
         box.addView(oval)
@@ -331,6 +350,7 @@ class EditorActivity : BaseActivity() {
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
                 b.keys = keys; b.label = label.text.toString().trim(); b.mode = mode.selectedItemPosition
+                b.holdMs = PadButton.parseHold(hold.text.toString())
                 b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
                 b.color = color; b.textColor = textColor; b.pressColor = pressColor
                 b.group = group.selectedItemPosition

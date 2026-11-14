@@ -107,6 +107,14 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         invalidate()
     }
 
+    // '일정 시간 입력' 버튼: 지금 키를 누르고 있는지, 시간이 다 되면 떼는 예약
+    private val timedOn = BooleanArray(buttons.size)
+    private val timedOff = Array(buttons.size) { i ->
+        Runnable {
+            if (timedOn[i]) { timedOn[i] = false; state.release(buttons[i].keys); send(); invalidate() }
+        }
+    }
+
     // 그룹 표시 상태. 0번은 항상 보이는 버튼들이다.
     private val groupOn = BooleanArray(PadButton.GROUPS + 1)     // 표시 버튼으로 켜 둔 그룹
     private val groupHolds = IntArray(PadButton.GROUPS + 1)      // '누르는 동안만' 표시 버튼을 누르고 있는 손가락 수
@@ -126,6 +134,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             if (b.group != g) continue
             holds[i] = 0
             if (toggled[i]) { toggled[i] = false; state.release(b.keys) }
+            if (timedOn[i]) { taps.removeCallbacks(timedOff[i]); timedOn[i] = false; state.release(b.keys) }
             // 사라진 그룹 안의 표시 버튼이 켜 둔 그룹도 함께 닫는다.
             if (b.isShow && b.target != g && groupOn[b.target]) {
                 groupOn[b.target] = false
@@ -307,6 +316,12 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 state.press(b.keys); send(); flash[i] = true
                 taps.postDelayed({ state.release(b.keys); send(); flash[i] = false; invalidate() }, TAP_MS)
             }
+            PadButton.MODE_TIMED -> {
+                // 입력 중에 다시 누르면 시간을 처음부터 다시 센다.
+                taps.removeCallbacks(timedOff[i])
+                if (!timedOn[i]) { timedOn[i] = true; state.press(b.keys); send() }
+                taps.postDelayed(timedOff[i], b.holdMs.toLong())
+            }
             PadButton.MODE_TOGGLE -> {
                 toggled[i] = !toggled[i]
                 if (toggled[i]) state.press(b.keys) else state.release(b.keys)
@@ -347,7 +362,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         pointers.clear(); lastAngle.clear(); lastX.clear(); lastY.clear()
         mouseParts.clear(); wheelTravel.clear()
         knobDir.fill(0); knobRem.fill(0f); knobAngle.fill(0f)
-        groupOn.fill(false); groupHolds.fill(0)
+        groupOn.fill(false); groupHolds.fill(0); timedOn.fill(false)
         holds.fill(0); toggled.fill(false); flash.fill(false)
         taps.removeCallbacksAndMessages(null)
         state.clear(); send()
@@ -422,7 +437,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
             val lit = if (b.isShow) groupVisible(b.target)
             else if (b.isKnob) holds[i] > 0
-            else flash[i] || toggled[i] || (holds[i] > 0 && b.mode == PadButton.MODE_HOLD)
+            else flash[i] || toggled[i] || timedOn[i] || (holds[i] > 0 && b.mode == PadButton.MODE_HOLD)
             var parts = 0
             if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts)
