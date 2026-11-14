@@ -1,5 +1,5 @@
 {
-  "versionCode": 35,
-  "versionName": "2.13",
-  "notes": "앱 이름이 '리듬 컨트롤러/가상키보드'로 바뀌었습니다."
+  "versionCode": 36,
+  "versionName": "2.13.1",
+  "notes": "앱 이름이 '리듬 컨트롤러/가상키보드'로 바뀌었습니다 (앱 안의 제목은 ControlPad 그대로)."
 }
