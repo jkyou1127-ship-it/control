@@ -149,7 +149,7 @@ object Link {
             val u = udp
             when {
                 u == null -> "PC 주소가 설정되지 않음"
-                u.alive -> "PC 연결됨 (${u.host})"
+                u.alive -> "PC 연결됨 (${u.host})" + if (u.rttMs >= 0) " · 왕복 ${u.rttMs}ms" else ""
                 else -> "PC 응답 없음 (${u.host}:${u.port})"
             }
         }
@@ -336,6 +336,11 @@ class UdpLink(val host: String, val port: Int) {
     private var addr: InetAddress? = null
     private var seq = 0
     @Volatile private var lastAck = 0L
+
+    /** 최근 키 패킷이 PC 에 갔다가 응답이 돌아오기까지 걸린 시간(ms). 아직 모르면 -1. */
+    @Volatile var rttMs = -1
+        private set
+    private val sentAt = java.util.concurrent.atomic.AtomicLongArray(64)   // 순번 % 64 → 보낸 시각(ns)
     @Volatile private var closed = false
 
     val alive: Boolean get() = lastAck != 0L && SystemClock.elapsedRealtime() - lastAck < 1500
@@ -349,6 +354,14 @@ class UdpLink(val host: String, val port: Int) {
                     socket.receive(p)
                     if (p.length >= 2 && buf[0] == 'C'.code.toByte() && buf[1] == 'A'.code.toByte()) {
                         lastAck = SystemClock.elapsedRealtime()
+                        if (p.length >= 6) {
+                            val seq = (buf[2].toInt() and 0xFF shl 24) or (buf[3].toInt() and 0xFF shl 16) or
+                                (buf[4].toInt() and 0xFF shl 8) or (buf[5].toInt() and 0xFF)
+                            val sent = sentAt.get(seq and 63)
+                            val ms = ((System.nanoTime() - sent) / 1_000_000).toInt()
+                            // 여러 번의 평균에 가깝게 보여 줘서 숫자가 덜 튀게 한다.
+                            if (sent != 0L && ms in 0..2000) rttMs = if (rttMs < 0) ms else (rttMs * 3 + ms) / 4
+                        }
                     }
                 } catch (e: Exception) {
                     if (closed) break
@@ -363,6 +376,7 @@ class UdpLink(val host: String, val port: Int) {
         val a = addr ?: InetAddress.getByName(host).also { addr = it }
         val data = header('P', report.size)
         System.arraycopy(report, 0, data, 7, report.size)
+        sentAt.set(seq and 63, System.nanoTime())
         socket.send(DatagramPacket(data, data.size, a, port))
     }
 

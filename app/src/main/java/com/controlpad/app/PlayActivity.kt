@@ -324,7 +324,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
             return
         }
-        if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         // 한/영을 누르면 글자 키의 표시도 함께 바꾼다(키를 R Alt 로 바꿔 둔 한/영 버튼 포함).
         if (Keys.HANGUL in b.keys || b.label == "한/영") hangul = !hangul
         when (b.mode) {
@@ -345,6 +344,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
             else -> { state.press(b.keys); send() }
         }
+        // 진동은 시스템 호출이라 시간이 걸릴 수 있으므로, 입력을 먼저 보낸 뒤에 울린다.
+        if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
     }
 
     private fun up(i: Int) {
@@ -448,16 +449,52 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         return true
     }
 
+    // 눌리지 않은 상태의 버튼 전체를 미리 그려 둔 그림. 터치마다 수십 개의 버튼을 다시 그리면
+    // 화면 그리기가 밀려 다음 터치 처리까지 늦어지므로, 평소에는 이 그림 한 장과 눌린 버튼만 그린다.
+    private var idle: android.graphics.Bitmap? = null
+    private var idleKey = -1
+
+    /** 보이는 그룹과 한/영 상태가 같으면 미리 그린 그림을 다시 쓸 수 있다. */
+    private fun idleStateKey(): Int {
+        var k = if (hangul) 1 else 0
+        for (g in 1..PadButton.GROUPS) if (groupVisible(g)) k = k or (1 shl g)
+        return k
+    }
+
+    private fun idleLayer(): android.graphics.Bitmap {
+        var bmp = idle
+        if (bmp == null || bmp.width != width || bmp.height != height) {
+            bmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+            idle = bmp
+            idleKey = -1
+        }
+        val key = idleStateKey()
+        if (idleKey != key) {
+            idleKey = key
+            bmp.eraseColor(theme.bg)
+            val c = Canvas(bmp)
+            for (b in buttons) {
+                if (!groupVisible(b.group)) continue
+                rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
+                painter.draw(c, b, rect, false, false, 0f, 0, if (hangul) 1 else 0)
+            }
+        }
+        return bmp
+    }
+
     override fun onDraw(c: Canvas) {
+        if (width == 0 || height == 0) return
+        c.drawBitmap(idleLayer(), 0f, 0f, null)
         for (i in buttons.indices) {
             val b = buttons[i]
             if (!groupVisible(b.group)) continue
-            rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
             val lit = if (b.isShow) groupVisible(b.target)
             else if (b.isKnob) holds[i] > 0
             else flash[i] || toggled[i] || timedOn[i] || (holds[i] > 0 && b.mode == PadButton.MODE_HOLD)
             var parts = 0
             if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)
+            if (!lit && parts == 0 && knobAngle[i] == 0f) continue    // 미리 그린 모습 그대로
+            rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)
         }
         if (showPressed && pressedText.isNotEmpty()) {
