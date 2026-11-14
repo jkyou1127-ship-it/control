@@ -68,6 +68,11 @@ class ReceiverTest(unittest.TestCase):
         self.assertEqual(ev, [("move", 4, -2), ("btn", 0, True), ("wheel", 3), ("btn", 0, False),
                               ("btn", 1, True), ("btn", 1, False)])
 
+    def test_discovery_reply(self):
+        self.assertEqual(r.discovery_reply(b"CD\x01", "거실-PC"), b"CR\x01" + "거실-PC".encode())
+        self.assertIsNone(r.discovery_reply(packet(1), "pc"))
+        self.assertIsNone(r.discovery_reply(b"CD\x02", "pc"))
+
     def test_every_app_key_has_a_scancode(self):
         # 앱의 Keys.kt 에 있는 usage 범위
         app = list(range(0x04, 0x28)) + list(range(0x28, 0x3A)) + list(range(0x3A, 0x47)) + \

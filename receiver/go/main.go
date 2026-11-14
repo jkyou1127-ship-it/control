@@ -121,6 +121,14 @@ func parseMouse(p []byte) (mousePacket, bool) {
 	}, true
 }
 
+// discoveryReply 는 'PC 자동으로 찾기' 질문이면 PC 이름을 담은 답을 만든다. 아니면 nil.
+func discoveryReply(p []byte, name string) []byte {
+	if len(p) != 3 || p[0] != 'C' || p[1] != 'D' || p[2] != 1 {
+		return nil
+	}
+	return append([]byte{'C', 'R', 1}, name...)
+}
+
 // newer 는 순번이 앞선 패킷인지 본다. 크게 뒤로 가면 앱이 다시 시작된 것으로 본다.
 func newer(seq, last uint32) bool {
 	return seq > last || int64(seq) < int64(last)-1000
@@ -281,12 +289,14 @@ func main() {
 	defer conn.Close()
 
 	fmt.Printf("ControlPad 수신 프로그램 버전 %d\n", version)
-	fmt.Printf("ControlPad 수신 대기 중. 태블릿 앱의 '연결 설정'에 아래 주소를 입력하세요 (포트 %d):\n", *port)
+	fmt.Printf("ControlPad 수신 대기 중. 태블릿 앱의 '연결 설정'에서 'PC 자동으로 찾기'를 누르세요.\n")
+	fmt.Printf("찾지 못하면 아래 주소를 직접 입력하세요 (포트 %d):\n", *port)
 	for _, a := range localAddresses() {
 		fmt.Println("   ", a)
 	}
 	fmt.Println("끝내려면 이 창을 닫으세요.")
 
+	hostname, _ := os.Hostname()
 	keys := &Keys{inj: inj, down: map[int]bool{}}
 	mouse := &Mouse{inj: inj}
 	last := time.Now()
@@ -297,7 +307,9 @@ func main() {
 		n, from, err := conn.ReadFromUDP(buf)
 		if err == nil {
 			p := buf[:n]
-			if m, ok := parseMouse(p); ok {
+			if reply := discoveryReply(p, hostname); reply != nil {
+				conn.WriteToUDP(reply, from)
+			} else if m, ok := parseMouse(p); ok {
 				mouse.Feed(m)
 				last = time.Now()
 			} else if seq, report, ok := parseKeys(p); ok {

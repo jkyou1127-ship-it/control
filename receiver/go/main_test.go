@@ -190,3 +190,12 @@ func TestFetchUpdate(t *testing.T) {
 		t.Fatal("missing file should be an error")
 	}
 }
+
+func TestDiscoveryReply(t *testing.T) {
+	if got := discoveryReply([]byte{'C', 'D', 1}, "거실-PC"); string(got) != "CR\x01거실-PC" {
+		t.Fatalf("got %q", got)
+	}
+	if discoveryReply(keyPacket(1), "pc") != nil || discoveryReply([]byte{'C', 'D', 2}, "pc") != nil {
+		t.Fatal("non-discovery packet answered")
+	}
+}

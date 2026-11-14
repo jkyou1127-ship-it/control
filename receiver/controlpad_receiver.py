@@ -110,6 +110,13 @@ class Mouse:
         self.set(0)
 
 
+def discovery_reply(packet, name):
+    """'PC 자동으로 찾기' 질문('C' 'D' 버전)이면 PC 이름을 담은 답, 아니면 None."""
+    if packet != b"CD\x01":
+        return None
+    return b"CR\x01" + name.encode("utf-8")
+
+
 class Receiver:
     """패킷을 받아 이전 상태와의 차이만큼 inject(usage, down) 을 부른다."""
 
@@ -255,6 +262,10 @@ def main(argv=None):
             except socket.timeout:
                 packet = None
             if packet is not None:
+                reply = discovery_reply(packet, socket.gethostname())
+                if reply is not None:
+                    sock.sendto(reply, sender)
+                    continue
                 m = parse_mouse(packet)
                 if m is not None:
                     mouse.feed(*m)

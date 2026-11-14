@@ -404,3 +404,56 @@ class UdpLink(val host: String, val port: Int) {
         socket.close()
     }
 }
+
+/**
+ * 같은 네트워크에서 실행 중인 PC 수신 프로그램을 찾는다.
+ * 'C' 'D' 버전(1) 을 브로드캐스트로 보내면, 수신 프로그램이 'C' 'R' 버전(1) + PC 이름으로 답한다.
+ */
+object Discovery {
+    class Pc(val address: String, val name: String)
+
+    val QUERY = byteArrayOf('C'.code.toByte(), 'D'.code.toByte(), 1)
+
+    /** 응답 패킷이면 PC 이름을, 아니면 null 을 돌려준다. */
+    fun parseReply(data: ByteArray, length: Int): String? {
+        if (length < 3 || data[0] != 'C'.code.toByte() || data[1] != 'R'.code.toByte() || data[2].toInt() != 1) return null
+        return String(data, 3, length - 3, Charsets.UTF_8).trim()
+    }
+
+    /** 약 1.5초 동안 찾고, 찾은 PC 들을 메인 스레드에서 알려 준다. */
+    fun find(port: Int, done: (List<Pc>) -> Unit) {
+        Thread {
+            val found = LinkedHashMap<String, Pc>()
+            runCatching {
+                DatagramSocket().use { socket ->
+                    socket.broadcast = true
+                    socket.soTimeout = 250
+                    // 전체 브로드캐스트를 막는 공유기가 있어서, 연결된 네트워크마다의 브로드캐스트 주소로도 보낸다.
+                    val targets = LinkedHashSet<InetAddress>()
+                    targets += InetAddress.getByName("255.255.255.255")
+                    runCatching {
+                        for (nif in java.net.NetworkInterface.getNetworkInterfaces()) {
+                            if (!nif.isUp || nif.isLoopback) continue
+                            for (ia in nif.interfaceAddresses) ia.broadcast?.let { targets += it }
+                        }
+                    }
+                    val buf = ByteArray(256)
+                    val end = SystemClock.elapsedRealtime() + 1500
+                    var nextSend = 0L
+                    while (SystemClock.elapsedRealtime() < end) {
+                        if (SystemClock.elapsedRealtime() >= nextSend) {   // 유실에 대비해 몇 번 다시 묻는다
+                            for (t in targets) runCatching { socket.send(DatagramPacket(QUERY, QUERY.size, t, port)) }
+                            nextSend = SystemClock.elapsedRealtime() + 400
+                        }
+                        val p = DatagramPacket(buf, buf.size)
+                        try { socket.receive(p) } catch (e: java.net.SocketTimeoutException) { continue }
+                        val name = parseReply(buf, p.length) ?: continue
+                        val ip = p.address.hostAddress ?: continue
+                        found[ip] = Pc(ip, name)
+                    }
+                }
+            }
+            Handler(android.os.Looper.getMainLooper()).post { done(found.values.toList()) }
+        }.start()
+    }
+}

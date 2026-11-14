@@ -293,4 +293,26 @@ class CoreTest {
         for (e in koEnds) assertEquals(ends[0], e, 1e-3f)
         assertEquals(ko.size, Templates.create(8, "kb").buttons.size)
     }
+
+    @Test
+    fun discoveryReplyCarriesPcName() {
+        val reply = "CR".toByteArray() + byteArrayOf(1) + "거실-PC".toByteArray()
+        assertEquals("거실-PC", Discovery.parseReply(reply, reply.size))
+        assertEquals("", Discovery.parseReply(reply, 3))
+        assertEquals(null, Discovery.parseReply("CA".toByteArray() + ByteArray(4), 6))     // 키 응답은 아님
+        assertEquals(null, Discovery.parseReply(reply, 2))
+        assertArrayEquals(byteArrayOf(0x43, 0x44, 1), Discovery.QUERY)
+    }
+
+    @Test
+    fun groupResizeScaleStaysWithinLimits() {
+        // 0.2 에서 시작해 폭 0.4 인 영역의 끝을 0.8 까지 끌면 1.5배
+        assertEquals(1.5f, Resize.scale(0.2f, 0.4f, 0.8f, 0.1f, 0.05f), 1e-4f)
+        // 화면 밖으로는 나가지 않는다: (1 - 0.2) / 0.4 = 2배까지
+        assertEquals(2f, Resize.scale(0.2f, 0.4f, 5f, 0.1f, 0.05f), 1e-4f)
+        // 가장 작은 버튼이 최소 크기보다 작아지지 않는다: 0.05 / 0.1 = 0.5배까지
+        assertEquals(0.5f, Resize.scale(0.2f, 0.4f, 0f, 0.1f, 0.05f), 1e-4f)
+        // 이미 최소보다 작은 버튼이 있으면 줄이지 않는다
+        assertEquals(1f, Resize.scale(0.2f, 0.4f, 0f, 0.02f, 0.05f), 1e-4f)
+    }
 }

@@ -617,6 +617,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     private val gridPaint = Paint().apply { color = theme.text and 0x00FFFFFF or 0x18000000; strokeWidth = 1f }
     private val drawPaint = Paint().apply { color = 0x664FC3F7; style = Paint.Style.FILL }
     private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.text }
+    private val outlinePaint = Paint().apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(1).toFloat() }
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.text and 0x00FFFFFF or 0x99000000.toInt(); textAlign = Paint.Align.CENTER; textSize = ctx.dp(18).toFloat()
     }
@@ -638,7 +639,23 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     private var moved = false
     private var wasSelected = false
     private var hitButton: PadButton? = null
-    private val starts = HashMap<PadButton, Pair<Float, Float>>()   // 옮기기 시작할 때의 위치
+    private val starts = HashMap<PadButton, FloatArray>()   // 옮기거나 크기를 바꾸기 시작할 때의 x, y, w, h
+    private val box = RectF()                               // 그때 선택 전체를 감싸는 영역(화면 대비 비율)
+
+    /** 선택된 버튼 전체를 감싸는 영역(화면 대비 비율). */
+    private fun selectionBox(out: RectF): RectF {
+        out.set(
+            selection.minOf { it.x }, selection.minOf { it.y },
+            selection.maxOf { it.x + it.w }, selection.maxOf { it.y + it.h },
+        )
+        return out
+    }
+
+    private fun remember() {
+        starts.clear()
+        for (b in selection) starts[b] = floatArrayOf(b.x, b.y, b.w, b.h)
+        selectionBox(box)
+    }
 
     private val cell: Float get() = width / 48f
     private fun snapPx(v: Float) = if (snap) (v / cell).roundToInt() * cell else v
@@ -659,9 +676,14 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             painter.draw(c, b, rectOf(b), false, b in selection, alt = 2)
             if (b.group > 0) painter.badge(c, rectOf(b), "그룹 ${b.group}")
         }
-        if (selection.size == 1) {
-            val r = rectOf(selection.first())
-            c.drawCircle(r.right, r.bottom, handle * 0.5f, handlePaint)
+        if (selection.isNotEmpty()) {
+            // 크기 조절 손잡이. 여러 개를 선택했으면 전체를 감싸는 영역의 모서리에 둔다.
+            val r = selectionBox(rect)
+            if (selection.size > 1) {
+                outlinePaint.color = theme.text and 0x00FFFFFF or 0x66000000
+                c.drawRect(r.left * width, r.top * height, r.right * width, r.bottom * height, outlinePaint)
+            }
+            c.drawCircle(r.right * width, r.bottom * height, handle * 0.5f, handlePaint)
         }
         if (drag == Drag.DRAW) {
             c.drawRect(min(downX, curX), min(downY, curY), max(downX, curX), max(downY, curY), drawPaint)
@@ -675,9 +697,11 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = x; downY = y; curX = x; curY = y; moved = false
-                val only = if (selection.size == 1) selection.first() else null
-                val sr = only?.let { RectF(rectOf(it)) }
-                if (sr != null && abs(x - sr.right) < handle * 1.4f && abs(y - sr.bottom) < handle * 1.4f) {
+                val corner = if (selection.isEmpty()) null else selectionBox(rect)
+                if (corner != null && abs(x - corner.right * width) < handle * 1.4f &&
+                    abs(y - corner.bottom * height) < handle * 1.4f
+                ) {
+                    remember()
                     drag = Drag.RESIZE
                 } else {
                     val hit = pad.buttons.lastOrNull { it.contains(x / width, y / height) }
@@ -691,8 +715,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                         // 선택된 버튼을 잡으면 선택된 것 전부를 옮긴다.
                         wasSelected = hit in selection
                         if (!multi) selected = hit
-                        starts.clear()
-                        for (b in selection) starts[b] = b.x to b.y
+                        remember()
                         drag = Drag.MOVE
                     } else {
                         selected = null
@@ -708,15 +731,18 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                     Drag.SLIDE -> pad.buttons.lastOrNull { it.contains(x / width, y / height) }?.let { selection += it }
                     Drag.MOVE -> if (moved && starts.isNotEmpty()) {
                         // 선택된 것들이 함께 움직이되, 어느 것도 화면 밖으로 나가지 않게 한다.
-                        val dx = (snapPx(x - downX) / width)
-                            .coerceIn(-starts.values.minOf { it.first }, starts.minOf { 1f - it.value.first - it.key.w })
-                        val dy = (snapPx(y - downY) / height)
-                            .coerceIn(-starts.values.minOf { it.second }, starts.minOf { 1f - it.value.second - it.key.h })
-                        for ((b, s) in starts) { b.x = s.first + dx; b.y = s.second + dy }
+                        val dx = (snapPx(x - downX) / width).coerceIn(-box.left, 1f - box.right)
+                        val dy = (snapPx(y - downY) / height).coerceIn(-box.top, 1f - box.bottom)
+                        for ((b, s) in starts) { b.x = s[0] + dx; b.y = s[1] + dy }
                     }
-                    Drag.RESIZE -> selection.firstOrNull()?.let { b ->
-                        b.w = (max(snapPx(x) - b.x * width, minSize) / width).coerceAtMost(1f - b.x)
-                        b.h = (max(snapPx(y) - b.y * height, minSize) / height).coerceAtMost(1f - b.y)
+                    Drag.RESIZE -> if (starts.isNotEmpty()) {
+                        // 선택 전체를 왼쪽 위 모서리를 기준으로 같은 비율로 늘리거나 줄인다.
+                        val sx = Resize.scale(box.left, box.width(), snapPx(x) / width, starts.values.minOf { it[2] }, minSize / width)
+                        val sy = Resize.scale(box.top, box.height(), snapPx(y) / height, starts.values.minOf { it[3] }, minSize / height)
+                        for ((b, s) in starts) {
+                            b.x = box.left + (s[0] - box.left) * sx; b.w = s[2] * sx
+                            b.y = box.top + (s[1] - box.top) * sy; b.h = s[3] * sy
+                        }
                     }
                     Drag.NONE -> {}
                 }

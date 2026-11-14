@@ -405,3 +405,16 @@ object MousePart {
         else -> WHEEL
     }
 }
+
+object Resize {
+    /**
+     * 시작점 origin, 길이 size 인 영역의 끝을 target 까지 끌었을 때의 배율.
+     * 가장 작은 버튼(smallest)이 min 보다 작아지지 않고, 영역이 화면(1.0) 밖으로 나가지 않게 제한한다.
+     */
+    fun scale(origin: Float, size: Float, target: Float, smallest: Float, min: Float): Float {
+        if (size <= 0f || smallest <= 0f) return 1f
+        val lowest = minOf(min / smallest, 1f)        // 이미 min 보다 작은 버튼은 더 줄이지 않는다
+        val highest = (1f - origin) / size
+        return ((target - origin) / size).coerceIn(lowest, maxOf(lowest, highest))
+    }
+}
