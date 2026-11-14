@@ -182,7 +182,11 @@ class SettingsActivity : BaseActivity() {
         root.addView(CheckBox(this).apply {
             text = "알파 빌드 받기 — 최신 빌드를 바로 받습니다. 끄면 한 번 전의 빌드(정식)를 받습니다"
             isChecked = Updater.alpha
-            setOnCheckedChangeListener { _, on -> Updater.alpha = on }
+            setOnCheckedChangeListener { _, on ->
+                Updater.alpha = on
+                // 채널을 바꾸면 그 채널의 새 버전을 바로 확인한다.
+                Updater.check(this@SettingsActivity)
+            }
         })
         root.addView(Button(this).apply { text = "업데이트 확인"; setOnClickListener { Updater.check(this@SettingsActivity) } })
 

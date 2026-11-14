@@ -27,7 +27,8 @@ object Updater {
     private const val BASE =
         "https://raw.githubusercontent.com/jkyou1127-ship-it/control/claude/vibrant-ramanujan-pdzsly/release/"
     private const val ACTION = "com.controlpad.app.INSTALL_STATUS"
-    private var checkedThisRun = false
+    private const val RECHECK_MS = 10 * 60 * 1000L
+    private var lastCheck = 0L
 
     var alpha: Boolean
         get() = Link.prefs.getBoolean("alpha", false)
@@ -54,10 +55,14 @@ object Updater {
     fun installedName(ctx: Context): String =
         ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
 
-    /** 앱을 켤 때 한 번만 조용히 확인한다. 새 버전이 없거나 실패하면 아무것도 띄우지 않는다. */
+    /**
+     * 목록 화면이 보일 때마다 조용히 확인한다(10분에 한 번까지). 새 버전이 없거나 실패하면 아무것도 띄우지 않는다.
+     * 앱을 닫아도 프로세스는 오래 살아 있으므로, 프로세스당 한 번만 확인하면 새 버전을 한참 놓친다.
+     */
     fun autoCheck(a: Activity) {
-        if (checkedThisRun) return
-        checkedThisRun = true
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (lastCheck != 0L && now - lastCheck < RECHECK_MS) return
+        lastCheck = now
         check(a, silent = true)
     }
 

@@ -1,5 +1,5 @@
 {
-  "versionCode": 16,
-  "versionName": "2.3",
-  "notes": "누르면 정해 둔 시간 동안 키를 누르고 있는 버튼 동작 방식이 추가되었습니다."
+  "versionCode": 18,
+  "versionName": "2.3.1",
+  "notes": "알파 빌드 받기를 켜도 업데이트가 오지 않던 문제를 고쳤습니다."
 }
