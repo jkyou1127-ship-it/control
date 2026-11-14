@@ -35,7 +35,7 @@ class PadPainter(ctx: Context) {
 
     /** angle 은 노브가 지금까지 돌아간 각도(표시용). */
     fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f) {
-        fill.color = if (pressed) b.color else shade(b.color, 0.38f)
+        fill.color = if (pressed && !b.isPad) b.color else shade(b.color, if (b.isPad) 0.18f else 0.38f)
         stroke.color = if (selected) Color.WHITE else b.color
         stroke.strokeWidth = density * if (selected) 3f else 1.5f
         val rad = minOf(r.width(), r.height()) * 0.14f
@@ -54,6 +54,13 @@ class PadPainter(ctx: Context) {
                 r.centerY() + (Math.sin(rad2) * r.height() * 0.36).toFloat(),
                 minOf(r.width(), r.height()) * 0.07f, fill,
             )
+        }
+
+        if (b.isPad) {
+            sub.color = 0x88FFFFFF.toInt()
+            sub.textSize = 13f * density
+            c.drawText(b.label.ifEmpty { "트랙패드" }, r.centerX(), r.top + sub.textSize * 1.8f, sub)
+            return
         }
 
         val combo = if (b.isKnob) Knob.describe(b) else Keys.combo(b.keys)

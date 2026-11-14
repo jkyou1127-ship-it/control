@@ -19,6 +19,11 @@ def packet(seq, *down):
     return b"CP\x01" + seq.to_bytes(4, "big") + bytes(rep)
 
 
+def mouse_packet(seq, dx, dy, buttons, wheel):
+    return (b"CM\x01" + seq.to_bytes(4, "big") + dx.to_bytes(2, "big", signed=True) +
+            dy.to_bytes(2, "big", signed=True) + bytes([buttons]) + wheel.to_bytes(1, "big", signed=True))
+
+
 class ReceiverTest(unittest.TestCase):
     def setUp(self):
         self.events = []
@@ -46,10 +51,22 @@ class ReceiverTest(unittest.TestCase):
         self.assertEqual(self.events, [])
 
     def test_mouse_packet(self):
-        pkt = b"CM\x01" + (9).to_bytes(4, "big") + (-300).to_bytes(2, "big", signed=True) + (7).to_bytes(2, "big")
-        self.assertEqual(r.parse_mouse(pkt), (-300, 7))
+        pkt = mouse_packet(9, -300, 7, 0b101, -2)
+        self.assertEqual(r.parse_mouse(pkt), (9, -300, 7, 0b101, -2))
         self.assertIsNone(r.parse_mouse(packet(1, 0x07)))
         self.assertIsNone(self.rx.feed(pkt))          # 키 처리 쪽은 건드리지 않는다
+
+    def test_mouse_buttons_follow_state_and_ignore_stale_packets(self):
+        ev = []
+        m = r.Mouse(lambda dx, dy: ev.append(("move", dx, dy)), lambda i, d: ev.append(("btn", i, d)),
+                    lambda w: ev.append(("wheel", w)))
+        m.feed(*r.parse_mouse(mouse_packet(1, 4, -2, 0b001, 0)))
+        m.feed(*r.parse_mouse(mouse_packet(2, 0, 0, 0b001, 0)))      # 상태 유지용 재전송
+        m.feed(*r.parse_mouse(mouse_packet(4, 0, 0, 0b010, 3)))
+        m.feed(*r.parse_mouse(mouse_packet(3, 0, 0, 0b001, 0)))      # 늦게 도착한 패킷
+        m.release_all()
+        self.assertEqual(ev, [("move", 4, -2), ("btn", 0, True), ("wheel", 3), ("btn", 0, False),
+                              ("btn", 1, True), ("btn", 1, False)])
 
     def test_every_app_key_has_a_scancode(self):
         # 앱의 Keys.kt 에 있는 usage 범위
@@ -75,14 +92,15 @@ class ReceiverTest(unittest.TestCase):
             else:
                 self.fail("no ack")
             self.assertEqual(ack, b"CA" + (1).to_bytes(4, "big"))
-            s.sendto(b"CM\x01" + (2).to_bytes(4, "big") + (5).to_bytes(2, "big") + (-3).to_bytes(2, "big", signed=True),
-                     ("127.0.0.1", port))
+            s.sendto(mouse_packet(2, 5, -3, 0b001, 0), ("127.0.0.1", port))
             time.sleep(r.TIMEOUT * 2 + 0.3)  # 패킷이 끊기면 스스로 키를 떼야 한다
         finally:
             proc.terminate()
             out = proc.communicate()[0]
         self.assertIn("누름 0x07", out)
         self.assertIn("마우스 +5 -3", out)
+        self.assertIn("마우스 버튼 0 누름", out)
+        self.assertIn("마우스 버튼 0 뗌", out)       # 패킷이 끊기면 마우스 버튼도 뗀다
         self.assertIn("뗌   0x07", out)
 
 

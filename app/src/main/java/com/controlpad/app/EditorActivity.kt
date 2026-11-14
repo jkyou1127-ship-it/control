@@ -39,6 +39,7 @@ class EditorActivity : BaseActivity() {
         val bar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
         bar.addView(TextView(this).apply {
             text = pad.name; textSize = 16f; setTextColor(Color.WHITE); setSingleLine()
+            minWidth = dp(120)
         }, LinearLayout.LayoutParams(0, -2, 1f))
 
         view = EditorView(this, pad)
@@ -65,6 +66,11 @@ class EditorActivity : BaseActivity() {
             pad.buttons += k; view.selected = k; view.invalidate()
             editButton(k, isNew = true)
         }
+        tool("＋트랙패드") {
+            val t = PadButton(0.3f, 0.25f, 0.4f, 0.5f, type = PadButton.TYPE_TRACKPAD, color = PadButton.PALETTE[7])
+            pad.buttons += t; view.selected = t; view.invalidate()
+            editButton(t, isNew = true)
+        }
         tool("속성") { view.selected?.let { editButton(it) } ?: hint() }
         tool("복제") {
             view.selected?.let {
@@ -79,7 +85,10 @@ class EditorActivity : BaseActivity() {
         }
         tool("완료") { finish() }
 
-        root.addView(bar)
+        root.addView(android.widget.HorizontalScrollView(this).apply {
+            isFillViewport = true
+            addView(bar)
+        })
         root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
 
@@ -190,8 +199,46 @@ class EditorActivity : BaseActivity() {
             .show()
     }
 
+    private fun editPad(b: PadButton, isNew: Boolean) {
+        val m = dp(20)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
+        box.addView(TextView(this).apply {
+            text = "한 손가락으로 움직이면 마우스 이동, 두 손가락으로 움직이면 스크롤입니다.\n" +
+                "드래그하려면 '좌클릭' 키를 넣은 버튼을 따로 그려서 누른 채로 움직이세요."
+        })
+        val sensText = TextView(this).apply { setPadding(0, dp(12), 0, 0) }
+        val sens = android.widget.SeekBar(this).apply { max = 19; progress = (b.sens.toInt() - 1).coerceIn(0, 19) }
+        fun showSens() { sensText.text = "포인터 속도: ${sens.progress + 1}" }
+        showSens()
+        sens.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: android.widget.SeekBar?, p: Int, fromUser: Boolean) = showSens()
+            override fun onStartTrackingTouch(s: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
+        })
+        box.addView(sensText); box.addView(sens)
+        val tap = CheckBox(this).apply {
+            text = "탭하면 클릭 (한 손가락 = 좌클릭, 두 손가락 = 우클릭)"; isChecked = b.mode == PadButton.PAD_TAP
+        }
+        box.addView(tap)
+        box.addView(TextView(this).apply { text = "표시할 이름"; setPadding(0, dp(8), 0, 0) })
+        val label = EditText(this).apply { setText(b.label); setSingleLine() }
+        box.addView(label)
+
+        AlertDialog.Builder(this).setTitle(if (isNew) "새 트랙패드" else "트랙패드 속성")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인") { _, _ ->
+                b.sens = (sens.progress + 1).toFloat()
+                b.mode = if (tap.isChecked) PadButton.PAD_TAP else PadButton.PAD_NO_TAP
+                b.label = label.text.toString().trim()
+                view.invalidate()
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
     private fun editButton(b: PadButton, isNew: Boolean = false) {
         if (b.isKnob) { editKnob(b, isNew); return }
+        if (b.isPad) { editPad(b, isNew); return }
         val keys = b.keys.toMutableList()
         var color = b.color
         val m = dp(20)

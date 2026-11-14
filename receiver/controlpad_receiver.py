@@ -9,7 +9,8 @@
 
 키 패킷: 'C' 'P' 버전(1) 순번(4바이트 big-endian) 리포트(16바이트)
 리포트: [0] 수정키 비트(HID usage 0xE0~0xE7), [1..15] usage 0x00~0x77 비트맵
-마우스 패킷(노브): 'C' 'M' 버전(1) 순번(4바이트) dx(2바이트) dy(2바이트), 부호 있는 big-endian
+마우스 패킷(노브·트랙패드): 'C' 'M' 버전(1) 순번(4바이트) dx(2바이트) dy(2바이트) 버튼(1바이트) 휠(1바이트)
+  dx, dy, 휠은 부호 있는 big-endian. 버튼은 bit0 좌, bit1 우, bit2 휠클릭
 """
 import argparse
 import socket
@@ -67,11 +68,42 @@ def parse(packet):
 
 
 def parse_mouse(packet):
-    """노브가 보낸 마우스 이동 (dx, dy) 또는 형식이 다르면 None."""
-    if len(packet) != 11 or packet[:2] != b"CM" or packet[2] != 1:
+    """마우스 패킷이면 (순번, dx, dy, 버튼, 휠), 아니면 None."""
+    if len(packet) != 13 or packet[:2] != b"CM" or packet[2] != 1:
         return None
-    return (int.from_bytes(packet[7:9], "big", signed=True),
-            int.from_bytes(packet[9:11], "big", signed=True))
+    return (int.from_bytes(packet[3:7], "big"),
+            int.from_bytes(packet[7:9], "big", signed=True),
+            int.from_bytes(packet[9:11], "big", signed=True),
+            packet[11] & 0x07,
+            int.from_bytes(packet[12:13], "big", signed=True))
+
+
+class Mouse:
+    """이동과 휠은 받는 대로 넣고, 버튼은 이전 상태와 달라진 것만 button(번호, down) 으로 넣는다."""
+
+    def __init__(self, move, button, wheel):
+        self.move, self.button, self.wheel = move, button, wheel
+        self.buttons = 0
+        self.seq = 0
+
+    def feed(self, seq, dx, dy, buttons, wheel):
+        if dx or dy:
+            self.move(dx, dy)
+        if wheel:
+            self.wheel(wheel)
+        if seq > self.seq or seq < self.seq - 1000:  # 늦게 도착한 옛 패킷의 버튼 상태는 무시
+            self.seq = seq
+            self.set(buttons)
+
+    def set(self, buttons):
+        for bit in range(3):
+            mask = 1 << bit
+            if (buttons ^ self.buttons) & mask:
+                self.button(bit, bool(buttons & mask))
+        self.buttons = buttons
+
+    def release_all(self):
+        self.set(0)
 
 
 class Receiver:
@@ -140,11 +172,21 @@ def windows_injector():
         inp = INPUT(type=1, u=UNION(ki=KEYBDINPUT(0, scan, flags, 0, 0)))
         send_input(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
-    def move(dx, dy):
-        inp = INPUT(type=0, u=UNION(mi=MOUSEINPUT(dx, dy, 0, 0x0001, 0, 0)))  # MOUSEEVENTF_MOVE
+    def mouse(dx, dy, data, flags):
+        inp = INPUT(type=0, u=UNION(mi=MOUSEINPUT(dx, dy, data, flags, 0, 0)))
         send_input(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
-    return inject, move
+    def move(dx, dy):
+        mouse(dx, dy, 0, 0x0001)  # MOUSEEVENTF_MOVE
+
+    def button(index, down):
+        # LEFTDOWN/UP, RIGHTDOWN/UP, MIDDLEDOWN/UP
+        mouse(0, 0, 0, ((0x0002, 0x0004), (0x0008, 0x0010), (0x0020, 0x0040))[index][0 if down else 1])
+
+    def wheel(steps):
+        mouse(0, 0, (steps * 120) & 0xFFFFFFFF, 0x0800)  # MOUSEEVENTF_WHEEL, 한 칸 = 120
+
+    return inject, move, button, wheel
 
 
 def local_addresses():
@@ -175,12 +217,19 @@ def main(argv=None):
 
         def move(dx, dy):
             print("마우스 %+d %+d" % (dx, dy), flush=True)
+
+        def button(index, down):
+            print("마우스 버튼 %d %s" % (index, "누름" if down else "뗌"), flush=True)
+
+        def wheel(steps):
+            print("휠 %+d" % steps, flush=True)
     elif sys.platform == "win32":
-        inject, move = windows_injector()
+        inject, move, button, wheel = windows_injector()
     else:
         sys.exit("키 입력은 Windows 에서만 지원합니다. 다른 OS 에서는 --dry-run 으로 수신만 확인할 수 있습니다.")
 
     rx = Receiver(inject)
+    mouse = Mouse(move, button, wheel)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(("0.0.0.0", args.port))
     sock.settimeout(TIMEOUT)
@@ -197,21 +246,23 @@ def main(argv=None):
             except socket.timeout:
                 packet = None
             if packet is not None:
-                delta = parse_mouse(packet)
-                if delta is not None:
-                    move(*delta)
+                m = parse_mouse(packet)
+                if m is not None:
+                    mouse.feed(*m)
                     last = time.monotonic()
                     continue
                 seq = rx.feed(packet, sender)
                 if seq is not None:
                     last = time.monotonic()
                     sock.sendto(b"CA" + seq.to_bytes(4, "big"), sender)
-            if rx.down and time.monotonic() - last > TIMEOUT:
+            if (rx.down or mouse.buttons) and time.monotonic() - last > TIMEOUT:
                 rx.release_all()
+                mouse.release_all()
     except KeyboardInterrupt:
         pass
     finally:
         rx.release_all()
+        mouse.release_all()
 
 
 if __name__ == "__main__":

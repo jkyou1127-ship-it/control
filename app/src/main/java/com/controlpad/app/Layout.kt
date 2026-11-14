@@ -23,6 +23,7 @@ class PadButton(
     var invert: Boolean = false,
 ) {
     val isKnob: Boolean get() = type == TYPE_KNOB
+    val isPad: Boolean get() = type == TYPE_TRACKPAD
 
     fun copy() = PadButton(
         x, y, w, h, label, keys.toMutableList(), mode, shape, color,
@@ -52,6 +53,9 @@ class PadButton(
         const val SHAPE_OVAL = 1
         const val TYPE_BUTTON = 0
         const val TYPE_KNOB = 1
+        const val TYPE_TRACKPAD = 2  // 마우스를 움직이는 영역. mode 가 PAD_NO_TAP 이면 탭 클릭을 끈다
+        const val PAD_TAP = 0
+        const val PAD_NO_TAP = 1
         const val OUT_MOUSE_X = 0  // 마우스 좌우 이동 (아날로그)
         const val OUT_MOUSE_Y = 1  // 마우스 상하 이동 (아날로그)
         const val OUT_KEYS = 2     // 돌리는 동안 키를 누름
@@ -128,7 +132,7 @@ object LayoutStore {
 object Templates {
     val names = listOf(
         "빈 레이아웃", "리듬게임 4키 (D F J K)", "리듬게임 7키 (S D F Space J K L)", "작업용 단축키",
-        "사운드 볼텍스 · KSM (노브 2개)",
+        "사운드 볼텍스 · KSM (노브 2개)", "트랙패드 + 마우스 버튼",
     )
 
     fun create(index: Int, name: String): PadLayout = when (index) {
@@ -139,6 +143,7 @@ object Templates {
         )
         3 -> shortcuts(name)
         4 -> voltex(name)
+        5 -> trackpad(name)
         else -> PadLayout(name = name)
     }
 
@@ -171,6 +176,25 @@ object Templates {
         }
         l.buttons += PadButton(0.2f, 0.76f, 0.29f, 0.2f, "FX-L", mutableListOf(0x06), color = p[1])
         l.buttons += PadButton(0.51f, 0.76f, 0.29f, 0.2f, "FX-R", mutableListOf(0x10), color = p[1])
+        return l
+    }
+
+    private fun trackpad(name: String): PadLayout {
+        val l = PadLayout(name = name)
+        val p = PadButton.PALETTE
+        l.buttons += PadButton(0.02f, 0.03f, 0.66f, 0.94f, type = PadButton.TYPE_TRACKPAD, color = p[7])
+        l.buttons += PadButton(0.7f, 0.03f, 0.135f, 0.3f, "좌클릭", mutableListOf(Keys.MOUSE_LEFT), color = p[0])
+        l.buttons += PadButton(0.845f, 0.03f, 0.135f, 0.3f, "우클릭", mutableListOf(Keys.MOUSE_RIGHT), color = p[3])
+        val keys = listOf(
+            Triple("복사", listOf(0xE0, 0x06), 2), Triple("붙여넣기", listOf(0xE0, 0x19), 2),
+            Triple("실행 취소", listOf(0xE0, 0x1D), 1), Triple("Enter", listOf(0x28), 4),
+        )
+        keys.forEachIndexed { i, (label, ks, color) ->
+            l.buttons += PadButton(
+                0.7f + (i % 2) * 0.145f, 0.36f + (i / 2) * 0.31f, 0.135f, 0.29f,
+                label, ks.toMutableList(), PadButton.MODE_TAP, color = p[color],
+            )
+        }
         return l
     }
 

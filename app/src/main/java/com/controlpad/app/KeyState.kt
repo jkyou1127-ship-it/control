@@ -8,14 +8,14 @@ package com.controlpad.app
  *   [1..15]  usage 0x00~0x77 비트맵 (usage u → 바이트 1+u/8 의 bit u%8)
  */
 class KeyState {
-    private val counts = IntArray(256)
+    private val counts = IntArray(Keys.MOUSE_MIDDLE + 1)
 
     fun press(usages: List<Int>) {
-        for (u in usages) if (u in 0..255) counts[u]++
+        for (u in usages) if (u in counts.indices) counts[u]++
     }
 
     fun release(usages: List<Int>) {
-        for (u in usages) if (u in 0..255 && counts[u] > 0) counts[u]--
+        for (u in usages) if (u in counts.indices && counts[u] > 0) counts[u]--
     }
 
     fun clear() = counts.fill(0)
@@ -28,6 +28,13 @@ class KeyState {
             r[idx] = (r[idx].toInt() or (1 shl (u % 8))).toByte()
         }
         return r
+    }
+
+    /** 눌린 마우스 버튼 비트 (bit0 좌, bit1 우, bit2 휠). */
+    fun mouseButtons(): Int {
+        var b = 0
+        for (i in 0..2) if (counts[Keys.MOUSE_LEFT + i] > 0) b = b or (1 shl i)
+        return b
     }
 
     companion object {

@@ -28,7 +28,15 @@ object Keys {
             KeyDef(0x53, "NumLk"), KeyDef(0x54, "Num /"), KeyDef(0x55, "Num *"), KeyDef(0x56, "Num -"),
             KeyDef(0x57, "Num +"), KeyDef(0x58, "Num Ent"),
         ) + (1..9).map { KeyDef(0x58 + it, "Num $it") } + listOf(KeyDef(0x62, "Num 0"), KeyDef(0x63, "Num .")),
+        "마우스 버튼" to listOf(KeyDef(MOUSE_LEFT, "좌클릭"), KeyDef(MOUSE_RIGHT, "우클릭"), KeyDef(MOUSE_MIDDLE, "휠클릭")),
     )
+
+    // 키보드 usage 가 아닌, 앱 안에서만 쓰는 마우스 버튼 번호
+    const val MOUSE_LEFT = 0x100
+    const val MOUSE_RIGHT = 0x101
+    const val MOUSE_MIDDLE = 0x102
+
+    fun isMouse(usage: Int): Boolean = usage in MOUSE_LEFT..MOUSE_MIDDLE
 
     private val names: Map<Int, String> = groups.flatMap { it.second }.associate { it.usage to it.name }
 

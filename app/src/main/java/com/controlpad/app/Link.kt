@@ -68,12 +68,25 @@ object Link {
         worker.post { transmit(report) }
     }
 
-    /** 노브용 마우스 상대 이동. */
-    fun sendMouse(dx: Int, dy: Int) {
-        if (dx == 0 && dy == 0) return
+    @Volatile private var mouseButtons = 0
+
+    /** 마우스 상대 이동과 휠 (노브, 트랙패드). */
+    fun sendMouse(dx: Int, dy: Int, wheel: Int = 0) {
+        if (dx == 0 && dy == 0 && wheel == 0) return
+        val buttons = mouseButtons
         worker.post {
-            runCatching { bt?.sendMouse(dx, dy) }
-            runCatching { udp?.sendMouse(dx, dy) }
+            runCatching { bt?.sendMouse(dx, dy, wheel, buttons) }
+            runCatching { udp?.sendMouse(dx, dy, wheel, buttons) }
+        }
+    }
+
+    /** 눌린 마우스 버튼이 바뀌었을 때만 보낸다. */
+    fun setMouseButtons(buttons: Int) {
+        if (buttons == mouseButtons) return
+        mouseButtons = buttons
+        worker.post {
+            runCatching { bt?.sendMouse(0, 0, 0, buttons) }
+            runCatching { udp?.sendMouse(0, 0, 0, buttons) }
         }
     }
 
@@ -86,6 +99,7 @@ object Link {
         override fun run() {
             // UDP 는 유실될 수 있으므로 현재 상태를 주기적으로 다시 보낸다.
             runCatching { udp?.send(lastReport) }
+            runCatching { udp?.sendMouse(0, 0, 0, mouseButtons) }
             worker.postDelayed(this, HEARTBEAT_MS)
         }
     }
@@ -151,7 +165,7 @@ class BtHid(private val ctx: Context) {
         }
 
         override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
-            runCatching { hid?.replyReport(device, type, id, if (id.toInt() == MOUSE_ID) ByteArray(3) else last) }
+            runCatching { hid?.replyReport(device, type, id, if (id.toInt() == MOUSE_ID) ByteArray(4) else last) }
         }
 
         override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
@@ -209,16 +223,17 @@ class BtHid(private val ctx: Context) {
         hid?.sendReport(d, REPORT_ID, report)
     }
 
-    fun sendMouse(dx: Int, dy: Int) {
+    fun sendMouse(dx: Int, dy: Int, wheel: Int, buttons: Int) {
         val d = host ?: return
         var x = dx
         var y = dy
-        while (x != 0 || y != 0) {   // 한 리포트는 축마다 -127~127 까지만 담는다
+        var w = wheel.coerceIn(-127, 127)
+        do {   // 한 리포트는 축마다 -127~127 까지만 담는다
             val sx = x.coerceIn(-127, 127)
             val sy = y.coerceIn(-127, 127)
-            hid?.sendReport(d, MOUSE_ID, byteArrayOf(0, sx.toByte(), sy.toByte()))
-            x -= sx; y -= sy
-        }
+            hid?.sendReport(d, MOUSE_ID, byteArrayOf(buttons.toByte(), sx.toByte(), sy.toByte(), w.toByte()))
+            x -= sx; y -= sy; w = 0
+        } while (x != 0 || y != 0)
     }
 
     fun stop() {
@@ -262,15 +277,15 @@ class BtHid(private val ctx: Context) {
             0x75, 0x01, 0x95, KeyState.MAX_USAGE + 1,
             0x81, 0x02,
             0xC0,
-            // 노브용 마우스: 버튼 3개(쓰지 않음) + X, Y 상대 이동
+            // 마우스: 버튼 3개 + X, Y, 휠 상대 이동
             0x05, 0x01, 0x09, 0x02, 0xA1, 0x01,
             0x85, MOUSE_ID,
             0x09, 0x01, 0xA1, 0x00,
             0x05, 0x09, 0x19, 0x01, 0x29, 0x03, 0x15, 0x00, 0x25, 0x01,
             0x95, 0x03, 0x75, 0x01, 0x81, 0x02,
             0x95, 0x01, 0x75, 0x05, 0x81, 0x01,
-            0x05, 0x01, 0x09, 0x30, 0x09, 0x31,
-            0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x02,
+            0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x38,
+            0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x03,
             0x81, 0x06,
             0xC0, 0xC0,
         ).map { it.toByte() }.toByteArray()
@@ -280,7 +295,7 @@ class BtHid(private val ctx: Context) {
 /**
  * UDP 로 PC 수신 프로그램(receiver/controlpad_receiver.py)에 키 상태를 보낸다.
  * 키 패킷: 'C' 'P' 버전(1) 순번(4바이트, big-endian) 리포트(16바이트). 수신 측은 'C' 'A' + 순번으로 답한다.
- * 마우스 패킷: 'C' 'M' 버전(1) 순번(4바이트) dx(2바이트) dy(2바이트), 부호 있는 big-endian.
+ * 마우스 패킷: 'C' 'M' 버전(1) 순번(4바이트) dx(2바이트) dy(2바이트) 버튼(1바이트) 휠(1바이트), 부호 있는 big-endian.
  */
 class UdpLink(val host: String, val port: Int) {
     private val socket = DatagramSocket()
@@ -317,12 +332,13 @@ class UdpLink(val host: String, val port: Int) {
         socket.send(DatagramPacket(data, data.size, a, port))
     }
 
-    fun sendMouse(dx: Int, dy: Int) {
+    fun sendMouse(dx: Int, dy: Int, wheel: Int, buttons: Int) {
         if (closed) return
         val a = addr ?: InetAddress.getByName(host).also { addr = it }
-        val data = header('M', 4)
+        val data = header('M', 6)
         data[7] = (dx shr 8).toByte(); data[8] = dx.toByte()
         data[9] = (dy shr 8).toByte(); data[10] = dy.toByte()
+        data[11] = buttons.toByte(); data[12] = wheel.coerceIn(-127, 127).toByte()
         socket.send(DatagramPacket(data, data.size, a, port))
     }
 

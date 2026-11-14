@@ -34,7 +34,7 @@ class CoreTest {
     fun descriptorMatchesReportSize() {
         // 수정키 8비트 + 비트맵 (MAX_USAGE+1)비트 = 16바이트
         assertEquals(KeyState.REPORT_SIZE * 8, 8 + KeyState.MAX_USAGE + 1)
-        assertTrue(Keys.groups.flatMap { it.second }.all { it.usage <= KeyState.MAX_USAGE || Keys.isModifier(it.usage) })
+        assertTrue(Keys.groups.flatMap { it.second }.all { it.usage <= KeyState.MAX_USAGE || Keys.isModifier(it.usage) || Keys.isMouse(it.usage) })
     }
 
     @Test
@@ -59,9 +59,9 @@ class CoreTest {
 
     @Test
     fun templatesStayOnScreen() {
-        for (i in 1..4) for (b in Templates.create(i, "t").buttons) {
+        for (i in 1..5) for (b in Templates.create(i, "t").buttons) {
             assertTrue(b.x >= 0 && b.y >= 0 && b.x + b.w <= 1.0001f && b.y + b.h <= 1.0001f)
-            assertTrue(b.keys.isNotEmpty())
+            assertTrue(b.isPad || b.keys.isNotEmpty())
         }
     }
 
@@ -98,5 +98,28 @@ class CoreTest {
         val old = PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1,"keys":[4]}"""))
         assertFalse(old.isKnob)
         assertEquals(4f, old.sens, 0f)
+    }
+
+    @Test
+    fun mouseButtonsAreSeparateFromKeyboardReport() {
+        val s = KeyState()
+        s.press(listOf(Keys.MOUSE_LEFT, 0x04))
+        s.press(listOf(Keys.MOUSE_RIGHT))
+        assertEquals(0b011, s.mouseButtons())
+        assertEquals(1 shl 4, s.report()[1].toInt())          // 키보드 리포트에는 A 만
+        assertEquals(0, s.report().drop(2).sumOf { it.toInt() })
+        s.release(listOf(Keys.MOUSE_LEFT, 0x04))
+        assertEquals(0b010, s.mouseButtons())
+        s.clear()
+        assertEquals(0, s.mouseButtons())
+    }
+
+    @Test
+    fun trackpadRoundTripsAndIsRectangular() {
+        val t = Templates.create(5, "pad").buttons.first { it.isPad }.apply { mode = PadButton.PAD_NO_TAP }
+        val back = PadButton.fromJson(JSONObject(t.toJson().toString()))
+        assertTrue(back.isPad)
+        assertEquals(PadButton.PAD_NO_TAP, back.mode)
+        assertTrue(back.contains(back.x + 0.001f, back.y + 0.001f))
     }
 }

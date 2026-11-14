@@ -49,7 +49,7 @@ class MainActivity : BaseActivity() {
 
         // 처음 실행하면 바로 써 볼 수 있게 예시를 넣어 둔다.
         if (!Link.prefs.getBoolean("seeded", false)) {
-            for (i in 1..4) LayoutStore.save(this, Templates.create(i, Templates.names[i]))
+            for (i in 1..5) LayoutStore.save(this, Templates.create(i, Templates.names[i]))
             Link.prefs.edit().putBoolean("seeded", true).apply()
         }
     }

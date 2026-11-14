@@ -7,6 +7,7 @@ import android.graphics.RectF
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
@@ -65,6 +66,17 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val knobDir = IntArray(buttons.size)        // 키 방식에서 지금 누르고 있는 방향 (-1, 0, 1)
     private val knobStop = Array(buttons.size) { i -> Runnable { knobKey(i, 0) } }
     private val lastAngle = HashMap<Int, Float>()       // 포인터 id → 직전 각도
+
+    // 트랙패드 상태 (버튼 인덱스별). 올라가 있는 손가락 수는 holds 를 같이 쓴다.
+    private val density = ctx.resources.displayMetrics.density
+    private val padStart = LongArray(buttons.size)      // 첫 손가락이 닿은 시각
+    private val padTravel = FloatArray(buttons.size)    // 이번 터치에서 움직인 거리(px)
+    private val padFingers = IntArray(buttons.size)     // 이번 터치에서 동시에 닿았던 최대 손가락 수
+    private val padRemX = FloatArray(buttons.size)
+    private val padRemY = FloatArray(buttons.size)
+    private val padRemWheel = FloatArray(buttons.size)
+    private val lastX = HashMap<Int, Float>()           // 포인터 id → 직전 위치
+    private val lastY = HashMap<Int, Float>()
     private var connected = false
     private var status = ""
     private val taps = Handler(Looper.getMainLooper())  // '한 번 입력'의 키 떼기 예약
@@ -84,7 +96,33 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         return -1
     }
 
-    private fun send() = Link.send(state.report())
+    private fun send() {
+        Link.send(state.report())
+        Link.setMouseButtons(state.mouseButtons())
+    }
+
+    private fun click(button: Int) {
+        val keys = listOf(button)
+        state.press(keys); send()
+        taps.postDelayed({ state.release(keys); send() }, TAP_MS)
+    }
+
+    /** 트랙패드 위에서 손가락 하나가 (dx, dy) 만큼 움직였다. */
+    private fun padMove(i: Int, dx: Float, dy: Float) {
+        val b = buttons[i]
+        padTravel[i] += kotlin.math.abs(dx) + kotlin.math.abs(dy)
+        if (holds[i] >= 2) {
+            // 두 손가락: 스크롤. 손가락마다 이벤트가 오므로 손가락 수로 나눈다.
+            padRemWheel[i] += dy / (SCROLL_STEP_DP * density) / holds[i]
+            val w = padRemWheel[i].toInt()
+            if (w != 0) { padRemWheel[i] -= w; Link.sendMouse(0, 0, w) }
+        } else {
+            val k = b.sens * PAD_GAIN / density
+            padRemX[i] += dx * k; padRemY[i] += dy * k
+            val mx = padRemX[i].toInt(); val my = padRemY[i].toInt()
+            if (mx != 0 || my != 0) { padRemX[i] -= mx; padRemY[i] -= my; Link.sendMouse(mx, my) }
+        }
+    }
 
     private fun pointerAngle(i: Int, x: Float, y: Float): Float {
         val b = buttons[i]
@@ -127,8 +165,14 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     private fun down(i: Int) {
         if (i < 0) return
-        if (++holds[i] != 1) return
+        val n = ++holds[i]
         val b = buttons[i]
+        if (b.isPad) {
+            if (n == 1) { padStart[i] = SystemClock.uptimeMillis(); padTravel[i] = 0f; padFingers[i] = 1 }
+            else padFingers[i] = maxOf(padFingers[i], n)
+            return
+        }
+        if (n != 1) return
         if (b.isKnob) return
         if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         when (b.mode) {
@@ -147,8 +191,16 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     private fun up(i: Int) {
         if (i < 0 || holds[i] == 0) return
-        if (--holds[i] != 0) return
+        val n = --holds[i]
         val b = buttons[i]
+        if (b.isPad) {
+            // 거의 움직이지 않고 짧게 뗐으면 탭: 한 손가락은 좌클릭, 두 손가락은 우클릭
+            if (n == 0 && b.mode == PadButton.PAD_TAP && padTravel[i] < TAP_SLOP_DP * density * padFingers[i] &&
+                SystemClock.uptimeMillis() - padStart[i] < TAP_TIMEOUT_MS
+            ) click(if (padFingers[i] >= 2) Keys.MOUSE_RIGHT else Keys.MOUSE_LEFT)
+            return
+        }
+        if (n != 0) return
         if (b.isKnob) {
             taps.removeCallbacks(knobStop[i])
             knobKey(i, 0)
@@ -157,7 +209,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     }
 
     fun releaseAll() {
-        pointers.clear(); lastAngle.clear()
+        pointers.clear(); lastAngle.clear(); lastX.clear(); lastY.clear()
         knobDir.fill(0); knobRem.fill(0f)
         holds.fill(0); toggled.fill(false); flash.fill(false)
         taps.removeCallbacksAndMessages(null)
@@ -172,12 +224,18 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 val b = hit(e.getX(idx), e.getY(idx))
                 pointers[e.getPointerId(idx)] = b
                 if (b >= 0 && buttons[b].isKnob) lastAngle[e.getPointerId(idx)] = pointerAngle(b, e.getX(idx), e.getY(idx))
+                if (b >= 0 && buttons[b].isPad) { lastX[e.getPointerId(idx)] = e.getX(idx); lastY[e.getPointerId(idx)] = e.getY(idx) }
                 down(b)
             }
             MotionEvent.ACTION_MOVE -> for (idx in 0 until e.pointerCount) {
                 val id = e.getPointerId(idx)
                 val before = pointers[id] ?: -1
-                if (before >= 0 && buttons[before].isKnob) {
+                if (before >= 0 && buttons[before].isPad) {
+                    val x = e.getX(idx); val y = e.getY(idx)
+                    val dx = x - (lastX[id] ?: x); val dy = y - (lastY[id] ?: y)
+                    lastX[id] = x; lastY[id] = y
+                    if (dx != 0f || dy != 0f) padMove(before, dx, dy)
+                } else if (before >= 0 && buttons[before].isKnob) {
                     // 노브를 잡은 손가락은 노브 밖으로 나가도 계속 그 노브를 돌린다.
                     val b = buttons[before]
                     val dx = e.getX(idx) - (b.x + b.w / 2) * width
@@ -193,18 +251,18 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                     if (d != 0f) turn(before, d)
                 } else if (layout.slide) {
                     var now = hit(e.getX(idx), e.getY(idx))
-                    if (now >= 0 && buttons[now].isKnob) now = -1   // 미끄러져서 노브를 잡지는 않는다
+                    if (now >= 0 && (buttons[now].isKnob || buttons[now].isPad)) now = -1   // 미끄러져서 노브·트랙패드를 잡지는 않는다
                     if (now != before) { up(before); pointers[id] = now; down(now) }
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 val id = e.getPointerId(e.actionIndex)
-                lastAngle.remove(id)
+                lastAngle.remove(id); lastX.remove(id); lastY.remove(id)
                 up(pointers.remove(id) ?: -1)
             }
             MotionEvent.ACTION_CANCEL -> {
                 for (b in pointers.values) up(b)
-                pointers.clear(); lastAngle.clear()
+                pointers.clear(); lastAngle.clear(); lastX.clear(); lastY.clear()
             }
         }
         invalidate()
@@ -225,6 +283,10 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     companion object {
         const val TAP_MS = 40L
+        const val PAD_GAIN = 0.35f       // 트랙패드: 감도 1 일 때 1dp 당 마우스 이동량
+        const val SCROLL_STEP_DP = 18f   // 트랙패드: 휠 한 칸에 해당하는 두 손가락 이동 거리
+        const val TAP_SLOP_DP = 12f      // 트랙패드: 이보다 덜 움직여야 탭으로 본다
+        const val TAP_TIMEOUT_MS = 250L
         const val KEY_STEP_DEG = 2f    // 키 방식 노브: 이만큼 돌아가야 키를 누른다
         const val KEY_HOLD_MS = 70L    // 키 방식 노브: 회전이 멈춘 뒤 키를 떼기까지의 시간
         const val DEAD_ZONE = 0.12f    // 노브 중심 주변의 무시 구간(지름 대비 비율)
