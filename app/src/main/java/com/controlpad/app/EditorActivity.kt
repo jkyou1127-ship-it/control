@@ -57,7 +57,16 @@ class EditorActivity : BaseActivity() {
         })
         fun tool(label: String, action: () -> Unit) =
             bar.addView(Button(this).apply { text = label; setOnClickListener { action() } })
-        tool("＋노브") {
+        // 추가할 수 있는 것들은 한 메뉴에 모은다(도구 줄이 길어져 화면 밖으로 밀려나지 않게).
+        val adds = LinkedHashMap<String, () -> Unit>()
+        fun add(label: String, action: () -> Unit) { adds[label] = action }
+        tool("＋추가") {
+            val names = adds.keys.toTypedArray()
+            AlertDialog.Builder(this).setTitle("추가")
+                .setItems(names) { _, which -> adds[names[which]]?.invoke() }
+                .show()
+        }
+        add("노브 (사운드 볼텍스 · KSM)") {
             // 화면에서 정사각형이 되도록 가로세로 비율을 맞춰 가운데에 놓는다.
             val h = 0.36f
             val w = (h * view.height / view.width.coerceAtLeast(1)).coerceIn(0.08f, 0.5f)
@@ -70,19 +79,19 @@ class EditorActivity : BaseActivity() {
             pad.buttons += k; view.selected = k; view.invalidate()
             editButton(k, isNew = true)
         }
-        tool("＋트랙패드") {
+        add("트랙패드") {
             val t = PadButton(0.3f, 0.25f, 0.4f, 0.5f, type = PadButton.TYPE_TRACKPAD, color = PadButton.PALETTE[7])
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
-        tool("＋마우스") {
+        add("가상 마우스") {
             val h = 0.6f
             val w = (h * 0.62f * view.height / view.width.coerceAtLeast(1)).coerceIn(0.1f, 0.5f)
             val t = PadButton(0.5f - w / 2, 0.2f, w, h, type = PadButton.TYPE_MOUSE, color = PadButton.PALETTE[7])
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
-        tool("＋재시작") {
+        add("퀵 리스타트 버튼") {
             AlertDialog.Builder(this).setTitle("퀵 리스타트 버튼")
                 .setItems(Restart.names.toTypedArray()) { _, which ->
                     val w = 0.14f
@@ -90,7 +99,7 @@ class EditorActivity : BaseActivity() {
                     pad.buttons += r; view.selected = r; view.invalidate()
                 }.show()
         }
-        tool("＋키패드") {
+        add("숫자 키패드") {
             AlertDialog.Builder(this).setTitle("숫자 키패드 추가")
                 .setItems(Keypad.names.toTypedArray()) { _, which ->
                     // 화면에서 칸이 대략 정사각형이 되도록 폭을 정해 가운데에 놓는다.
@@ -104,7 +113,7 @@ class EditorActivity : BaseActivity() {
                     view.invalidate()
                 }.show()
         }
-        tool("＋표시 버튼") {
+        add("표시 버튼 (누르면 그룹이 나타남)") {
             // 아직 표시 버튼이 없는 가장 작은 그룹 번호를 기본으로 한다.
             val used = pad.buttons.filter { it.isShow }.map { it.target }
             val g = (1..PadButton.GROUPS).firstOrNull { it !in used } ?: 1

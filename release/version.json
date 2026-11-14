@@ -1,5 +1,5 @@
 {
-  "versionCode": 21,
-  "versionName": "2.4",
-  "notes": "숫자 키패드를 한 번에 넣는 '＋키패드'와 숫자 키패드 예시 레이아웃이 추가되었습니다."
+  "versionCode": 22,
+  "versionName": "2.5",
+  "notes": "기본 레이아웃에 키보드가 추가되었습니다."
 }
