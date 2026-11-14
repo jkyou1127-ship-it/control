@@ -75,9 +75,13 @@ class SettingsActivity : BaseActivity() {
         udpBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         udpBox.addView(title("Wi-Fi / USB 테더링"))
         udpBox.addView(note(
-            "PC에서 controlpad_receiver.py 를 실행하면 창에 PC 주소가 표시됩니다. 그 주소를 아래에 입력하세요. " +
-                "태블릿과 PC가 같은 공유기에 연결되어 있어야 합니다."
+            "PC(Windows)에서 ControlPadReceiver.exe 를 실행하면 창에 PC 주소가 표시됩니다. 그 주소를 아래에 입력하세요. " +
+                "태블릿과 PC가 같은 공유기에 연결되어 있어야 합니다.\n\n" +
+                "수신 프로그램은 PC 브라우저에서 아래 주소로 받습니다. 한 번 받으면 실행할 때마다 스스로 업데이트합니다."
         ))
+        udpBox.addView(TextView(this).apply {
+            text = Updater.RECEIVER_URL; textSize = 13f; setTextIsSelectable(true); setPadding(0, dp(4), 0, dp(8))
+        })
         val host = EditText(this).apply {
             hint = "PC 주소 (예: 192.168.0.10)"; setSingleLine()
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI

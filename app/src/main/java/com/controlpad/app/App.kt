@@ -89,7 +89,8 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         c.drawText(text, r.left + w / 2, r.top + 12 * density, sub)
     }
 
-    fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f, parts: Int = 0) {
+    /** alt: 0 = 기본 이름, 1 = 한글 상태 이름, 2 = 둘 다(편집 화면). */
+    fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f, parts: Int = 0, alt: Int = 0) {
         if (b.isMouse) { drawMouse(c, b, r, selected, parts); return }
         val lit = if (b.pressColor != 0) b.pressColor else b.color      // 눌렸을 때 채우는 색
         // 눌렸을 때 글자는 채운 색의 밝기에 맞춰 검정/흰색 중 잘 보이는 쪽
@@ -123,7 +124,12 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         }
 
         val combo = if (b.isShow) "그룹 ${b.target} 표시" else if (b.isKnob) Knob.describe(b) else Keys.combo(b.keys)
-        val label = b.label.ifEmpty { if (b.isShow) "그룹 ${b.target}" else if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
+        val name = when {
+            b.label2.isEmpty() || alt == 0 -> b.label
+            alt == 1 -> b.label2
+            else -> b.label + "/" + b.label2
+        }
+        val label = name.ifEmpty { if (b.isShow) "그룹 ${b.target}" else if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
         text.color = if (pressed) onLit else if (b.textColor != 0) b.textColor else if (theme.colorText) b.color else theme.text
         text.textSize = (r.height() * 0.3f)
             .coerceAtMost(r.width() * (if (b.isKnob) 0.9f else 1.5f) / label.length.coerceAtLeast(2))

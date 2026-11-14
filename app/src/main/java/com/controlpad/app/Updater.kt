@@ -26,6 +26,7 @@ import java.net.URL
 object Updater {
     private const val BASE =
         "https://raw.githubusercontent.com/jkyou1127-ship-it/control/claude/vibrant-ramanujan-pdzsly/release/"
+    const val RECEIVER_URL = BASE + "ControlPadReceiver.exe"
     private const val ACTION = "com.controlpad.app.INSTALL_STATUS"
     private const val RECHECK_MS = 10 * 60 * 1000L
     private var lastCheck = 0L

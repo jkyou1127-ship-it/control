@@ -15,9 +15,13 @@ jobs:
           java-version: 21
       - name: Receiver tests
         run: python3 receiver/test_receiver.py
+      - name: Windows receiver
+        run: scripts/build-receiver.sh
       - name: Unit tests and APK
         run: ./gradlew testReleaseUnitTest assembleRelease
       - uses: actions/upload-artifact@v4
         with:
-          name: ControlPad-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          name: ControlPad
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            release/ControlPadReceiver.exe

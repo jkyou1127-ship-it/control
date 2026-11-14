@@ -31,6 +31,8 @@ class PadButton(
     var pressColor: Int = 0,
     /** MODE_TIMED 일 때 키를 누르고 있을 시간(밀리초). */
     var holdMs: Int = 1000,
+    /** PC 가 한글 입력 상태일 때 보여 줄 이름. 비어 있으면 label 을 그대로 쓴다. */
+    var label2: String = "",
 ) {
     val isShow: Boolean get() = type == TYPE_SHOW
     val isKnob: Boolean get() = type == TYPE_KNOB
@@ -39,7 +41,7 @@ class PadButton(
 
     fun copy() = PadButton(
         x, y, w, h, label, keys.toMutableList(), mode, shape, color,
-        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor, holdMs,
+        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor, holdMs, label2,
     )
 
     fun contains(px: Float, py: Float): Boolean {
@@ -58,6 +60,7 @@ class PadButton(
         .put("sens", sens.toDouble()).put("invert", invert)
         .put("group", group).put("target", target)
         .put("textColor", textColor).put("pressColor", pressColor).put("holdMs", holdMs)
+        .put("label2", label2)
 
     companion object {
         const val MODE_HOLD = 0    // 누르고 있는 동안 입력 (게임)
@@ -103,6 +106,7 @@ class PadButton(
                 o.optInt("group").coerceIn(0, GROUPS), o.optInt("target", 1).coerceIn(1, GROUPS),
                 o.optInt("textColor"), o.optInt("pressColor"),
                 o.optInt("holdMs", 1000).coerceIn(MIN_HOLD_MS, MAX_HOLD_MS),
+                o.optString("label2"),
             )
         }
     }
@@ -212,18 +216,17 @@ object Keyboard {
 
     private const val JAMO = "ㅁㅠㅊㅇㄷㄹㅎㅗㅑㅓㅏㅣㅡㅜㅐㅔㅂㄱㄴㅅㅕㅍㅈㅌㅛㅋ"   // A~Z 자리의 두벌식 자모
 
-    private fun letters(s: String, korean: Boolean) =
-        s.map { k(if (korean) JAMO[it - 'A'].toString() else it.toString(), 0x04 + (it - 'A')) }
+    private fun letters(s: String) = s.map { k(it.toString(), 0x04 + (it - 'A')) }
 
     private fun rows(korean: Boolean): List<List<Triple<String, Int, Float>>> = listOf(
         listOf(k("Esc", 0x29)) + (1..12).map { k("F$it", 0x39 + it) } + k("Del", 0x4C, 2f),
         listOf(k("`", 0x35)) + (1..9).map { k(it.toString(), 0x1D + it) } +
             listOf(k("0", 0x27), k("-", 0x2D), k("=", 0x2E), k("⌫", 0x2A, 2f)),
-        listOf(k("Tab", 0x2B, 1.5f)) + letters("QWERTYUIOP", korean) +
+        listOf(k("Tab", 0x2B, 1.5f)) + letters("QWERTYUIOP") +
             listOf(k("[", 0x2F), k("]", 0x30), k(if (korean) "₩" else "\\", 0x31, 1.5f)),
-        listOf(k("Caps", 0x39, 1.75f)) + letters("ASDFGHJKL", korean) +
+        listOf(k("Caps", 0x39, 1.75f)) + letters("ASDFGHJKL") +
             listOf(k(";", 0x33), k("'", 0x34), k("Enter", 0x28, 2.25f)),
-        listOf(k("Shift", 0xE1, 2.25f)) + letters("ZXCVBNM", korean) +
+        listOf(k("Shift", 0xE1, 2.25f)) + letters("ZXCVBNM") +
             listOf(k(",", 0x36), k(".", 0x37), k("/", 0x38), k("Shift", 0xE5, 2.75f)),
         listOf(k("Ctrl", 0xE0, 1.5f), k("Win", 0xE3, 1.25f), k("Alt", 0xE2, 1.25f)) +
             (if (korean) listOf(k("한자", Keys.HANJA), k("Space", 0x2C, 5f), k("한/영", Keys.HANGUL, 1.25f))
@@ -231,7 +234,10 @@ object Keyboard {
             listOf(k("←", 0x50, 0.9375f), k("↓", 0x51, 0.9375f), k("↑", 0x52, 0.9375f), k("→", 0x4F, 0.9375f)),
     )
 
-    /** korean 이 참이면 글자 키에 한글 자모를 적고 한/영·한자 키를 넣는다. 입력되는 키는 영문 배열과 같다. */
+    /**
+     * korean 이 참이면 한/영·한자 키를 넣고, 글자 키에 한글 상태용 이름(자모)을 붙인다.
+     * 실행 화면에서 한/영을 누를 때마다 글자 키의 표시가 영문 ↔ 자모로 바뀐다. 입력되는 키는 영문 배열과 같다.
+     */
     fun create(korean: Boolean = false): List<PadButton> {
         val margin = 0.01f
         val gap = 0.006f
@@ -248,6 +254,7 @@ object Keyboard {
                 out += PadButton(
                     x + gap / 2, margin + r * rowH + gap / 2, unit * units - gap, rowH - gap,
                     label, mutableListOf(usage),
+                    label2 = if (korean && usage in 0x04..0x1D) JAMO[usage - 0x04].toString() else "",
                     color = if (plain) p[7] else if (lang) p[4] else if (Keys.isModifier(usage)) p[0]
                     else if (label == "Enter") p[2] else p[1],
                 )

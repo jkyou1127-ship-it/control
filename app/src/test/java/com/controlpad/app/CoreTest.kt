@@ -278,12 +278,14 @@ class CoreTest {
         assertEquals(keys.size, keys.map { it.keys[0] }.toSet().size)     // 같은 키가 두 번 들어가지 않는다
         assertEquals(keys.size, Templates.create(7, "kb").buttons.size)
 
-        // 한글 키보드: 같은 자리의 키는 같은 입력이고, 이름만 자모다.
+        // 한글 키보드: 같은 자리의 키는 같은 입력이고, 한글 상태용 이름(자모)이 따로 붙는다.
         val ko = Keyboard.create(true)
-        assertEquals("ㅂ", ko.first { it.keys == listOf(0x14) }.label)
-        assertEquals("ㅁ", ko.first { it.keys == listOf(0x04) }.label)
-        assertEquals("ㅡ", ko.first { it.keys == listOf(0x10) }.label)
-        assertEquals(26, ko.count { it.label.length == 1 && it.label[0] in 'ㄱ'..'ㅣ' })
+        assertEquals("Q" to "ㅂ", ko.first { it.keys == listOf(0x14) }.let { it.label to it.label2 })
+        assertEquals("ㅁ", ko.first { it.keys == listOf(0x04) }.label2)
+        assertEquals("ㅡ", ko.first { it.keys == listOf(0x10) }.label2)
+        assertEquals(26, ko.count { it.label2.length == 1 && it.label2[0] in 'ㄱ'..'ㅣ' })
+        assertTrue(keys.all { it.label2.isEmpty() })                       // 영문 키보드는 바뀌지 않는다
+        assertEquals("ㅂ", PadButton.fromJson(JSONObject(ko.first { it.label == "Q" }.toJson().toString())).copy().label2)
         assertEquals(listOf(Keys.HANGUL), ko.first { it.label == "한/영" }.keys)
         assertEquals(listOf(Keys.HANJA), ko.first { it.label == "한자" }.keys)
         assertTrue(keys.none { it.keys[0] == Keys.HANGUL })

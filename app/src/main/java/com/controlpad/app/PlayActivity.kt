@@ -115,6 +115,9 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         }
     }
 
+    /** PC 가 한글 입력 상태라고 보고 있는지. 화면을 열 때는 영문으로 시작한다. */
+    private var hangul = false
+
     // 그룹 표시 상태. 0번은 항상 보이는 버튼들이다.
     private val groupOn = BooleanArray(PadButton.GROUPS + 1)     // 표시 버튼으로 켜 둔 그룹
     private val groupHolds = IntArray(PadButton.GROUPS + 1)      // '누르는 동안만' 표시 버튼을 누르고 있는 손가락 수
@@ -311,6 +314,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             return
         }
         if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        // 한/영을 누르면 글자 키의 표시도 함께 바꾼다(키를 R Alt 로 바꿔 둔 한/영 버튼 포함).
+        if (Keys.HANGUL in b.keys || b.label == "한/영") hangul = !hangul
         when (b.mode) {
             PadButton.MODE_TAP -> {
                 state.press(b.keys); send(); flash[i] = true
@@ -440,7 +445,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             else flash[i] || toggled[i] || timedOn[i] || (holds[i] > 0 && b.mode == PadButton.MODE_HOLD)
             var parts = 0
             if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)
-            painter.draw(c, b, rect, lit, false, knobAngle[i], parts)
+            painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)
         }
         if (showPressed && pressedText.isNotEmpty()) {
             val held = pressedAt == Long.MAX_VALUE

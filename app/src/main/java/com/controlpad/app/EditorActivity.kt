@@ -336,6 +336,11 @@ class EditorActivity : BaseActivity() {
         box.addView(TextView(this).apply { text = "버튼에 표시할 이름 (비우면 키 이름)"; setPadding(0, dp(8), 0, 0) })
         val label = EditText(this).apply { setText(b.label); setSingleLine() }
         box.addView(label)
+        box.addView(TextView(this).apply {
+            text = "한글 상태일 때 표시할 이름 (실행 화면에서 한/영을 누르면 바뀜, 비우면 안 바뀜)"; setPadding(0, dp(8), 0, 0)
+        })
+        val label2 = EditText(this).apply { setText(b.label2); setSingleLine() }
+        box.addView(label2)
 
         box.addView(TextView(this).apply { text = "동작 방식"; setPadding(0, dp(8), 0, 0) })
         val mode = Spinner(this).apply {
@@ -382,6 +387,7 @@ class EditorActivity : BaseActivity() {
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
                 b.keys = keys; b.label = label.text.toString().trim(); b.mode = mode.selectedItemPosition
+                b.label2 = label2.text.toString().trim()
                 b.holdMs = PadButton.parseHold(hold.text.toString())
                 b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
                 b.color = color; b.textColor = textColor; b.pressColor = pressColor
@@ -650,7 +656,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             c.drawText("빈 곳을 손가락으로 드래그해서 버튼을 그리세요", width / 2f, height / 2f, hintPaint)
         }
         for (b in pad.buttons) {
-            painter.draw(c, b, rectOf(b), false, b in selection)
+            painter.draw(c, b, rectOf(b), false, b in selection, alt = 2)
             if (b.group > 0) painter.badge(c, rectOf(b), "그룹 ${b.group}")
         }
         if (selection.size == 1) {
