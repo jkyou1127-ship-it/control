@@ -203,10 +203,54 @@ object Keypad {
     }
 }
 
+/** PC 키보드 전체 배열(기능키 줄 포함 6줄). 한 줄은 15칸이다. */
+object Keyboard {
+    // 한 줄 = (이름, 키, 칸 수) 목록
+    private fun k(label: String, usage: Int, units: Float = 1f) = Triple(label, usage, units)
+
+    private fun letters(s: String) = s.map { k(it.toString(), 0x04 + (it - 'A')) }
+
+    private val rows: List<List<Triple<String, Int, Float>>> = listOf(
+        listOf(k("Esc", 0x29)) + (1..12).map { k("F$it", 0x39 + it) } + k("Del", 0x4C, 2f),
+        listOf(k("`", 0x35)) + (1..9).map { k(it.toString(), 0x1D + it) } +
+            listOf(k("0", 0x27), k("-", 0x2D), k("=", 0x2E), k("⌫", 0x2A, 2f)),
+        listOf(k("Tab", 0x2B, 1.5f)) + letters("QWERTYUIOP") + listOf(k("[", 0x2F), k("]", 0x30), k("\\", 0x31, 1.5f)),
+        listOf(k("Caps", 0x39, 1.75f)) + letters("ASDFGHJKL") + listOf(k(";", 0x33), k("'", 0x34), k("Enter", 0x28, 2.25f)),
+        listOf(k("Shift", 0xE1, 2.25f)) + letters("ZXCVBNM") +
+            listOf(k(",", 0x36), k(".", 0x37), k("/", 0x38), k("Shift", 0xE5, 2.75f)),
+        listOf(
+            k("Ctrl", 0xE0, 1.5f), k("Win", 0xE3, 1.25f), k("Alt", 0xE2, 1.25f), k("Space", 0x2C, 6f),
+            k("R Alt", 0xE6, 1.25f), k("←", 0x50, 0.9375f), k("↓", 0x51, 0.9375f), k("↑", 0x52, 0.9375f), k("→", 0x4F, 0.9375f),
+        ),
+    )
+
+    fun create(): List<PadButton> {
+        val margin = 0.01f
+        val gap = 0.006f
+        val unit = (1f - margin * 2) / 15f
+        val rowH = (1f - margin * 2) / rows.size
+        val p = PadButton.PALETTE
+        val out = ArrayList<PadButton>()
+        rows.forEachIndexed { r, row ->
+            var x = margin
+            for ((label, usage, units) in row) {
+                val plain = label.length == 1 && label != "⌫"      // 글자·숫자·기호 키
+                out += PadButton(
+                    x + gap / 2, margin + r * rowH + gap / 2, unit * units - gap, rowH - gap,
+                    label, mutableListOf(usage),
+                    color = if (plain) p[7] else if (Keys.isModifier(usage)) p[0] else if (label == "Enter") p[2] else p[1],
+                )
+                x += unit * units
+            }
+        }
+        return out
+    }
+}
+
 object Templates {
     val names = listOf(
         "빈 레이아웃", "리듬게임 4키 (D F J K)", "리듬게임 7키 (S D F Space J K L)", "작업용 단축키",
-        "사운드 볼텍스 · KSM (노브 2개)", "트랙패드 + 마우스 버튼", "숫자 키패드",
+        "사운드 볼텍스 · KSM (노브 2개)", "트랙패드 + 마우스 버튼", "숫자 키패드", "키보드",
     )
 
     fun create(index: Int, name: String): PadLayout = when (index) {
@@ -218,6 +262,7 @@ object Templates {
         3 -> shortcuts(name)
         4 -> voltex(name)
         5 -> trackpad(name)
+        7 -> PadLayout(name = name, buttons = Keyboard.create().toMutableList())
         6 -> PadLayout(name = name, buttons = Keypad.create(true, 0.3f, 0.03f, 0.4f, 0.94f).toMutableList())
         else -> PadLayout(name = name)
     }

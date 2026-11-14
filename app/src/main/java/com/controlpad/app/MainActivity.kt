@@ -48,9 +48,12 @@ class MainActivity : BaseActivity() {
         setContentView(root)
 
         // 처음 실행하면 바로 써 볼 수 있게 예시를 넣어 둔다.
-        if (!Link.prefs.getBoolean("seeded", false)) {
-            for (i in 1..6) LayoutStore.save(this, Templates.create(i, Templates.names[i]))
-            Link.prefs.edit().putBoolean("seeded", true).apply()
+        // 나중 버전에서 예시가 늘어나면, 이미 쓰고 있던 사람에게는 새로 생긴 것만 넣는다.
+        val last = Templates.names.lastIndex
+        val have = Link.prefs.getInt("seedCount", if (Link.prefs.getBoolean("seeded", false)) 6 else 0)
+        if (have < last) {
+            for (i in have + 1..last) LayoutStore.save(this, Templates.create(i, Templates.names[i]))
+            Link.prefs.edit().putBoolean("seeded", true).putInt("seedCount", last).apply()
         }
     }
 

@@ -1,5 +1,5 @@
 {
-  "versionCode": 20,
-  "versionName": "2.3.2",
-  "notes": "색 고르기 창이 잘리던 문제를 고쳤습니다."
+  "versionCode": 21,
+  "versionName": "2.4",
+  "notes": "숫자 키패드를 한 번에 넣는 '＋키패드'와 숫자 키패드 예시 레이아웃이 추가되었습니다."
 }

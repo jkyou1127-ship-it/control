@@ -59,7 +59,7 @@ class CoreTest {
 
     @Test
     fun templatesStayOnScreen() {
-        for (i in 1..6) for (b in Templates.create(i, "t").buttons) {
+        for (i in 1 until Templates.names.size) for (b in Templates.create(i, "t").buttons) {
             assertTrue(b.x >= 0 && b.y >= 0 && b.x + b.w <= 1.0001f && b.y + b.h <= 1.0001f)
             assertTrue(b.isPad || b.keys.isNotEmpty())
         }
@@ -258,5 +258,22 @@ class CoreTest {
         assertEquals("Num 5", Keys.combo(Keypad.create(true, 0f, 0f, 1f, 1f).first { it.label == "5" }.keys))
         assertEquals("5", Keys.combo(Keypad.create(false, 0f, 0f, 1f, 1f).first { it.label == "5" }.keys))
         assertEquals("Shift + =", Keys.combo(Keypad.create(false, 0f, 0f, 1f, 1f).first { it.label == "+" }.keys))
+    }
+
+    @Test
+    fun keyboardHasEveryLetterAndRowsFillTheWidth() {
+        val keys = Keyboard.create()
+        assertEquals(('A'..'Z').map { it.toString() }, keys.map { it.label }.filter { it.length == 1 && it[0] in 'A'..'Z' }.sorted())
+        assertEquals("Q", keys.first { it.keys == listOf(0x14) }.label)
+        assertEquals(listOf(0xE1, 0xE5), keys.filter { it.label == "Shift" }.map { it.keys[0] })
+        // 여섯 줄 모두 오른쪽 끝이 같은 곳에서 끝난다.
+        val ends = keys.groupBy { it.y }.values.map { row -> row.maxOf { it.x + it.w } }
+        assertEquals(6, ends.size)
+        for (e in ends) assertEquals(ends[0], e, 1e-3f)
+        for (a in keys) for (b in keys) if (a !== b) {
+            assertFalse(a.label + "/" + b.label, a.x < b.x + b.w - 1e-4f && b.x < a.x + a.w - 1e-4f && a.y < b.y + b.h - 1e-4f && b.y < a.y + a.h - 1e-4f)
+        }
+        assertEquals(keys.size, keys.map { it.keys[0] }.toSet().size)     // 같은 키가 두 번 들어가지 않는다
+        assertEquals(keys.size, Templates.create(7, "kb").buttons.size)
     }
 }
