@@ -1,14 +1,6 @@
-import java.util.Properties
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-}
-
-// 스토어 업로드용 서명 정보. 저장소에 넣지 않는 play-signing.properties 에서 읽는다(scripts/build-play.sh 참고).
-val playSigning = Properties().apply {
-    val f = rootProject.file("play-signing.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -34,35 +26,13 @@ android {
         }
     }
 
-    if (playSigning.containsKey("storeFile")) {
-        signingConfigs.create("play") {
-            storeFile = rootProject.file(playSigning.getProperty("storeFile"))
-            storePassword = playSigning.getProperty("storePassword")
-            keyAlias = playSigning.getProperty("keyAlias")
-            keyPassword = playSigning.getProperty("keyPassword")
-        }
-    }
-
-    // direct: 저장소에서 APK 를 직접 받아 설치하고 앱 안에서 업데이트하는 빌드.
-    // play:   구글 플레이 스토어용. 자체 업데이트가 없고, 스토어가 요구하는 최신 Android 를 대상으로 한다.
-    flavorDimensions += "dist"
-    productFlavors {
-        create("direct") {
-            dimension = "dist"
-            signingConfig = signingConfigs.getByName("shared")
-        }
-        create("play") {
-            dimension = "dist"
-            // 스토어에 한 번 올리면 바꿀 수 없다. 처음 올리기 전에 원하는 이름으로 정한다.
-            applicationId = "io.github.jkyou1127shipit.controlpad"
-            targetSdk = 36
-            signingConfig = signingConfigs.findByName("play")
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("shared")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("shared")
         }
     }
 

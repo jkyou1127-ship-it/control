@@ -26,8 +26,6 @@ import java.net.URL
 object Updater {
     private const val BASE =
         "https://raw.githubusercontent.com/jkyou1127-ship-it/control/claude/vibrant-ramanujan-pdzsly/release/"
-    /** 이 빌드가 스스로 업데이트하는지. 스토어용 빌드에서는 거짓이다. */
-    const val ENABLED = true
     const val RECEIVER_URL = BASE + "ControlPadReceiver.exe"
     private const val ACTION = "com.controlpad.app.INSTALL_STATUS"
     private const val RECHECK_MS = 10 * 60 * 1000L

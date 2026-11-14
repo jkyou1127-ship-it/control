@@ -36,8 +36,8 @@ json.dump({"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "notes":
 PY
 
 python3 receiver/test_receiver.py
-./gradlew testDirectReleaseUnitTest assembleDirectRelease -q
-cp app/build/outputs/apk/direct/release/app-direct-release.apk release/alpha/ControlPad.apk
+./gradlew testReleaseUnitTest assembleRelease -q
+cp app/build/outputs/apk/release/app-release.apk release/alpha/ControlPad.apk
 if [ "$fix" = 1 ]; then
     cp release/alpha/version.json release/alpha/ControlPad.apk release/   # 버그 수정은 정식에도 바로
 fi

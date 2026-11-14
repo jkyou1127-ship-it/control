@@ -159,30 +159,9 @@ scripts/publish.sh --fix "고친 점"
 
 ## 빌드
 
-빌드 종류가 둘입니다.
-
-| 종류 | 용도 | 차이 |
-|---|---|---|
-| `direct` | 이 저장소에서 APK를 직접 받아 설치 | 앱 안에서 업데이트(알파·정식 채널) |
-| `play` | 구글 플레이 스토어 | 자체 업데이트 없음, 스토어가 요구하는 최신 Android 대상, 앱 ID가 다름 |
-
 ```bash
-./gradlew assembleDirectRelease
+./gradlew assembleRelease
 ```
 
-결과물은 `app/build/outputs/apk/direct/release/app-direct-release.apk` 입니다. GitHub에 푸시하면 Actions가 같은 APK를 빌드해 artifact로 올립니다.
+결과물은 `app/build/outputs/apk/release/app-release.apk` 입니다. GitHub에 푸시하면 Actions가 같은 APK를 빌드해 artifact로 올립니다.
 서명 키(`app/controlpad.keystore`)는 어디서 빌드해도 업데이트 설치가 되도록 저장소에 넣어 둔 공개 키입니다.
-
-### 플레이 스토어용
-
-```bash
-scripts/build-play.sh
-```
-
-`play/ControlPad-<버전>.aab`가 만들어집니다. 이 파일을 플레이 콘솔에 올립니다.
-
-- 프로젝트 맨 위에 업로드 키 `play-upload.keystore`와 그 비밀번호를 적은 `play-signing.properties`가 있어야 합니다. 두 파일은 `.gitignore`에 들어 있고, 공개 저장소에 올리면 안 됩니다. 잃어버리면 플레이 콘솔에서 업로드 키 재설정을 요청해야 합니다
-- 앱 ID는 `app/build.gradle.kts`의 `play` 항목에 있습니다. 스토어에 한 번 올리면 바꿀 수 없으니 처음 올리기 전에 정하세요
-- 올릴 때마다 `versionCode`가 이전보다 커야 합니다
-- 개인정보처리방침은 `docs/privacy-policy.md`에 있습니다. 이 파일의 GitHub 주소를 스토어 등록 정보에 넣으면 됩니다
-- 직접 배포용과 서명·앱 ID가 달라서 두 가지를 한 기기에 같이 깔 수 있고, 서로 레이아웃을 공유하지 않습니다. 옮기려면 `파일로 저장`과 `불러오기`를 쓰세요
