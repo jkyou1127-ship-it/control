@@ -79,6 +79,16 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         c.drawText(b.label.ifEmpty { "마우스" }, r.centerX(), (top + r.bottom) / 2 + sub.textSize * 0.4f, sub)
     }
 
+    /** 편집 화면에서 그룹에 속한 버튼의 왼쪽 위에 그룹 번호를 붙인다. */
+    fun badge(c: Canvas, r: RectF, text: String) {
+        sub.textSize = 11f * density
+        val w = sub.measureText(text) + 8 * density
+        fill.color = theme.text
+        c.drawRoundRect(r.left, r.top, r.left + w, r.top + 16 * density, 4 * density, 4 * density, fill)
+        sub.color = theme.bg
+        c.drawText(text, r.left + w / 2, r.top + 12 * density, sub)
+    }
+
     fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f, parts: Int = 0) {
         if (b.isMouse) { drawMouse(c, b, r, selected, parts); return }
         fill.color = if (pressed && !b.isPad) b.color else shade(b.color, if (b.isPad) 0.18f else 0.38f)
@@ -109,8 +119,8 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
             return
         }
 
-        val combo = if (b.isKnob) Knob.describe(b) else Keys.combo(b.keys)
-        val label = b.label.ifEmpty { if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
+        val combo = if (b.isShow) "그룹 ${b.target} 표시" else if (b.isKnob) Knob.describe(b) else Keys.combo(b.keys)
+        val label = b.label.ifEmpty { if (b.isShow) "그룹 ${b.target}" else if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
         text.color = if (pressed) Color.BLACK else if (theme.colorText) b.color else theme.text
         text.textSize = (r.height() * 0.3f)
             .coerceAtMost(r.width() * (if (b.isKnob) 0.9f else 1.5f) / label.length.coerceAtLeast(2))

@@ -200,4 +200,21 @@ class CoreTest {
         assertTrue(steps in 5..30)        // 16ms 간격으로 약 0.1~0.5초
         assertEquals(0f, Knob.settle(-1.2f), 0f)
     }
+
+    @Test
+    fun groupsRoundTripAndOldFilesAreAlwaysVisible() {
+        val show = PadButton(0f, 0f, 0.1f, 0.1f, type = PadButton.TYPE_SHOW, target = 3, group = 2)
+        val back = PadButton.fromJson(JSONObject(show.toJson().toString()))
+        assertTrue(back.isShow)
+        assertEquals(3, back.target)
+        assertEquals(2, back.group)
+        assertEquals(2, back.copy().group)
+
+        val old = PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1,"keys":[4]}"""))
+        assertEquals(0, old.group)
+        assertFalse(old.isShow)
+        val bad = PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1,"group":99,"target":0}"""))
+        assertEquals(PadButton.GROUPS, bad.group)     // 범위를 벗어난 값은 배열 밖을 가리키지 않게 맞춘다
+        assertEquals(1, bad.target)
+    }
 }

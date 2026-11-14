@@ -85,6 +85,17 @@ class EditorActivity : BaseActivity() {
                     pad.buttons += r; view.selected = r; view.invalidate()
                 }.show()
         }
+        tool("＋표시 버튼") {
+            // 아직 표시 버튼이 없는 가장 작은 그룹 번호를 기본으로 한다.
+            val used = pad.buttons.filter { it.isShow }.map { it.target }
+            val g = (1..PadButton.GROUPS).firstOrNull { it !in used } ?: 1
+            val t = PadButton(
+                0.43f, 0.4f, 0.14f, 0.2f, type = PadButton.TYPE_SHOW, mode = PadButton.MODE_TOGGLE,
+                target = g, color = PadButton.PALETTE[5],
+            )
+            pad.buttons += t; view.selected = t; view.invalidate()
+            editButton(t, isNew = true)
+        }
         tool("속성") { view.selected?.let { editButton(it) } ?: hint() }
         tool("복제") {
             view.selected?.let {
@@ -182,6 +193,9 @@ class EditorActivity : BaseActivity() {
         val label = EditText(this).apply { setText(b.label); setSingleLine() }
         box.addView(label)
 
+        val group = groupSpinner(b.group)
+        box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
+        box.addView(group)
         box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
 
         AlertDialog.Builder(this).setTitle(if (isNew) "새 노브" else "노브 속성")
@@ -192,6 +206,7 @@ class EditorActivity : BaseActivity() {
                 b.keys = left; b.keys2 = right
                 b.invert = invert.isChecked
                 b.label = label.text.toString().trim(); b.color = color
+                b.group = group.selectedItemPosition
                 view.invalidate()
             }
             .setNegativeButton("취소", null)
@@ -222,6 +237,9 @@ class EditorActivity : BaseActivity() {
             text = "탭하면 클릭 (한 손가락 = 좌클릭, 두 손가락 = 우클릭)"; isChecked = b.mode == PadButton.PAD_TAP
         }
         if (!b.isMouse) box.addView(tap)
+        val group = groupSpinner(b.group)
+        box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
+        box.addView(group)
         box.addView(TextView(this).apply { text = "표시할 이름"; setPadding(0, dp(8), 0, 0) })
         val label = EditText(this).apply { setText(b.label); setSingleLine() }
         box.addView(label)
@@ -233,6 +251,7 @@ class EditorActivity : BaseActivity() {
                 b.sens = (sens.progress + 1).toFloat()
                 b.mode = if (tap.isChecked) PadButton.PAD_TAP else PadButton.PAD_NO_TAP
                 b.label = label.text.toString().trim()
+                b.group = group.selectedItemPosition
                 view.invalidate()
             }
             .setNegativeButton("취소", null)
@@ -240,6 +259,7 @@ class EditorActivity : BaseActivity() {
     }
 
     private fun editButton(b: PadButton, isNew: Boolean = false) {
+        if (b.isShow) { editShow(b, isNew); return }
         if (b.isKnob) { editKnob(b, isNew); return }
         if (b.isPad || b.isMouse) { editPad(b, isNew); return }
         val keys = b.keys.toMutableList()
@@ -276,6 +296,9 @@ class EditorActivity : BaseActivity() {
         val oval = CheckBox(this).apply { text = "원형 버튼"; isChecked = b.shape == PadButton.SHAPE_OVAL }
         box.addView(oval)
 
+        val group = groupSpinner(b.group)
+        box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
+        box.addView(group)
         box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
 
         AlertDialog.Builder(this).setTitle(if (isNew) "새 버튼" else "버튼 속성")
@@ -284,6 +307,64 @@ class EditorActivity : BaseActivity() {
                 b.keys = keys; b.label = label.text.toString().trim(); b.mode = mode.selectedItemPosition
                 b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
                 b.color = color
+                b.group = group.selectedItemPosition
+                view.invalidate()
+            }
+            .setNegativeButton("취소", null)
+            .show().wide()
+    }
+
+    private fun groupSpinner(initial: Int) = Spinner(this).apply {
+        adapter = ArrayAdapter(
+            this@EditorActivity, android.R.layout.simple_spinner_dropdown_item,
+            listOf("항상 표시") + (1..PadButton.GROUPS).map { "그룹 $it — 표시 버튼을 눌러야 나타남" },
+        )
+        setSelection(initial)
+    }
+
+    /** 누르면 지정한 그룹의 버튼들이 나타나는 버튼. */
+    private fun editShow(b: PadButton, isNew: Boolean) {
+        var color = b.color
+        val m = dp(20)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
+        box.addView(TextView(this).apply {
+            text = "이 버튼을 누르면 아래에서 고른 그룹의 버튼들이 나타납니다.\n" +
+                "나타나게 할 버튼은 각 버튼의 속성 > 표시 조건에서 같은 그룹으로 지정하세요."
+        })
+        box.addView(TextView(this).apply { text = "나타나게 할 그룹"; setPadding(0, dp(8), 0, 0) })
+        val target = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@EditorActivity, android.R.layout.simple_spinner_dropdown_item,
+                (1..PadButton.GROUPS).map { g -> "그룹 $g (버튼 ${pad.buttons.count { it.group == g }}개)" },
+            )
+            setSelection(b.target - 1)
+        }
+        box.addView(target)
+        box.addView(TextView(this).apply { text = "동작 방식"; setPadding(0, dp(8), 0, 0) })
+        val mode = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@EditorActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("누를 때마다 나타남/사라짐", "누르고 있는 동안만 나타남"),
+            )
+            setSelection(if (b.mode == PadButton.MODE_HOLD) 1 else 0)
+        }
+        box.addView(mode)
+        box.addView(TextView(this).apply { text = "버튼에 표시할 이름"; setPadding(0, dp(8), 0, 0) })
+        val label = EditText(this).apply { setText(b.label); setSingleLine() }
+        box.addView(label)
+        val group = groupSpinner(b.group)
+        box.addView(TextView(this).apply { text = "이 버튼 자체의 표시 조건"; setPadding(0, dp(8), 0, 0) })
+        box.addView(group)
+        box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
+
+        AlertDialog.Builder(this).setTitle(if (isNew) "새 표시 버튼" else "표시 버튼 속성")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인") { _, _ ->
+                b.target = target.selectedItemPosition + 1
+                b.mode = if (mode.selectedItemPosition == 1) PadButton.MODE_HOLD else PadButton.MODE_TOGGLE
+                b.label = label.text.toString().trim(); b.color = color
+                // 자기가 여는 그룹에 자기 자신이 들어가면 영영 누를 수 없으므로 막는다.
+                b.group = group.selectedItemPosition.let { if (it == b.target) 0 else it }
                 view.invalidate()
             }
             .setNegativeButton("취소", null)
@@ -406,7 +487,10 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         if (pad.buttons.isEmpty() && drag != Drag.DRAW) {
             c.drawText("빈 곳을 손가락으로 드래그해서 버튼을 그리세요", width / 2f, height / 2f, hintPaint)
         }
-        for (b in pad.buttons) painter.draw(c, b, rectOf(b), false, b === selected)
+        for (b in pad.buttons) {
+            painter.draw(c, b, rectOf(b), false, b === selected)
+            if (b.group > 0) painter.badge(c, rectOf(b), "그룹 ${b.group}")
+        }
         selected?.let {
             val r = rectOf(it)
             c.drawCircle(r.right, r.bottom, handle * 0.5f, handlePaint)

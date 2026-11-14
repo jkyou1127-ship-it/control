@@ -107,11 +107,41 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         invalidate()
     }
 
+    // 그룹 표시 상태. 0번은 항상 보이는 버튼들이다.
+    private val groupOn = BooleanArray(PadButton.GROUPS + 1)     // 표시 버튼으로 켜 둔 그룹
+    private val groupHolds = IntArray(PadButton.GROUPS + 1)      // '누르는 동안만' 표시 버튼을 누르고 있는 손가락 수
+
+    private fun groupVisible(g: Int) = g == 0 || groupOn[g] || groupHolds[g] > 0
+
+    /** 그룹이 사라질 때, 그 그룹 버튼에 걸려 있던 입력을 모두 푼다. */
+    private fun hideGroup(g: Int) {
+        for ((id, i) in pointers.entries.toList()) {
+            if (i < 0 || buttons[i].group != g) continue
+            if (buttons[i].isMouse) mouseUp(id) else up(i)
+            pointers[id] = -1
+            lastAngle.remove(id)
+        }
+        for (i in buttons.indices) {
+            val b = buttons[i]
+            if (b.group != g) continue
+            holds[i] = 0
+            if (toggled[i]) { toggled[i] = false; state.release(b.keys) }
+            // 사라진 그룹 안의 표시 버튼이 켜 둔 그룹도 함께 닫는다.
+            if (b.isShow && b.target != g && groupOn[b.target]) {
+                groupOn[b.target] = false
+                if (!groupVisible(b.target)) hideGroup(b.target)
+            }
+        }
+        send()
+    }
+
     private fun hit(x: Float, y: Float): Int {
         if (width == 0 || height == 0) return -1
         val nx = x / width
         val ny = y / height
-        for (i in buttons.indices.reversed()) if (buttons[i].contains(nx, ny)) return i
+        for (i in buttons.indices.reversed()) {
+            if (groupVisible(buttons[i].group) && buttons[i].contains(nx, ny)) return i
+        }
         return -1
     }
 
@@ -261,6 +291,16 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         }
         if (n != 1) return
         if (b.isKnob) return
+        if (b.isShow) {
+            if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            val g = b.target
+            if (b.mode == PadButton.MODE_HOLD) groupHolds[g]++
+            else {
+                groupOn[g] = !groupOn[g]
+                if (!groupVisible(g)) hideGroup(g)
+            }
+            return
+        }
         if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
         when (b.mode) {
             PadButton.MODE_TAP -> {
@@ -288,6 +328,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             return
         }
         if (n != 0) return
+        if (b.isShow) {
+            val g = b.target
+            if (b.mode == PadButton.MODE_HOLD && groupHolds[g] > 0 && --groupHolds[g] == 0 && !groupVisible(g)) hideGroup(g)
+            return
+        }
         if (b.isKnob) {
             taps.removeCallbacks(knobStop[i])
             knobKey(i, 0)
@@ -302,6 +347,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         pointers.clear(); lastAngle.clear(); lastX.clear(); lastY.clear()
         mouseParts.clear(); wheelTravel.clear()
         knobDir.fill(0); knobRem.fill(0f); knobAngle.fill(0f)
+        groupOn.fill(false); groupHolds.fill(0)
         holds.fill(0); toggled.fill(false); flash.fill(false)
         taps.removeCallbacksAndMessages(null)
         state.clear(); send()
@@ -372,8 +418,10 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     override fun onDraw(c: Canvas) {
         for (i in buttons.indices) {
             val b = buttons[i]
+            if (!groupVisible(b.group)) continue
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
-            val lit = if (b.isKnob) holds[i] > 0
+            val lit = if (b.isShow) groupVisible(b.target)
+            else if (b.isKnob) holds[i] > 0
             else flash[i] || toggled[i] || (holds[i] > 0 && b.mode == PadButton.MODE_HOLD)
             var parts = 0
             if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)

@@ -21,14 +21,19 @@ class PadButton(
     /** 마우스 출력일 때 1도 돌릴 때마다 보내는 이동량. */
     var sens: Float = 4f,
     var invert: Boolean = false,
+    /** 0 이면 항상 보인다. 1 이상이면 그 그룹의 표시 버튼을 눌러야 나타난다. */
+    var group: Int = 0,
+    /** TYPE_SHOW 일 때, 나타나게 할 그룹 번호. */
+    var target: Int = 1,
 ) {
+    val isShow: Boolean get() = type == TYPE_SHOW
     val isKnob: Boolean get() = type == TYPE_KNOB
     val isPad: Boolean get() = type == TYPE_TRACKPAD
     val isMouse: Boolean get() = type == TYPE_MOUSE
 
     fun copy() = PadButton(
         x, y, w, h, label, keys.toMutableList(), mode, shape, color,
-        type, keys2.toMutableList(), knobOut, sens, invert,
+        type, keys2.toMutableList(), knobOut, sens, invert, group, target,
     )
 
     fun contains(px: Float, py: Float): Boolean {
@@ -45,6 +50,7 @@ class PadButton(
         .put("mode", mode).put("shape", shape).put("color", color)
         .put("type", type).put("keys2", JSONArray(keys2)).put("knobOut", knobOut)
         .put("sens", sens.toDouble()).put("invert", invert)
+        .put("group", group).put("target", target)
 
     companion object {
         const val MODE_HOLD = 0    // 누르고 있는 동안 입력 (게임)
@@ -56,6 +62,8 @@ class PadButton(
         const val TYPE_KNOB = 1
         const val TYPE_TRACKPAD = 2  // 마우스를 움직이는 영역. mode 가 PAD_NO_TAP 이면 탭 클릭을 끈다
         const val TYPE_MOUSE = 3     // 마우스 모양: 좌·우 버튼, 휠, 몸통(이동)
+        const val TYPE_SHOW = 4      // 누르면 target 그룹의 버튼들이 나타나는 버튼
+        const val GROUPS = 8
         const val PAD_TAP = 0
         const val PAD_NO_TAP = 1
         const val OUT_MOUSE_X = 0  // 마우스 좌우 이동 (아날로그)
@@ -78,6 +86,7 @@ class PadButton(
                 o.optInt("mode"), o.optInt("shape"), o.optInt("color", PALETTE[0]),
                 o.optInt("type"), MutableList(ks2.length()) { ks2.getInt(it) },
                 o.optInt("knobOut"), o.optDouble("sens", 4.0).toFloat(), o.optBoolean("invert"),
+                o.optInt("group").coerceIn(0, GROUPS), o.optInt("target", 1).coerceIn(1, GROUPS),
             )
         }
     }
