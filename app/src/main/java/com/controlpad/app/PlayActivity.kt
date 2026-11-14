@@ -28,6 +28,16 @@ class PlayActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         val layout = LayoutStore.load(this, intent.getStringExtra("id") ?: "") ?: run { finish(); return }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // 화면 주사율이 높을수록 터치도 더 자주 읽는 기기가 많으므로, 지원하는 가장 높은 주사율을 쓴다.
+        runCatching {
+            @Suppress("DEPRECATION")
+            val d = windowManager.defaultDisplay
+            val now = d.mode
+            val best = d.supportedModes
+                .filter { it.physicalWidth == now.physicalWidth && it.physicalHeight == now.physicalHeight }
+                .maxByOrNull { it.refreshRate }
+            if (best != null) window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
+        }
         view = PlayView(this, layout).also { setContentView(it) }
     }
 
@@ -212,6 +222,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         textAlign = Paint.Align.CENTER; textSize = ctx.dp(22).toFloat(); isFakeBoldText = true
     }
     private val pressedBack = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val theme = Themes.current
 
     private fun send() {
         Link.send(state.report())
@@ -377,6 +388,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                // 움직임을 화면 갱신 주기에 묶지 말고, 터치 패널이 읽는 대로 바로 받는다(노브·트랙패드 지연 감소).
+                if (e.actionMasked == MotionEvent.ACTION_DOWN) requestUnbufferedDispatch(e)
                 val idx = e.actionIndex
                 val b = hit(e.getX(idx), e.getY(idx))
                 pointers[e.getPointerId(idx)] = b
@@ -450,7 +463,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         if (showPressed && pressedText.isNotEmpty()) {
             val held = pressedAt == Long.MAX_VALUE
             if (held || SystemClock.uptimeMillis() - pressedAt < PRESSED_LINGER_MS) {
-                val theme = Themes.current
                 val w = pressedPaint.measureText(pressedText)
                 val h = pressedPaint.textSize
                 val cx = width / 2f

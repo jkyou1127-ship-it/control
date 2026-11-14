@@ -42,8 +42,12 @@ type winInjector struct{}
 func newInjector() (Injector, error) { return winInjector{}, nil }
 
 // setupConsole 은 한글이 깨지지 않게 콘솔 출력을 UTF-8 로 바꾼다.
+// 그리고 다른 프로그램에 밀려 입력이 늦어지지 않게 우선순위를 높인다.
 func setupConsole() {
 	kernel32.NewProc("SetConsoleOutputCP").Call(65001)
+	if h, _, _ := kernel32.NewProc("GetCurrentProcess").Call(); h != 0 {
+		kernel32.NewProc("SetPriorityClass").Call(h, 0x00000080) // HIGH_PRIORITY_CLASS
+	}
 }
 
 func (winInjector) Key(usage int, down bool) {

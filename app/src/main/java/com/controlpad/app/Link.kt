@@ -27,7 +27,9 @@ object Link {
     private const val HEARTBEAT_MS = 50L
 
     private lateinit var app: Context
-    private val thread = HandlerThread("link").apply { start() }
+    // 입력을 보내는 스레드는 화면 그리기보다 먼저 돌도록 우선순위를 높인다.
+    private val thread = HandlerThread("link", android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY).apply { start() }
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
     private val worker = Handler(thread.looper)
 
     @Volatile var bt: BtHid? = null
@@ -120,6 +122,22 @@ object Link {
         active = on
         worker.removeCallbacks(heartbeat)
         if (on) worker.post(heartbeat)
+        lowLatencyWifi(on && mode == MODE_UDP)
+    }
+
+    /** Wi-Fi 절전은 패킷을 수십 ms 씩 묶어 보내므로, 컨트롤러로 쓰는 동안에는 끈다. */
+    private fun lowLatencyWifi(on: Boolean) {
+        runCatching {
+            if (on && wifiLock == null) {
+                val wm = app.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+                @Suppress("DEPRECATION")
+                val kind = if (Build.VERSION.SDK_INT >= 29) android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                else android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                wifiLock = wm.createWifiLock(kind, "controlpad").apply { setReferenceCounted(false); acquire() }
+            } else if (!on) {
+                wifiLock?.release(); wifiLock = null
+            }
+        }
     }
 
     val connected: Boolean
@@ -201,7 +219,13 @@ class BtHid(private val ctx: Context) {
             "ControlPad", "ControlPad Keyboard and Mouse", "ControlPad",
             BluetoothHidDevice.SUBCLASS1_COMBO, DESCRIPTOR,
         )
-        runCatching { h.registerApp(sdp, null, null, ctx.mainExecutor, callback) }
+        // 블루투스가 허용하는 가장 짧은 전송 간격(11.25ms)을 요청한다. 받아들이지 않는 기기에서는 기본값으로 등록한다.
+        val qos = android.bluetooth.BluetoothHidDeviceAppQosSettings(
+            android.bluetooth.BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT, 800, 9, 0, 11250,
+            android.bluetooth.BluetoothHidDeviceAppQosSettings.MAX,
+        )
+        val ok = runCatching { h.registerApp(sdp, null, qos, ctx.mainExecutor, callback) }.getOrDefault(false)
+        if (!ok) runCatching { h.registerApp(sdp, null, null, ctx.mainExecutor, callback) }
     }
 
     /** 앱이 뒤로 가면 시스템이 등록을 풀어버리므로, 화면이 앞으로 올 때마다 다시 확인한다. */

@@ -604,7 +604,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         get() = selection.lastOrNull()
         set(v) { selection.clear(); if (v != null) selection += v }
 
-    /** 켜면 버튼을 눌러 선택에 더하거나 빼고, 빈 곳을 드래그해 범위로 선택한다. */
+    /** 켜면 버튼을 눌러 선택에 더하거나 빼고, 손가락으로 훑고 지나간 버튼들을 선택한다. */
     var multi = false
         set(on) { field = on; if (!on && selection.size > 1) selected = selection.last() }
     var snap = true
@@ -629,7 +629,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     private val minSize = ctx.dp(36).toFloat()
     private val slop = ctx.dp(8).toFloat()
 
-    private enum class Drag { NONE, DRAW, MARQUEE, MOVE, RESIZE }
+    private enum class Drag { NONE, DRAW, SLIDE, MOVE, RESIZE }
     private var drag = Drag.NONE
     private var downX = 0f
     private var downY = 0f
@@ -663,7 +663,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             val r = rectOf(selection.first())
             c.drawCircle(r.right, r.bottom, handle * 0.5f, handlePaint)
         }
-        if (drag == Drag.DRAW || drag == Drag.MARQUEE) {
+        if (drag == Drag.DRAW) {
             c.drawRect(min(downX, curX), min(downY, curY), max(downX, curX), max(downY, curY), drawPaint)
         }
     }
@@ -682,15 +682,18 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                 } else {
                     val hit = pad.buttons.lastOrNull { it.contains(x / width, y / height) }
                     hitButton = hit
-                    if (hit != null) {
+                    if (multi && (hit == null || hit !in selection)) {
+                        // 다중 선택: 선택되지 않은 곳에서 시작하면 손가락이 지나가는 버튼을 차례로 선택한다.
+                        wasSelected = false
+                        if (hit != null) selection += hit
+                        drag = Drag.SLIDE
+                    } else if (hit != null) {
+                        // 선택된 버튼을 잡으면 선택된 것 전부를 옮긴다.
                         wasSelected = hit in selection
-                        if (multi) selection += hit else selected = hit
+                        if (!multi) selected = hit
                         starts.clear()
                         for (b in selection) starts[b] = b.x to b.y
                         drag = Drag.MOVE
-                    } else if (multi) {
-                        selection.clear()
-                        drag = Drag.MARQUEE
                     } else {
                         selected = null
                         downX = snapPx(x); downY = snapPx(y)
@@ -702,7 +705,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                 if (abs(x - downX) > slop || abs(y - downY) > slop) moved = true
                 when (drag) {
                     Drag.DRAW -> { curX = snapPx(x); curY = snapPx(y) }
-                    Drag.MARQUEE -> { curX = x; curY = y }
+                    Drag.SLIDE -> pad.buttons.lastOrNull { it.contains(x / width, y / height) }?.let { selection += it }
                     Drag.MOVE -> if (moved && starts.isNotEmpty()) {
                         // 선택된 것들이 함께 움직이되, 어느 것도 화면 밖으로 나가지 않게 한다.
                         val dx = (snapPx(x - downX) / width)
@@ -733,11 +736,8 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                             onCreated(b)
                         }
                     }
-                    Drag.MARQUEE -> {
-                        val l = min(downX, curX) / width; val r = max(downX, curX) / width
-                        val t = min(downY, curY) / height; val b2 = max(downY, curY) / height
-                        selection += pad.buttons.filter { it.x < r && it.x + it.w > l && it.y < b2 && it.y + it.h > t }
-                    }
+                    // 빈 곳을 움직이지 않고 톡 누르면 선택을 모두 푼다.
+                    Drag.SLIDE -> if (!moved && hitButton == null) selection.clear()
                     Drag.MOVE -> if (!moved && wasSelected) {
                         // 이미 선택된 버튼을 다시 누름: 다중 선택에서는 선택 해제, 아니면 속성 열기
                         if (multi) hitButton?.let { selection -= it } else selected?.let(onEdit)
