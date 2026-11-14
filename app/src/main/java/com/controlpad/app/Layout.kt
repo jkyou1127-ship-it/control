@@ -131,6 +131,17 @@ object LayoutStore {
     }
 }
 
+/** 게임별 퀵 리스타트 키. 누르고 있는 동안 입력되므로, 길게 눌러야 하는 게임에서도 쓸 수 있다. */
+object Restart {
+    val names = listOf("사운드 볼텍스 (Enter + Space + R Alt)", "DJMAX · EZ2ON (F5)")
+    val SDVX = listOf(0xE6, 0x28, 0x2C)
+    val F5 = listOf(0x3E)
+
+    fun button(index: Int, x: Float, y: Float, w: Float, h: Float) = PadButton(
+        x, y, w, h, "RESTART", (if (index == 0) SDVX else F5).toMutableList(), color = PadButton.PALETTE[3],
+    )
+}
+
 object Templates {
     val names = listOf(
         "빈 레이아웃", "리듬게임 4키 (D F J K)", "리듬게임 7키 (S D F Space J K L)", "작업용 단축키",
@@ -159,6 +170,7 @@ object Templates {
                 color = PadButton.PALETTE[if (label == "Space") 1 else if (i % 2 == 0) 0 else 2],
             )
         }
+        l.buttons += Restart.button(1, 0.845f, 0.04f, 0.14f, 0.2f)
         return l
     }
 
@@ -173,6 +185,7 @@ object Templates {
         l.buttons += knob(0.02f, "VOL-L", 0x14, 0x1A, p[0])
         l.buttons += knob(0.78f, "VOL-R", 0x12, 0x13, p[3])
         l.buttons += PadButton(0.42f, 0.05f, 0.16f, 0.16f, "START", mutableListOf(0x28), color = p[4])
+        l.buttons += Restart.button(0, 0.42f, 0.23f, 0.16f, 0.14f)
         listOf("BT-A" to 0x16, "BT-B" to 0x07, "BT-C" to 0x0E, "BT-D" to 0x0F).forEachIndexed { i, (label, key) ->
             l.buttons += PadButton(0.1f + i * 0.205f, 0.42f, 0.185f, 0.3f, label, mutableListOf(key), color = p[7])
         }

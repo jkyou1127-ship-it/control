@@ -145,4 +145,12 @@ class CoreTest {
         assertTrue(gradle.contains("versionName = \"${info.name}\""))
         assertTrue(info.notes.isNotEmpty())
     }
+
+    @Test
+    fun restartButtonsUseTheGameKeys() {
+        assertEquals("R Alt + Enter + Space", Keys.combo(Restart.button(0, 0f, 0f, 0.1f, 0.1f).keys))
+        assertEquals("F5", Keys.combo(Restart.button(1, 0f, 0f, 0.1f, 0.1f).keys))
+        assertEquals(Restart.SDVX, Templates.create(4, "t").buttons.first { it.label == "RESTART" }.keys)
+        for (i in 1..2) assertEquals(Restart.F5, Templates.create(i, "t").buttons.first { it.label == "RESTART" }.keys)
+    }
 }

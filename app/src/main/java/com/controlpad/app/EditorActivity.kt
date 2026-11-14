@@ -78,6 +78,14 @@ class EditorActivity : BaseActivity() {
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
+        tool("＋재시작") {
+            AlertDialog.Builder(this).setTitle("퀵 리스타트 버튼")
+                .setItems(Restart.names.toTypedArray()) { _, which ->
+                    val w = 0.14f
+                    val r = Restart.button(which, 0.5f - w / 2, 0.04f, w, 0.2f)
+                    pad.buttons += r; view.selected = r; view.invalidate()
+                }.show()
+        }
         tool("속성") { view.selected?.let { editButton(it) } ?: hint() }
         tool("복제") {
             view.selected?.let {

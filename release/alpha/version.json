@@ -1,5 +1,5 @@
 {
-  "versionCode": 5,
-  "versionName": "1.4",
-  "notes": "알파 채널이 추가되었습니다. 연결 설정에서 '알파 빌드 받기'를 켜면 최신 빌드를 바로 받습니다."
+  "versionCode": 6,
+  "versionName": "1.5",
+  "notes": "퀵 리스타트 버튼이 추가되었습니다 (사운드 볼텍스: Enter+Space+R Alt, DJMAX·EZ2ON: F5). 편집 화면의 '＋재시작'에서 추가합니다."
 }
