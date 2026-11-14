@@ -33,6 +33,11 @@ object Updater {
         get() = Link.prefs.getBoolean("alpha", false)
         set(on) = Link.prefs.edit().putBoolean("alpha", on).apply()
 
+    /** 켜져 있으면 앱을 켤 때 새 버전을 묻지 않고 바로 내려받아 설치한다. */
+    var auto: Boolean
+        get() = Link.prefs.getBoolean("autoUpdate", true)
+        set(on) = Link.prefs.edit().putBoolean("autoUpdate", on).apply()
+
     private fun base(alpha: Boolean) = if (alpha) BASE + "alpha/" else BASE
     private var receiverRegistered = false
 
@@ -65,6 +70,10 @@ object Updater {
                 when {
                     info == null -> if (!silent) toast(a, "업데이트를 확인하지 못했습니다. 인터넷 연결을 확인하세요")
                     info.code <= installedCode(a) -> if (!silent) toast(a, "최신 버전입니다 (${installedName(a)})")
+                    silent && auto -> {
+                        toast(a, "새 버전 ${info.name}을(를) 내려받아 설치합니다")
+                        download(a, alpha, quiet = true)
+                    }
                     else -> AlertDialog.Builder(a)
                         .setTitle("새 버전 ${info.name}" + if (alpha) " (알파)" else "")
                         .setMessage(info.notes.ifEmpty { "새 버전이 있습니다." } + "\n\n지금 업데이트할까요?")
@@ -100,29 +109,35 @@ object Updater {
     }
 
     @Suppress("DEPRECATION")
-    private fun download(a: Activity, alpha: Boolean) {
-        val progress = ProgressDialog(a).apply {
+    private fun download(a: Activity, alpha: Boolean, quiet: Boolean = false) {
+        val progress = if (quiet) null else ProgressDialog(a).apply {
             setMessage("내려받는 중…"); setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
             max = 100; setCancelable(false); show()
         }
         Thread {
             val result = runCatching {
-                val apk = fetch(base(alpha) + "ControlPad.apk") { p -> a.runOnUiThread { progress.progress = p } }
+                val apk = fetch(base(alpha) + "ControlPad.apk") { p -> a.runOnUiThread { progress?.progress = p } }
                 install(a.applicationContext, apk)
             }
             a.runOnUiThread {
-                runCatching { progress.dismiss() }
+                runCatching { progress?.dismiss() }
                 if (result.isFailure) toast(a, "업데이트에 실패했습니다: " + (result.exceptionOrNull()?.message ?: ""))
             }
         }.start()
     }
 
-    /** 시스템 설치 화면을 띄운다. 처음에는 '이 출처 허용'을 물을 수 있다. */
+    /**
+     * 시스템 설치 화면을 띄운다. 처음에는 '이 출처 허용'을 물을 수 있다.
+     * 안드로이드 12 이상에서는 이 앱이 스스로 설치한 적이 있으면(두 번째 업데이트부터) 확인 없이 설치된다.
+     */
     private fun install(ctx: Context, apk: ByteArray) {
         registerReceiver(ctx)
         val installer = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         params.setAppPackageName(ctx.packageName)
+        if (Build.VERSION.SDK_INT >= 31) {
+            params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+        }
         val id = installer.createSession(params)
         installer.openSession(id).use { session ->
             session.openWrite("ControlPad.apk", 0, apk.size.toLong()).use { out ->

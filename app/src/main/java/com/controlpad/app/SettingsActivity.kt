@@ -132,6 +132,11 @@ class SettingsActivity : BaseActivity() {
         root.addView(title("업데이트"))
         root.addView(note("현재 버전 " + Updater.installedName(this) + " · 앱을 켤 때 새 버전을 자동으로 확인합니다."))
         root.addView(CheckBox(this).apply {
+            text = "자동 업데이트 — 앱을 켤 때 새 버전이 있으면 묻지 않고 바로 설치합니다"
+            isChecked = Updater.auto
+            setOnCheckedChangeListener { _, on -> Updater.auto = on }
+        })
+        root.addView(CheckBox(this).apply {
             text = "알파 빌드 받기 — 최신 빌드를 바로 받습니다. 끄면 한 번 전의 빌드(정식)를 받습니다"
             isChecked = Updater.alpha
             setOnCheckedChangeListener { _, on -> Updater.alpha = on }
