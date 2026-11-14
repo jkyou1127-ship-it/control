@@ -293,11 +293,22 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         knobAngle[i] += degrees
         val d = if (b.invert) -degrees else degrees
         if (b.knobOut == PadButton.OUT_KEYS) {
-            if (knobRem[i] * d < 0) knobRem[i] = 0f           // 방향이 바뀌면 누적을 버린다
-            knobRem[i] += d
-            if (kotlin.math.abs(knobRem[i]) >= KEY_STEP_DEG) {
-                knobKey(i, if (knobRem[i] > 0) 1 else -1)
+            var keep = false
+            if (Knob.sameWay(knobDir[i], d)) {
+                // 이미 그 방향 키를 누르고 있으면, 조금이라도 더 돌아갈 때마다 계속 누른 채로 둔다.
+                // (일정 각도를 채울 때만 연장하면 천천히 돌릴 때 키가 떼졌다 눌렸다 한다.)
                 knobRem[i] = 0f
+                keep = true
+            } else {
+                if (knobRem[i] * d < 0) knobRem[i] = 0f       // 방향이 바뀌면 누적을 버린다
+                knobRem[i] += d
+                if (kotlin.math.abs(knobRem[i]) >= KEY_STEP_DEG) {
+                    knobKey(i, if (knobRem[i] > 0) 1 else -1)
+                    knobRem[i] = 0f
+                    keep = true
+                }
+            }
+            if (keep) {
                 taps.removeCallbacks(knobStop[i])
                 // '계속 누름'이면 멈춰도 키를 유지하고, 손을 떼거나 반대로 돌릴 때만 바뀐다.
                 if (b.mode != PadButton.KNOB_UNTIL_RELEASE) taps.postDelayed(knobStop[i], KEY_HOLD_MS)
@@ -530,7 +541,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         const val TAP_SLOP_DP = 12f      // 트랙패드: 이보다 덜 움직여야 탭으로 본다
         const val TAP_TIMEOUT_MS = 250L
         const val KEY_STEP_DEG = 2f    // 키 방식 노브: 이만큼 돌아가야 키를 누른다
-        const val KEY_HOLD_MS = 70L    // 키 방식 노브: 회전이 멈춘 뒤 키를 떼기까지의 시간
+        const val KEY_HOLD_MS = 150L   // 키 방식 노브: 회전이 멈춘 뒤 키를 떼기까지의 시간
         const val DEAD_ZONE = 0.12f    // 노브 중심 주변의 무시 구간(지름 대비 비율)
     }
 }

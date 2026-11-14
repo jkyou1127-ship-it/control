@@ -376,6 +376,9 @@ object Knob {
         return d
     }
 
+    /** 지금 누르고 있는 방향(held: -1, 0, 1)과 같은 쪽으로 돌았는지. */
+    fun sameWay(held: Int, degrees: Float): Boolean = (held > 0 && degrees > 0f) || (held < 0 && degrees < 0f)
+
     /** 원점으로 돌아가는 애니메이션의 한 단계: 남은 각도를 줄이고, 거의 다 왔으면 0 으로 맞춘다. */
     fun settle(angle: Float): Float {
         val next = angle * 0.7f

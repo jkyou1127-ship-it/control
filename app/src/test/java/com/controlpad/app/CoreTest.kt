@@ -344,4 +344,12 @@ class CoreTest {
         assertTrue(gradle.contains("versionName = \"${info.name}\""))
         assertTrue(info.notes.isNotEmpty())
     }
+
+    @Test
+    fun knobKeepsKeyHeldOnAnyFurtherTurnInTheSameDirection() {
+        assertTrue(Knob.sameWay(1, 0.1f))          // 아주 조금만 더 돌아도 계속 누름
+        assertTrue(Knob.sameWay(-1, -0.1f))
+        assertFalse(Knob.sameWay(1, -0.1f))        // 반대로 돌면 유지하지 않는다
+        assertFalse(Knob.sameWay(0, 5f))           // 아직 아무 키도 누르지 않은 상태
+    }
 }
