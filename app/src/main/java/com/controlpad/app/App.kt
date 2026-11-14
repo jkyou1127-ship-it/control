@@ -46,6 +46,7 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; isFakeBoldText = true }
     private val sub = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val keyNames = Link.showKeyNames
 
     /** angle 은 노브가 지금까지 돌아간 각도(표시용). */
     private val clip = android.graphics.Path()
@@ -118,7 +119,7 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         val cy = r.centerY() - (text.descent() + text.ascent()) / 2
         c.drawText(label, r.centerX(), cy, text)
 
-        if (combo.isNotEmpty() && combo != label && r.height() > 56 * density) {
+        if (keyNames && combo.isNotEmpty() && combo != label && r.height() > 56 * density) {
             sub.color = if (pressed) 0xAA000000.toInt() else theme.text and 0x00FFFFFF or 0xAA000000.toInt()
             sub.textSize = (text.textSize * 0.45f).coerceIn(9f * density, 16f * density)
             val sy = if (b.isKnob) cy + sub.textSize * 1.5f else r.bottom - sub.textSize * 0.7f

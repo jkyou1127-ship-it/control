@@ -148,9 +148,30 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         lastX.remove(id); lastY.remove(id)
     }
 
+    // 지금 눌리고 있는 키 표시
+    private val showPressed = Link.showPressed
+    private var pressedText = ""
+    private var pressedAt = 0L          // 마지막으로 키가 눌려 있던 시각
+    private val pressedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER; textSize = ctx.dp(22).toFloat(); isFakeBoldText = true
+    }
+    private val pressedBack = Paint(Paint.ANTI_ALIAS_FLAG)
+
     private fun send() {
         Link.send(state.report())
         Link.setMouseButtons(state.mouseButtons())
+        if (showPressed) {
+            val now = state.pressed()
+            if (now.isNotEmpty()) {
+                pressedText = Keys.combo(now)
+                pressedAt = Long.MAX_VALUE
+            } else if (pressedAt == Long.MAX_VALUE) {
+                // 짧게 누른 키도 읽을 수 있게 뗀 뒤에도 잠깐 남겨 둔다.
+                pressedAt = SystemClock.uptimeMillis()
+                postInvalidateDelayed(PRESSED_LINGER_MS + 20)
+            }
+            invalidate()
+        }
     }
 
     private fun click(button: Int) {
@@ -341,12 +362,26 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts)
         }
+        if (showPressed && pressedText.isNotEmpty()) {
+            val held = pressedAt == Long.MAX_VALUE
+            if (held || SystemClock.uptimeMillis() - pressedAt < PRESSED_LINGER_MS) {
+                val theme = Themes.current
+                val w = pressedPaint.measureText(pressedText)
+                val h = pressedPaint.textSize
+                val cx = width / 2f
+                pressedBack.color = theme.bg and 0x00FFFFFF or 0xCC000000.toInt()
+                c.drawRoundRect(cx - w / 2 - h * 0.6f, h * 0.35f, cx + w / 2 + h * 0.6f, h * 2.05f, h * 0.5f, h * 0.5f, pressedBack)
+                pressedPaint.color = if (held) theme.text else theme.text and 0x00FFFFFF or 0x77000000
+                c.drawText(pressedText, cx, h * 1.55f, pressedPaint)
+            }
+        }
         statusPaint.color = if (connected) 0x9981C784.toInt() else 0xFFFFB74D.toInt()
         c.drawText((if (connected) "● " else "○ ") + status, statusPaint.textSize, statusPaint.textSize * 1.6f, statusPaint)
     }
 
     companion object {
         const val TAP_MS = 40L
+        const val PRESSED_LINGER_MS = 600L   // 키를 뗀 뒤 표시를 남겨 두는 시간
         const val PAD_GAIN = 0.35f       // 트랙패드: 감도 1 일 때 1dp 당 마우스 이동량
         const val SCROLL_STEP_DP = 18f   // 트랙패드: 휠 한 칸에 해당하는 두 손가락 이동 거리
         const val TAP_SLOP_DP = 12f      // 트랙패드: 이보다 덜 움직여야 탭으로 본다

@@ -160,6 +160,14 @@ class SettingsActivity : BaseActivity() {
 
         root.addView(title("기타"))
         root.addView(CheckBox(this).apply {
+            text = "눌리고 있는 키 표시 — 실행 화면 위쪽에 지금 입력 중인 키를 보여 줍니다"; isChecked = Link.showPressed
+            setOnCheckedChangeListener { _, on -> Link.showPressed = on }
+        })
+        root.addView(CheckBox(this).apply {
+            text = "버튼에 키 이름 표시 — 버튼 아래쪽에 그 버튼이 입력하는 키를 작게 보여 줍니다"; isChecked = Link.showKeyNames
+            setOnCheckedChangeListener { _, on -> Link.showKeyNames = on; reload() }
+        })
+        root.addView(CheckBox(this).apply {
             text = "버튼을 누를 때 진동"; isChecked = Link.haptic
             setOnCheckedChangeListener { _, on -> Link.prefs.edit().putBoolean("haptic", on).apply() }
         })

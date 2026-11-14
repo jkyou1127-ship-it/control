@@ -30,6 +30,11 @@ class KeyState {
         return r
     }
 
+    /** 지금 눌려 있는 것들(수정키, 키, 마우스 버튼 순). 화면에 보여 줄 때 쓴다. */
+    fun pressed(): List<Int> =
+        (0xE0..0xE7).filter { counts[it] > 0 } + (0..MAX_USAGE).filter { counts[it] > 0 } +
+            (Keys.MOUSE_LEFT..Keys.MOUSE_MIDDLE).filter { counts[it] > 0 }
+
     /** 눌린 마우스 버튼 비트 (bit0 좌, bit1 우, bit2 휠). */
     fun mouseButtons(): Int {
         var b = 0

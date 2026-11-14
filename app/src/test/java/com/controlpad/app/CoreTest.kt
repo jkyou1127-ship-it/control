@@ -179,4 +179,13 @@ class CoreTest {
         assertTrue(Themes.luminance(light.card) < Themes.luminance(light.bg))
         assertEquals(0xFF7F7F7F.toInt(), Themes.mix(0xFF000000.toInt(), 0xFFFFFFFF.toInt(), 0.5f))
     }
+
+    @Test
+    fun pressedListsModifiersThenKeysThenMouse() {
+        val s = KeyState()
+        s.press(listOf(Keys.MOUSE_LEFT, 0x16, 0xE1, 0xE0))
+        assertEquals("Ctrl + Shift + S + 좌클릭", Keys.combo(s.pressed()))
+        s.clear()
+        assertTrue(s.pressed().isEmpty())
+    }
 }

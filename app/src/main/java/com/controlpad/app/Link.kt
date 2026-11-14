@@ -41,6 +41,16 @@ object Link {
     val mode: Int get() = prefs.getInt("mode", MODE_BT)
     val haptic: Boolean get() = prefs.getBoolean("haptic", true)
 
+    /** 실행 화면 위쪽에 지금 눌리고 있는 키를 보여 줄지. */
+    var showPressed: Boolean
+        get() = prefs.getBoolean("showPressed", true)
+        set(on) = prefs.edit().putBoolean("showPressed", on).apply()
+
+    /** 버튼 아래쪽에 그 버튼이 입력하는 키 이름을 보여 줄지. */
+    var showKeyNames: Boolean
+        get() = prefs.getBoolean("showKeyNames", true)
+        set(on) = prefs.edit().putBoolean("showKeyNames", on).apply()
+
     fun init(ctx: Context) {
         app = ctx.applicationContext
     }
