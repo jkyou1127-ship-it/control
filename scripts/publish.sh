@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# 새 빌드를 알파 채널에 올리고, 알파에 있던 빌드를 정식 채널로 내린다.
+#   scripts/publish.sh "바뀐 점"
+# 실행 전에 app/build.gradle.kts 의 versionCode / versionName 을 올려 둔다. 끝나면 커밋하고 푸시한다.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+notes="${1:?바뀐 점을 적어 주세요}"
+code=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
+name=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+
+if [ -f release/alpha/version.json ]; then
+    old=$(sed -n 's/.*"versionCode": *\([0-9]*\).*/\1/p' release/alpha/version.json)
+    if [ "$code" -le "$old" ]; then
+        echo "versionCode($code)가 알파에 올라가 있는 버전($old)보다 커야 합니다" >&2
+        exit 1
+    fi
+    cp release/alpha/version.json release/alpha/ControlPad.apk release/   # 알파 → 정식
+fi
+
+mkdir -p release/alpha
+python3 - "$code" "$name" "$notes" <<'PY'
+import json, sys
+json.dump({"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "notes": sys.argv[3]},
+          open("release/alpha/version.json", "w"), ensure_ascii=False, indent=2)
+PY
+
+python3 receiver/test_receiver.py
+./gradlew testReleaseUnitTest assembleRelease -q
+cp app/build/outputs/apk/release/app-release.apk release/alpha/ControlPad.apk
+echo "알파: $name ($code) / 정식: $(sed -n 's/.*"versionName": *"\(.*\)".*/\1/p' release/version.json)"

@@ -18,13 +18,22 @@ import java.net.URL
 
 /**
  * 앱 안에서 새 버전을 확인하고 설치한다.
- * 저장소의 release/version.json 과 release/ControlPad.apk 를 내려받는다.
+ * 채널이 둘이다.
+ *   알파: release/alpha/ — 가장 최신 빌드가 바로 올라온다.
+ *   정식: release/ — 한 번 전의 빌드. 새 빌드는 다음 빌드가 나올 때 정식으로 넘어온다.
+ * 각 폴더의 version.json 과 ControlPad.apk 를 내려받는다.
  */
 object Updater {
     private const val BASE =
         "https://raw.githubusercontent.com/jkyou1127-ship-it/control/claude/vibrant-ramanujan-pdzsly/release/"
     private const val ACTION = "com.controlpad.app.INSTALL_STATUS"
     private var checkedThisRun = false
+
+    var alpha: Boolean
+        get() = Link.prefs.getBoolean("alpha", false)
+        set(on) = Link.prefs.edit().putBoolean("alpha", on).apply()
+
+    private fun base(alpha: Boolean) = if (alpha) BASE + "alpha/" else BASE
     private var receiverRegistered = false
 
     class Info(val code: Int, val name: String, val notes: String)
@@ -48,17 +57,18 @@ object Updater {
     }
 
     fun check(a: Activity, silent: Boolean = false) {
+        val alpha = alpha
         Thread {
-            val info = runCatching { parse(String(fetch(BASE + "version.json"))) }.getOrNull()
+            val info = runCatching { parse(String(fetch(base(alpha) + "version.json"))) }.getOrNull()
             a.runOnUiThread {
                 if (a.isFinishing || a.isDestroyed) return@runOnUiThread
                 when {
                     info == null -> if (!silent) toast(a, "업데이트를 확인하지 못했습니다. 인터넷 연결을 확인하세요")
                     info.code <= installedCode(a) -> if (!silent) toast(a, "최신 버전입니다 (${installedName(a)})")
                     else -> AlertDialog.Builder(a)
-                        .setTitle("새 버전 ${info.name}")
+                        .setTitle("새 버전 ${info.name}" + if (alpha) " (알파)" else "")
                         .setMessage(info.notes.ifEmpty { "새 버전이 있습니다." } + "\n\n지금 업데이트할까요?")
-                        .setPositiveButton("업데이트") { _, _ -> download(a) }
+                        .setPositiveButton("업데이트") { _, _ -> download(a, alpha) }
                         .setNegativeButton("나중에", null)
                         .show()
                 }
@@ -90,14 +100,14 @@ object Updater {
     }
 
     @Suppress("DEPRECATION")
-    private fun download(a: Activity) {
+    private fun download(a: Activity, alpha: Boolean) {
         val progress = ProgressDialog(a).apply {
             setMessage("내려받는 중…"); setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
             max = 100; setCancelable(false); show()
         }
         Thread {
             val result = runCatching {
-                val apk = fetch(BASE + "ControlPad.apk") { p -> a.runOnUiThread { progress.progress = p } }
+                val apk = fetch(base(alpha) + "ControlPad.apk") { p -> a.runOnUiThread { progress.progress = p } }
                 install(a.applicationContext, apk)
             }
             a.runOnUiThread {

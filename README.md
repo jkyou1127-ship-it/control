@@ -66,8 +66,23 @@ Windows 방화벽이 물으면 허용하세요. 관리자 권한으로 실행된
 앱을 켜면 새 버전을 자동으로 확인하고, 있으면 내려받아 설치할지 묻습니다. `연결 설정 > 업데이트 확인`으로 직접 확인할 수도 있습니다.
 처음 업데이트할 때 안드로이드가 "이 출처의 앱 설치 허용"을 한 번 묻습니다.
 
-새 버전을 배포하려면 `app/build.gradle.kts`의 `versionCode`/`versionName`을 올리고, 빌드한 APK를 `release/ControlPad.apk`로,
-같은 버전 정보를 `release/version.json`에 넣어 푸시합니다. 앱은 `Updater.kt`의 `BASE` 주소(현재 `claude/vibrant-ramanujan-pdzsly` 브랜치)에서 받아 옵니다.
+채널이 둘입니다.
+
+| 채널 | 폴더 | 내용 |
+|---|---|---|
+| 알파 | `release/alpha/` | 가장 최신 빌드. 올리는 즉시 받습니다 |
+| 정식 (기본) | `release/` | 한 번 전의 빌드. 새 빌드는 그다음 빌드가 나올 때 정식으로 넘어옵니다 |
+
+알파를 받으려면 `연결 설정 > 알파 빌드 받기`를 켭니다.
+
+새 버전을 배포하려면 `app/build.gradle.kts`의 `versionCode`/`versionName`을 올리고 아래를 실행한 뒤 커밋·푸시합니다.
+지금 알파에 있던 빌드가 정식으로 내려가고, 새 빌드가 알파에 올라갑니다.
+
+```bash
+scripts/publish.sh "이번 버전에서 바뀐 점"
+```
+
+앱은 `Updater.kt`의 `BASE` 주소(현재 `claude/vibrant-ramanujan-pdzsly` 브랜치)에서 받아 옵니다.
 
 ## 빌드
 
