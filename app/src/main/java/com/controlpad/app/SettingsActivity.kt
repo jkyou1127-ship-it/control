@@ -106,6 +106,21 @@ class SettingsActivity : BaseActivity() {
         })
         root.addView(udpBox)
 
+        root.addView(title("컨트롤러 테마"))
+        root.addView(android.widget.Spinner(this).apply {
+            adapter = android.widget.ArrayAdapter(
+                this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, Themes.all.map { it.name },
+            )
+            setSelection(Themes.index)
+            onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(p: android.widget.AdapterView<*>?, v: android.view.View?, pos: Int, id: Long) {
+                    Themes.index = pos
+                }
+                override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+            }
+        })
+        root.addView(note("편집 화면과 실행 화면의 배경과 버튼 모양이 바뀝니다."))
+
         root.addView(title("기타"))
         root.addView(CheckBox(this).apply {
             text = "버튼을 누를 때 진동"; isChecked = Link.haptic

@@ -53,6 +53,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val painter = PadPainter(ctx)
     private val rect = RectF()
     private val state = KeyState()
+
+    init {
+        setBackgroundColor(Themes.current.bg)
+    }
+
     private val buttons = layout.buttons
     private val holds = IntArray(buttons.size)          // 버튼별로 올라가 있는 손가락 수
     private val toggled = BooleanArray(buttons.size)

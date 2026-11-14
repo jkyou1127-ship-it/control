@@ -368,11 +368,16 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
 
     private val painter = PadPainter(ctx)
     private val rect = RectF()
-    private val gridPaint = Paint().apply { color = 0x18FFFFFF; strokeWidth = 1f }
+    private val theme = Themes.current
+    private val gridPaint = Paint().apply { color = theme.text and 0x00FFFFFF or 0x18000000; strokeWidth = 1f }
     private val drawPaint = Paint().apply { color = 0x664FC3F7; style = Paint.Style.FILL }
-    private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.text }
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x99FFFFFF.toInt(); textAlign = Paint.Align.CENTER; textSize = ctx.dp(18).toFloat()
+        color = theme.text and 0x00FFFFFF or 0x99000000.toInt(); textAlign = Paint.Align.CENTER; textSize = ctx.dp(18).toFloat()
+    }
+
+    init {
+        setBackgroundColor(theme.bg)
     }
     private val handle = ctx.dp(22).toFloat()
     private val minSize = ctx.dp(36).toFloat()

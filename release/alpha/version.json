@@ -1,5 +1,5 @@
 {
-  "versionCode": 6,
-  "versionName": "1.5",
-  "notes": "퀵 리스타트 버튼이 추가되었습니다 (사운드 볼텍스: Enter+Space+R Alt, DJMAX·EZ2ON: F5). 편집 화면의 '＋재시작'에서 추가합니다."
+  "versionCode": 7,
+  "versionName": "1.6",
+  "notes": "컨트롤러 테마(다크·블랙·라이트·네온)가 추가되었습니다. 연결 설정에서 고릅니다."
 }
