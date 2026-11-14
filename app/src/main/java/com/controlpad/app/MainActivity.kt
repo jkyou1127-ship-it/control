@@ -33,7 +33,7 @@ class MainActivity : BaseActivity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
 
         val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        header.addView(TextView(this).apply { text = "ControlPad"; textSize = 24f; setTextColor(Color.WHITE) })
+        header.addView(TextView(this).apply { text = "ControlPad"; textSize = 24f; setTextColor(Themes.current.text) })
         status = TextView(this).apply { textSize = 14f; setPadding(pad, 0, pad, 0) }
         header.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(Button(this).apply {
@@ -79,12 +79,12 @@ class MainActivity : BaseActivity() {
             val row = LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(12), dp(8), dp(4), dp(8))
-                setBackgroundColor(0xFF1E2128.toInt())
+                setBackgroundColor(Themes.current.card)
                 isClickable = true
                 setOnClickListener { open(PlayActivity::class.java, l.id) }
             }
             val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            texts.addView(TextView(this).apply { text = l.name; textSize = 18f; setTextColor(Color.WHITE) })
+            texts.addView(TextView(this).apply { text = l.name; textSize = 18f; setTextColor(Themes.current.text) })
             texts.addView(TextView(this).apply { text = "버튼 ${l.buttons.size}개 · 눌러서 실행"; textSize = 13f })
             row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(Button(this).apply { text = "편집"; setOnClickListener { open(EditorActivity::class.java, l.id) } })

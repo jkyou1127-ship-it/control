@@ -1,5 +1,5 @@
 {
-  "versionCode": 6,
-  "versionName": "1.5",
-  "notes": "퀵 리스타트 버튼이 추가되었습니다 (사운드 볼텍스: Enter+Space+R Alt, DJMAX·EZ2ON: F5). 편집 화면의 '＋재시작'에서 추가합니다."
+  "versionCode": 9,
+  "versionName": "1.6.2",
+  "notes": "키 선택 창과 버튼 속성 창이 잘리던 문제, 테마가 목록·설정 화면에 적용되지 않던 문제를 고쳤습니다."
 }

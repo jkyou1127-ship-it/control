@@ -16,7 +16,6 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
-import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Spinner
@@ -38,7 +37,7 @@ class EditorActivity : BaseActivity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val bar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
         bar.addView(TextView(this).apply {
-            text = pad.name; textSize = 16f; setTextColor(Color.WHITE); setSingleLine()
+            text = pad.name; textSize = 16f; setTextColor(Themes.current.text); setSingleLine()
             minWidth = dp(120)
         }, LinearLayout.LayoutParams(0, -2, 1f))
 
@@ -151,7 +150,7 @@ class EditorActivity : BaseActivity() {
         val keyBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fun keyRow(title: String, keys: MutableList<Int>) {
             val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-            val shown = TextView(this).apply { textSize = 16f; setTextColor(Color.WHITE) }
+            val shown = TextView(this).apply { textSize = 16f; setTextColor(Themes.current.text) }
             fun show() { shown.text = title + ": " + Keys.combo(keys).ifEmpty { "(없음)" } }
             show()
             row.addView(shown, LinearLayout.LayoutParams(0, -2, 1f))
@@ -183,22 +182,22 @@ class EditorActivity : BaseActivity() {
         val label = EditText(this).apply { setText(b.label); setSingleLine() }
         box.addView(label)
 
-        val swatches = LinearLayout(this).apply { setPadding(0, dp(8), 0, 0) }
+        val swatches = FlowLayout(this).apply { setPadding(0, dp(8), 0, 0) }
         fun paint() {
             for (i in 0 until swatches.childCount) {
                 val c = PadButton.PALETTE[i]
                 swatches.getChildAt(i).background = GradientDrawable().apply {
                     setColor(c); cornerRadius = dp(6).toFloat()
-                    if (c == color) setStroke(dp(3), Color.WHITE)
+                    if (c == color) setStroke(dp(3), Themes.current.text)
                 }
             }
         }
         for (c in PadButton.PALETTE) {
             swatches.addView(View(this).apply { setOnClickListener { color = c; paint() } },
-                LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(8) })
+                android.view.ViewGroup.LayoutParams(dp(40), dp(40)))
         }
         paint()
-        box.addView(swatches)
+        box.addView(swatches, LinearLayout.LayoutParams(-1, -2))
 
         AlertDialog.Builder(this).setTitle(if (isNew) "새 노브" else "노브 속성")
             .setView(ScrollView(this).apply { addView(box) })
@@ -211,7 +210,7 @@ class EditorActivity : BaseActivity() {
                 view.invalidate()
             }
             .setNegativeButton("취소", null)
-            .show()
+            .show().wide()
     }
 
     private fun editPad(b: PadButton, isNew: Boolean) {
@@ -252,7 +251,7 @@ class EditorActivity : BaseActivity() {
                 view.invalidate()
             }
             .setNegativeButton("취소", null)
-            .show()
+            .show().wide()
     }
 
     private fun editButton(b: PadButton, isNew: Boolean = false) {
@@ -265,7 +264,7 @@ class EditorActivity : BaseActivity() {
 
         box.addView(TextView(this).apply { text = "입력할 키" })
         val keyRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        val keyText = TextView(this).apply { textSize = 18f; setTextColor(Color.WHITE) }
+        val keyText = TextView(this).apply { textSize = 18f; setTextColor(Themes.current.text) }
         fun showKeys() { keyText.text = Keys.combo(keys).ifEmpty { "(없음)" } }
         showKeys()
         keyRow.addView(keyText, LinearLayout.LayoutParams(0, -2, 1f))
@@ -292,22 +291,22 @@ class EditorActivity : BaseActivity() {
         val oval = CheckBox(this).apply { text = "원형 버튼"; isChecked = b.shape == PadButton.SHAPE_OVAL }
         box.addView(oval)
 
-        val swatches = LinearLayout(this).apply { setPadding(0, dp(8), 0, 0) }
+        val swatches = FlowLayout(this).apply { setPadding(0, dp(8), 0, 0) }
         fun paint() {
             for (i in 0 until swatches.childCount) {
                 val c = PadButton.PALETTE[i]
                 swatches.getChildAt(i).background = GradientDrawable().apply {
                     setColor(c); cornerRadius = dp(6).toFloat()
-                    if (c == color) setStroke(dp(3), Color.WHITE)
+                    if (c == color) setStroke(dp(3), Themes.current.text)
                 }
             }
         }
         for (c in PadButton.PALETTE) {
             swatches.addView(View(this).apply { setOnClickListener { color = c; paint() } },
-                LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(8) })
+                android.view.ViewGroup.LayoutParams(dp(40), dp(40)))
         }
         paint()
-        box.addView(swatches)
+        box.addView(swatches, LinearLayout.LayoutParams(-1, -2))
 
         AlertDialog.Builder(this).setTitle(if (isNew) "새 버튼" else "버튼 속성")
             .setView(ScrollView(this).apply { addView(box) })
@@ -318,17 +317,16 @@ class EditorActivity : BaseActivity() {
                 view.invalidate()
             }
             .setNegativeButton("취소", null)
-            .show()
+            .show().wide()
     }
 
     /** 여러 키를 골라 조합(예: Ctrl + Shift + S)을 만든다. */
     private fun pickKeys(current: List<Int>, done: (List<Int>) -> Unit) {
         val chosen = LinkedHashSet(current)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), 0) }
-        val cols = max(4, (resources.displayMetrics.widthPixels * 0.8f / dp(76)).toInt())
         for ((title, defs) in Keys.groups) {
             box.addView(TextView(this).apply { text = title; setPadding(0, dp(10), 0, dp(4)) })
-            val grid = GridLayout(this).apply { columnCount = cols }
+            val grid = FlowLayout(this)
             for (k in defs) {
                 val cell = TextView(this).apply {
                     text = k.name; gravity = Gravity.CENTER; textSize = 15f
@@ -345,18 +343,16 @@ class EditorActivity : BaseActivity() {
                     if (!chosen.remove(k.usage)) chosen += k.usage
                     paint()
                 }
-                grid.addView(cell, GridLayout.LayoutParams().apply {
-                    width = dp(68); height = dp(44); setMargins(dp(3), dp(3), dp(3), dp(3))
-                })
+                grid.addView(cell, android.view.ViewGroup.LayoutParams(dp(68), dp(44)))
             }
-            box.addView(grid)
+            box.addView(grid, LinearLayout.LayoutParams(-1, -2))
         }
         AlertDialog.Builder(this).setTitle("키 선택 (여러 개를 고르면 동시에 입력)")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ -> done(Keys.ordered(chosen)) }
             .setNeutralButton("모두 해제") { _, _ -> done(emptyList()) }
             .setNegativeButton("취소", null)
-            .show()
+            .show().wide()
     }
 }
 

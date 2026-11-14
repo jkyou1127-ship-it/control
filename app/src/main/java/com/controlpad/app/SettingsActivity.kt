@@ -41,10 +41,10 @@ class SettingsActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         val pad = dp(16)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-        fun title(t: String) = TextView(this).apply { text = t; textSize = 18f; setTextColor(Color.WHITE); setPadding(0, pad, 0, dp(4)) }
+        fun title(t: String) = TextView(this).apply { text = t; textSize = 18f; setTextColor(Themes.current.text); setPadding(0, pad, 0, dp(4)) }
         fun note(t: String) = TextView(this).apply { text = t; textSize = 14f; setLineSpacing(0f, 1.2f) }
 
-        root.addView(TextView(this).apply { text = "연결 설정"; textSize = 24f; setTextColor(Color.WHITE) })
+        root.addView(TextView(this).apply { text = "연결 설정"; textSize = 24f; setTextColor(Themes.current.text) })
         status = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
         root.addView(status)
 
@@ -114,12 +114,14 @@ class SettingsActivity : BaseActivity() {
             setSelection(Themes.index)
             onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(p: android.widget.AdapterView<*>?, v: android.view.View?, pos: Int, id: Long) {
+                    if (pos == Themes.index) return
                     Themes.index = pos
+                    recreate()   // 이 화면에도 바로 반영
                 }
                 override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
             }
         })
-        root.addView(note("편집 화면과 실행 화면의 배경과 버튼 모양이 바뀝니다."))
+        root.addView(note("앱 전체의 배경과 글자색, 컨트롤러의 버튼 모양이 바뀝니다."))
 
         root.addView(title("기타"))
         root.addView(CheckBox(this).apply {

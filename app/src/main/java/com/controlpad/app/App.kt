@@ -17,8 +17,22 @@ class App : Application() {
 
 /** 화면이 앞으로 올 때마다 PC 연결을 다시 확인하는 공통 액티비티. */
 open class BaseActivity : Activity() {
+    private var shownTheme = -1
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        // 테마는 화면을 만들기 전에 정해야 글자·대화상자 색까지 함께 바뀐다.
+        val t = Themes.current
+        shownTheme = Themes.index
+        setTheme(if (t.light) R.style.AppThemeLight else R.style.AppTheme)
+        super.onCreate(savedInstanceState)
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(t.bg))
+        window.statusBarColor = t.bg
+        window.navigationBarColor = t.bg
+    }
+
     override fun onStart() {
         super.onStart()
+        if (shownTheme != Themes.index) { recreate(); return }   // 설정에서 테마를 바꾸고 돌아온 경우
         Link.ensure()
     }
 }
@@ -133,14 +147,16 @@ class PadTheme(
     val text: Int,        // 글자, 선택 테두리, 격자
     val stroke: Float,    // 테두리 굵기(dp)
     val colorText: Boolean = false,  // 글자를 버튼 색으로 쓸지
+    val light: Boolean = false,      // 밝은 테마(목록·설정·대화상자도 밝게)
+    val card: Int = 0xFF1E2128.toInt(),  // 목록 항목 배경
 )
 
 object Themes {
     val all = listOf(
         PadTheme("다크 (기본)", 0xFF14161A.toInt(), Color.BLACK, 1f, Color.WHITE, 1.5f),
-        PadTheme("블랙", Color.BLACK, Color.BLACK, 0.6f, Color.WHITE, 1.5f),
-        PadTheme("라이트", 0xFFECEFF1.toInt(), Color.WHITE, 1.2f, 0xFF202124.toInt(), 1.5f),
-        PadTheme("네온", 0xFF05060A.toInt(), Color.BLACK, 0.25f, Color.WHITE, 3f, colorText = true),
+        PadTheme("블랙", Color.BLACK, Color.BLACK, 0.6f, Color.WHITE, 1.5f, card = 0xFF101010.toInt()),
+        PadTheme("라이트", 0xFFECEFF1.toInt(), Color.WHITE, 1.2f, 0xFF202124.toInt(), 1.5f, light = true, card = Color.WHITE),
+        PadTheme("네온", 0xFF05060A.toInt(), Color.BLACK, 0.25f, Color.WHITE, 3f, colorText = true, card = 0xFF10131C.toInt()),
     )
 
     var index: Int
@@ -148,4 +164,44 @@ object Themes {
         set(i) = Link.prefs.edit().putInt("theme", i).apply()
 
     val current: PadTheme get() = all[index]
+}
+
+/** 자식들을 왼쪽부터 놓다가 폭이 모자라면 다음 줄로 넘긴다. 대화상자 폭이 기기마다 달라도 잘리지 않는다. */
+class FlowLayout(ctx: Context) : android.view.ViewGroup(ctx) {
+    private val gap = ctx.dp(6)
+
+    /** 주어진 폭 안에서 자식들의 위치를 정하고 전체 높이를 돌려준다. place 가 참이면 실제로 배치한다. */
+    private fun arrange(width: Int, place: Boolean): Int {
+        var x = 0
+        var y = 0
+        var rowHeight = 0
+        for (i in 0 until childCount) {
+            val c = getChildAt(i)
+            if (c.visibility == GONE) continue
+            if (x > 0 && x + c.measuredWidth > width) { x = 0; y += rowHeight + gap; rowHeight = 0 }
+            if (place) c.layout(x, y, x + c.measuredWidth, y + c.measuredHeight)
+            x += c.measuredWidth + gap
+            rowHeight = maxOf(rowHeight, c.measuredHeight)
+        }
+        return y + rowHeight
+    }
+
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        val unbounded = MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED
+        val width = if (unbounded) resources.displayMetrics.widthPixels else MeasureSpec.getSize(widthSpec)
+        for (i in 0 until childCount) {
+            measureChild(getChildAt(i), MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), heightSpec)
+        }
+        setMeasuredDimension(width, arrange(width, false))
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        arrange(r - l, true)
+    }
+}
+
+/** 대화상자를 화면 폭에 가깝게 넓힌다(기본 폭은 태블릿에서 좁아 내용이 잘린다). */
+fun android.app.AlertDialog.wide(): android.app.AlertDialog {
+    window?.setLayout((context.resources.displayMetrics.widthPixels * 0.92f).toInt(), android.view.WindowManager.LayoutParams.WRAP_CONTENT)
+    return this
 }
