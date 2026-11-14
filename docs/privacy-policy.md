@@ -1,10 +1,10 @@
-# ControlPad 개인정보처리방침 / Privacy Policy
+# 리듬 컨트롤러/가상키보드 개인정보처리방침 / Privacy Policy
 
 최종 수정: 2026-11-14
 
 ## 한국어
 
-ControlPad는 사용자의 개인정보를 수집하거나 저장하거나 외부로 전송하지 않습니다.
+리듬 컨트롤러/가상키보드(ControlPad)는 사용자의 개인정보를 수집하거나 저장하거나 외부로 전송하지 않습니다.
 
 - **수집하는 정보**: 없습니다. 계정, 광고, 분석 도구를 쓰지 않습니다.
 - **블루투스 권한**: 태블릿을 PC의 키보드·마우스로 연결하는 데에만 씁니다.
@@ -15,7 +15,7 @@ ControlPad는 사용자의 개인정보를 수집하거나 저장하거나 외�
 
 ## English
 
-ControlPad does not collect, store, or transmit any personal data.
+리듬 컨트롤러/가상키보드 (ControlPad) does not collect, store, or transmit any personal data.
 
 - **Data collected**: None. The app has no accounts, ads, or analytics.
 - **Bluetooth permission**: Used only to connect the tablet to your PC as a keyboard and mouse.

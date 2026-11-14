@@ -33,7 +33,7 @@ class MainActivity : BaseActivity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
 
         val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        header.addView(TextView(this).apply { text = "ControlPad"; textSize = 24f; setTextColor(Themes.current.text) })
+        header.addView(TextView(this).apply { text = getString(R.string.app_name); textSize = 20f; setSingleLine(); setTextColor(Themes.current.text) })
         status = TextView(this).apply { textSize = 14f; setPadding(pad, 0, pad, 0) }
         header.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(Button(this).apply {

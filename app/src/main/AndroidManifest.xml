@@ -16,7 +16,7 @@
         android:name=".App"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="ControlPad"
+        android:label="@string/app_name"
         android:theme="@style/AppTheme">
 
         <!-- Android 16 부터 태블릿에서는 화면 방향 고정이 무시된다. 편집·실행 화면은 가로 전용이므로 당분간 예외를 요청한다. -->
