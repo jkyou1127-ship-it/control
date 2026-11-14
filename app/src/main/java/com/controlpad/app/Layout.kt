@@ -36,6 +36,7 @@ class PadButton(
 ) {
     val isShow: Boolean get() = type == TYPE_SHOW
     val isStick: Boolean get() = type == TYPE_STICK
+    val isDisplay: Boolean get() = type == TYPE_DISPLAY
     val isKnob: Boolean get() = type == TYPE_KNOB
     val isPad: Boolean get() = type == TYPE_TRACKPAD
     val isMouse: Boolean get() = type == TYPE_MOUSE
@@ -84,6 +85,7 @@ class PadButton(
         const val TYPE_STICK = 5     // 조이스틱. keys 는 위, 아래, 왼쪽, 오른쪽 키 순서(없는 방향은 0)
         const val STICK_8WAY = 0     // 대각선으로 기울이면 두 방향 키를 함께 누른다 (mode 값)
         const val STICK_4WAY = 1     // 항상 한 방향만
+        const val TYPE_DISPLAY = 6   // 지금 눌리고 있는 키를 보여 주는 패널(누를 수 없음)
         const val GROUPS = 8
         const val KNOB_UNTIL_STOP = 0    // 키 방식 노브: 돌리는 동안만 누르고 멈추면 뗀다 (mode 값)
         const val KNOB_UNTIL_RELEASE = 1 // 키 방식 노브: 돌리기 시작하면 손을 뗄 때까지 계속 누른다

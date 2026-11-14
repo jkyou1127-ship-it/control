@@ -172,7 +172,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         val nx = x / width
         val ny = y / height
         for (i in buttons.indices.reversed()) {
-            if (groupVisible(buttons[i].group) && buttons[i].contains(nx, ny)) return i
+            // 표시 패널은 누를 수 없으므로 건너뛴다(밑에 있는 버튼이 눌린다).
+            if (!buttons[i].isDisplay && groupVisible(buttons[i].group) && buttons[i].contains(nx, ny)) return i
         }
         return -1
     }
@@ -254,6 +255,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     // 지금 눌리고 있는 키 표시
     private val showPressed = Link.showPressed
+    /** 레이아웃에 키 입력 표시 패널이 있으면 그 패널에 보여 주고, 화면 위쪽의 기본 표시는 쓰지 않는다. */
+    private val hasPanel = buttons.any { it.isDisplay }
     private var pressedText = ""
     private var pressedAt = 0L          // 마지막으로 키가 눌려 있던 시각
     private val pressedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -265,7 +268,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private fun send() {
         Link.send(state.report())
         Link.setMouseButtons(state.mouseButtons())
-        if (showPressed) {
+        if (showPressed || hasPanel) {
             val now = state.pressed()
             if (now.isNotEmpty()) {
                 pressedText = Keys.combo(now)
@@ -553,6 +556,13 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             else flash[i] || toggled[i] || timedOn[i] || (holds[i] > 0 && b.mode == PadButton.MODE_HOLD)
             var parts = 0
             if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)
+            if (b.isDisplay) {
+                val held = pressedAt == Long.MAX_VALUE
+                if (pressedText.isEmpty() || !(held || SystemClock.uptimeMillis() - pressedAt < PRESSED_LINGER_MS)) continue
+                rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
+                painter.drawDisplay(c, b, rect, false, pressedText, !held)
+                continue
+            }
             if (b.isStick) {
                 if (holds[i] == 0) continue
                 rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
@@ -563,7 +573,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)
         }
-        if (showPressed && pressedText.isNotEmpty()) {
+        if (showPressed && !hasPanel && pressedText.isNotEmpty()) {
             val held = pressedAt == Long.MAX_VALUE
             if (held || SystemClock.uptimeMillis() - pressedAt < PRESSED_LINGER_MS) {
                 val w = pressedPaint.measureText(pressedText)

@@ -378,4 +378,14 @@ class CoreTest {
         assertTrue(back.isStick && back.mode == PadButton.STICK_4WAY && back.keys == Stick.WASD)
         assertFalse(back.contains(0.005f, 0.005f))                                 // 원형
     }
+
+    @Test
+    fun displayPanelRoundTrips() {
+        val p = PadButton(0.3f, 0f, 0.3f, 0.1f, type = PadButton.TYPE_DISPLAY, textColor = 0xFF00FF00.toInt(), group = 2)
+        val back = PadButton.fromJson(JSONObject(p.toJson().toString())).copy()
+        assertTrue(back.isDisplay)
+        assertEquals(0xFF00FF00.toInt(), back.textColor)
+        assertEquals(2, back.group)
+        assertFalse(PadButton(0f, 0f, 0.1f, 0.1f).isDisplay)
+    }
 }

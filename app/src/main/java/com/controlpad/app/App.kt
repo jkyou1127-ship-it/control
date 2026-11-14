@@ -122,6 +122,22 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         c.drawText(text, r.left + w / 2, r.top + 12 * density, sub)
     }
 
+    /** 키 입력 표시 패널. shown 은 보여 줄 글자, dim 이면 흐리게(방금 뗀 키, 편집 화면의 안내 글자). */
+    fun drawDisplay(c: Canvas, b: PadButton, r: RectF, selected: Boolean, shown: String, dim: Boolean) {
+        val rad = minOf(r.width(), r.height()) * 0.2f
+        fill.color = shade(b.color, 0.18f)
+        c.drawRoundRect(r, rad, rad, fill)
+        stroke.color = if (selected) theme.text else b.color
+        stroke.strokeWidth = density * if (selected) 3f else theme.stroke
+        c.drawRoundRect(r, rad, rad, stroke)
+        if (shown.isEmpty()) return
+        val color = if (b.textColor != 0) b.textColor else theme.text
+        text.color = if (dim) color and 0x00FFFFFF or 0x77000000 else color
+        text.textSize = (r.height() * 0.5f).coerceAtMost(r.width() * 1.7f / shown.length.coerceAtLeast(3))
+            .coerceAtLeast(9f * density)
+        c.drawText(shown, r.centerX(), r.centerY() - (text.descent() + text.ascent()) / 2, text)
+    }
+
     /** sx, sy 는 손잡이가 기울어진 정도(-1~1), mask 는 지금 눌린 방향(Stick.UP 등). */
     fun drawStick(c: Canvas, b: PadButton, r: RectF, selected: Boolean, sx: Float, sy: Float, mask: Int) {
         fill.color = shade(b.color, 0.22f)
@@ -151,6 +167,7 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
     fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f, parts: Int = 0, alt: Int = 0) {
         if (b.isMouse) { drawMouse(c, b, r, selected, parts); return }
         if (b.isStick) { drawStick(c, b, r, selected, 0f, 0f, 0); return }
+        if (b.isDisplay) { drawDisplay(c, b, r, selected, if (alt == 2) "키 입력 표시" else "", alt == 2); return }
         val lit = if (b.pressColor != 0) b.pressColor else b.color      // 눌렸을 때 채우는 색
         // 눌렸을 때 글자는 채운 색의 밝기에 맞춰 검정/흰색 중 잘 보이는 쪽
         val onLit = if (b.textColor != 0) b.textColor else if (Themes.luminance(lit) > 0.5f) Color.BLACK else Color.WHITE

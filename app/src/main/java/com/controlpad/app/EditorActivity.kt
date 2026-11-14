@@ -90,6 +90,11 @@ class EditorActivity : BaseActivity() {
             pad.buttons += k; view.selected = k; view.invalidate()
             editButton(k, isNew = true)
         }
+        add("키 입력 표시 패널") {
+            val t = PadButton(0.35f, 0.03f, 0.3f, 0.12f, type = PadButton.TYPE_DISPLAY, color = PadButton.PALETTE[7])
+            pad.buttons += t; view.selected = t; view.invalidate()
+            editButton(t, isNew = true)
+        }
         add("트랙패드") {
             val t = PadButton(0.3f, 0.25f, 0.4f, 0.5f, type = PadButton.TYPE_TRACKPAD, color = PadButton.PALETTE[7])
             pad.buttons += t; view.selected = t; view.invalidate()
@@ -387,6 +392,7 @@ class EditorActivity : BaseActivity() {
     private fun editButton(b: PadButton, isNew: Boolean = false) {
         if (b.isShow) { editShow(b, isNew); return }
         if (b.isStick) { editStick(b, isNew); return }
+        if (b.isDisplay) { editDisplay(b, isNew); return }
         if (b.isKnob) { editKnob(b, isNew); return }
         if (b.isPad || b.isMouse) { editPad(b, isNew); return }
         val keys = b.keys.toMutableList()
@@ -526,6 +532,34 @@ class EditorActivity : BaseActivity() {
                 b.mode = if (diagonal.isChecked) PadButton.STICK_8WAY else PadButton.STICK_4WAY
                 b.group = group.selectedItemPosition
                 b.color = color
+                view.invalidate()
+            }
+            .setNegativeButton("취소", null)
+            .show().wide()
+    }
+
+    private fun editDisplay(b: PadButton, isNew: Boolean) {
+        var color = b.color
+        var textColor = b.textColor
+        val m = dp(20)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
+        box.addView(TextView(this).apply {
+            text = "실행 화면에서 지금 눌리고 있는 키를 이 자리에 보여 줍니다. 버튼처럼 옮기고 크기를 바꿀 수 있고, 누를 수는 없습니다.\n" +
+                "이 패널을 넣으면 화면 위쪽의 기본 키 표시는 나오지 않습니다."
+        })
+        val group = groupSpinner(b.group)
+        box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
+        box.addView(group)
+        box.addView(TextView(this).apply { text = "패널 색"; setPadding(0, dp(8), 0, 0) })
+        box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
+        box.addView(optionalColor("글자색", "테마 기본", textColor) { textColor = it })
+
+        AlertDialog.Builder(this).setTitle(if (isNew) "새 키 입력 표시 패널" else "키 입력 표시 패널 속성")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인") { _, _ ->
+                checkpoint()
+                b.group = group.selectedItemPosition
+                b.color = color; b.textColor = textColor
                 view.invalidate()
             }
             .setNegativeButton("취소", null)
