@@ -122,4 +122,25 @@ class CoreTest {
         assertEquals(PadButton.PAD_NO_TAP, back.mode)
         assertTrue(back.contains(back.x + 0.001f, back.y + 0.001f))
     }
+
+    @Test
+    fun mousePartsCoverButtonsWheelAndBody() {
+        assertEquals(MousePart.LEFT, MousePart.of(0.1f, 0.1f))
+        assertEquals(MousePart.WHEEL, MousePart.of(0.5f, 0.2f))
+        assertEquals(MousePart.RIGHT, MousePart.of(0.9f, 0.39f))
+        assertEquals(MousePart.BODY, MousePart.of(0.5f, 0.4f))
+        assertEquals(MousePart.BODY, MousePart.of(0.05f, 0.95f))
+        val m = PadButton(0f, 0f, 0.2f, 0.5f, type = PadButton.TYPE_MOUSE)
+        assertTrue(PadButton.fromJson(JSONObject(m.toJson().toString())).isMouse)
+    }
+
+    @Test
+    fun publishedVersionFileMatchesThisBuild() {
+        // release/version.json 이 빌드 버전과 어긋나면 인앱 업데이트가 새 버전을 알아채지 못한다.
+        val info = Updater.parse(java.io.File("../release/version.json").readText())
+        val gradle = java.io.File("build.gradle.kts").readText()
+        assertTrue(gradle.contains("versionCode = ${info.code}\n"))
+        assertTrue(gradle.contains("versionName = \"${info.name}\""))
+        assertTrue(info.notes.isNotEmpty())
+    }
 }

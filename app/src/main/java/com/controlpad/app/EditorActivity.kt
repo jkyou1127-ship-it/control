@@ -71,6 +71,13 @@ class EditorActivity : BaseActivity() {
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
+        tool("＋마우스") {
+            val h = 0.6f
+            val w = (h * 0.62f * view.height / view.width.coerceAtLeast(1)).coerceIn(0.1f, 0.5f)
+            val t = PadButton(0.5f - w / 2, 0.2f, w, h, type = PadButton.TYPE_MOUSE, color = PadButton.PALETTE[7])
+            pad.buttons += t; view.selected = t; view.invalidate()
+            editButton(t, isNew = true)
+        }
         tool("속성") { view.selected?.let { editButton(it) } ?: hint() }
         tool("복제") {
             view.selected?.let {
@@ -203,7 +210,10 @@ class EditorActivity : BaseActivity() {
         val m = dp(20)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
         box.addView(TextView(this).apply {
-            text = "한 손가락으로 움직이면 마우스 이동, 두 손가락으로 움직이면 스크롤입니다.\n" +
+            text = if (b.isMouse) "위쪽 왼쪽·오른쪽은 좌클릭·우클릭(누르고 있는 동안 유지), 가운데는 휠입니다. " +
+                "휠은 위아래로 밀면 스크롤, 톡 누르면 휠클릭입니다.\n아래쪽 몸통을 문지르면 마우스가 움직입니다. " +
+                "좌클릭을 누른 채 다른 손가락으로 몸통을 움직이면 드래그가 됩니다."
+            else "한 손가락으로 움직이면 마우스 이동, 두 손가락으로 움직이면 스크롤입니다.\n" +
                 "드래그하려면 '좌클릭' 키를 넣은 버튼을 따로 그려서 누른 채로 움직이세요."
         })
         val sensText = TextView(this).apply { setPadding(0, dp(12), 0, 0) }
@@ -219,12 +229,13 @@ class EditorActivity : BaseActivity() {
         val tap = CheckBox(this).apply {
             text = "탭하면 클릭 (한 손가락 = 좌클릭, 두 손가락 = 우클릭)"; isChecked = b.mode == PadButton.PAD_TAP
         }
-        box.addView(tap)
+        if (!b.isMouse) box.addView(tap)
         box.addView(TextView(this).apply { text = "표시할 이름"; setPadding(0, dp(8), 0, 0) })
         val label = EditText(this).apply { setText(b.label); setSingleLine() }
         box.addView(label)
 
-        AlertDialog.Builder(this).setTitle(if (isNew) "새 트랙패드" else "트랙패드 속성")
+        val what = if (b.isMouse) "마우스" else "트랙패드"
+        AlertDialog.Builder(this).setTitle(if (isNew) "새 $what" else "$what 속성")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
                 b.sens = (sens.progress + 1).toFloat()
@@ -238,7 +249,7 @@ class EditorActivity : BaseActivity() {
 
     private fun editButton(b: PadButton, isNew: Boolean = false) {
         if (b.isKnob) { editKnob(b, isNew); return }
-        if (b.isPad) { editPad(b, isNew); return }
+        if (b.isPad || b.isMouse) { editPad(b, isNew); return }
         val keys = b.keys.toMutableList()
         var color = b.color
         val m = dp(20)

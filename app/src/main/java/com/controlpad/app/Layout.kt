@@ -24,6 +24,7 @@ class PadButton(
 ) {
     val isKnob: Boolean get() = type == TYPE_KNOB
     val isPad: Boolean get() = type == TYPE_TRACKPAD
+    val isMouse: Boolean get() = type == TYPE_MOUSE
 
     fun copy() = PadButton(
         x, y, w, h, label, keys.toMutableList(), mode, shape, color,
@@ -54,6 +55,7 @@ class PadButton(
         const val TYPE_BUTTON = 0
         const val TYPE_KNOB = 1
         const val TYPE_TRACKPAD = 2  // 마우스를 움직이는 영역. mode 가 PAD_NO_TAP 이면 탭 클릭을 끈다
+        const val TYPE_MOUSE = 3     // 마우스 모양: 좌·우 버튼, 휠, 몸통(이동)
         const val PAD_TAP = 0
         const val PAD_NO_TAP = 1
         const val OUT_MOUSE_X = 0  // 마우스 좌우 이동 (아날로그)
@@ -237,5 +239,24 @@ object Knob {
         PadButton.OUT_MOUSE_X -> "마우스 X축"
         PadButton.OUT_MOUSE_Y -> "마우스 Y축"
         else -> Keys.combo(b.keys).ifEmpty { "?" } + " ↺ ↻ " + Keys.combo(b.keys2).ifEmpty { "?" }
+    }
+}
+
+/** 가상 마우스의 부분. 위쪽 40%가 버튼 줄(왼쪽 40% 좌클릭, 가운데 20% 휠, 오른쪽 40% 우클릭), 아래는 몸통. */
+object MousePart {
+    const val LEFT = 0
+    const val RIGHT = 1
+    const val WHEEL = 2
+    const val BODY = 3
+    const val TOP = 0.4f
+    const val WHEEL_FROM = 0.4f
+    const val WHEEL_TO = 0.6f
+
+    /** u, v 는 마우스 영역 안에서의 위치 비율(0~1). */
+    fun of(u: Float, v: Float): Int = when {
+        v >= TOP -> BODY
+        u < WHEEL_FROM -> LEFT
+        u > WHEEL_TO -> RIGHT
+        else -> WHEEL
     }
 }

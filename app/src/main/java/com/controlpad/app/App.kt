@@ -34,7 +34,38 @@ class PadPainter(ctx: Context) {
     private val sub = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
 
     /** angle 은 노브가 지금까지 돌아간 각도(표시용). */
-    fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f) {
+    private val clip = android.graphics.Path()
+
+    /** parts 는 눌린 부분의 비트(1 shl MousePart.x). */
+    private fun drawMouse(c: Canvas, b: PadButton, r: RectF, selected: Boolean, parts: Int) {
+        val rad = minOf(r.width(), r.height()) * 0.3f
+        val top = r.top + r.height() * MousePart.TOP
+        val x1 = r.left + r.width() * MousePart.WHEEL_FROM
+        val x2 = r.left + r.width() * MousePart.WHEEL_TO
+        clip.reset(); clip.addRoundRect(r, rad, rad, android.graphics.Path.Direction.CW)
+        c.save(); c.clipPath(clip)
+        fill.color = shade(b.color, 0.22f); c.drawRect(r, fill)
+        fill.color = b.color
+        if (parts and (1 shl MousePart.LEFT) != 0) c.drawRect(r.left, r.top, x1, top, fill)
+        if (parts and (1 shl MousePart.RIGHT) != 0) c.drawRect(x2, r.top, r.right, top, fill)
+        fill.color = if (parts and (1 shl MousePart.WHEEL) != 0) b.color else shade(b.color, 0.6f)
+        val wr = (x2 - x1) * 0.28f
+        c.drawRoundRect(x1 + (x2 - x1) * 0.22f, r.top + (top - r.top) * 0.18f, x2 - (x2 - x1) * 0.22f, top - (top - r.top) * 0.18f, wr, wr, fill)
+        c.restore()
+        stroke.color = if (selected) Color.WHITE else b.color
+        stroke.strokeWidth = density * if (selected) 3f else 1.5f
+        c.drawRoundRect(r, rad, rad, stroke)
+        stroke.strokeWidth = density
+        c.drawLine(r.left, top, r.right, top, stroke)
+        c.drawLine(x1, r.top, x1, top, stroke)
+        c.drawLine(x2, r.top, x2, top, stroke)
+        sub.color = 0x88FFFFFF.toInt()
+        sub.textSize = 13f * density
+        c.drawText(b.label.ifEmpty { "마우스" }, r.centerX(), (top + r.bottom) / 2 + sub.textSize * 0.4f, sub)
+    }
+
+    fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f, parts: Int = 0) {
+        if (b.isMouse) { drawMouse(c, b, r, selected, parts); return }
         fill.color = if (pressed && !b.isPad) b.color else shade(b.color, if (b.isPad) 0.18f else 0.38f)
         stroke.color = if (selected) Color.WHITE else b.color
         stroke.strokeWidth = density * if (selected) 3f else 1.5f

@@ -56,6 +56,7 @@ class MainActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        Updater.autoCheck(this)
         refresh()
         ui.post(tick)
     }

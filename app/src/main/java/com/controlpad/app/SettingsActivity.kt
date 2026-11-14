@@ -112,6 +112,10 @@ class SettingsActivity : BaseActivity() {
             setOnCheckedChangeListener { _, on -> Link.prefs.edit().putBoolean("haptic", on).apply() }
         })
 
+        root.addView(title("업데이트"))
+        root.addView(note("현재 버전 " + Updater.installedName(this) + " · 앱을 켤 때 새 버전을 자동으로 확인합니다."))
+        root.addView(Button(this).apply { text = "업데이트 확인"; setOnClickListener { Updater.check(this@SettingsActivity) } })
+
         setContentView(ScrollView(this).apply { addView(root) })
 
         group.check(if (Link.mode == Link.MODE_BT) 1 else 2)

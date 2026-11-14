@@ -96,6 +96,53 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         return -1
     }
 
+    // 가상 마우스: 포인터 id → 잡고 있는 부분(MousePart), 휠 부분에서 움직인 거리
+    private val mouseParts = HashMap<Int, Int>()
+    private val wheelTravel = HashMap<Int, Float>()
+
+    private fun mouseDown(id: Int, i: Int, x: Float, y: Float) {
+        val b = buttons[i]
+        val part = MousePart.of((x / width - b.x) / b.w, (y / height - b.y) / b.h)
+        mouseParts[id] = part
+        lastX[id] = x; lastY[id] = y
+        when (part) {
+            MousePart.LEFT -> { state.press(listOf(Keys.MOUSE_LEFT)); send() }
+            MousePart.RIGHT -> { state.press(listOf(Keys.MOUSE_RIGHT)); send() }
+            MousePart.WHEEL -> wheelTravel[id] = 0f
+        }
+        if (haptic && part != MousePart.BODY) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+    }
+
+    private fun mouseMove(id: Int, i: Int, x: Float, y: Float) {
+        val dx = x - (lastX[id] ?: x)
+        val dy = y - (lastY[id] ?: y)
+        lastX[id] = x; lastY[id] = y
+        when (mouseParts[id]) {
+            MousePart.BODY -> {
+                val k = buttons[i].sens * PAD_GAIN / density
+                padRemX[i] += dx * k; padRemY[i] += dy * k
+                val mx = padRemX[i].toInt(); val my = padRemY[i].toInt()
+                if (mx != 0 || my != 0) { padRemX[i] -= mx; padRemY[i] -= my; Link.sendMouse(mx, my) }
+            }
+            MousePart.WHEEL -> {
+                wheelTravel[id] = (wheelTravel[id] ?: 0f) + kotlin.math.abs(dy)
+                padRemWheel[i] += dy / (SCROLL_STEP_DP * density)
+                val w = padRemWheel[i].toInt()
+                if (w != 0) { padRemWheel[i] -= w; Link.sendMouse(0, 0, w) }
+            }
+        }
+    }
+
+    private fun mouseUp(id: Int) {
+        when (mouseParts.remove(id)) {
+            MousePart.LEFT -> { state.release(listOf(Keys.MOUSE_LEFT)); send() }
+            MousePart.RIGHT -> { state.release(listOf(Keys.MOUSE_RIGHT)); send() }
+            // 휠을 굴리지 않고 눌렀다 떼면 휠클릭
+            MousePart.WHEEL -> if ((wheelTravel.remove(id) ?: 0f) < TAP_SLOP_DP * density) click(Keys.MOUSE_MIDDLE)
+        }
+        lastX.remove(id); lastY.remove(id)
+    }
+
     private fun send() {
         Link.send(state.report())
         Link.setMouseButtons(state.mouseButtons())
@@ -210,6 +257,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     fun releaseAll() {
         pointers.clear(); lastAngle.clear(); lastX.clear(); lastY.clear()
+        mouseParts.clear(); wheelTravel.clear()
         knobDir.fill(0); knobRem.fill(0f)
         holds.fill(0); toggled.fill(false); flash.fill(false)
         taps.removeCallbacksAndMessages(null)
@@ -223,6 +271,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 val idx = e.actionIndex
                 val b = hit(e.getX(idx), e.getY(idx))
                 pointers[e.getPointerId(idx)] = b
+                if (b >= 0 && buttons[b].isMouse) {
+                    mouseDown(e.getPointerId(idx), b, e.getX(idx), e.getY(idx))
+                    invalidate()
+                    return true
+                }
                 if (b >= 0 && buttons[b].isKnob) lastAngle[e.getPointerId(idx)] = pointerAngle(b, e.getX(idx), e.getY(idx))
                 if (b >= 0 && buttons[b].isPad) { lastX[e.getPointerId(idx)] = e.getX(idx); lastY[e.getPointerId(idx)] = e.getY(idx) }
                 down(b)
@@ -230,7 +283,9 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             MotionEvent.ACTION_MOVE -> for (idx in 0 until e.pointerCount) {
                 val id = e.getPointerId(idx)
                 val before = pointers[id] ?: -1
-                if (before >= 0 && buttons[before].isPad) {
+                if (before >= 0 && buttons[before].isMouse) {
+                    mouseMove(id, before, e.getX(idx), e.getY(idx))
+                } else if (before >= 0 && buttons[before].isPad) {
                     val x = e.getX(idx); val y = e.getY(idx)
                     val dx = x - (lastX[id] ?: x); val dy = y - (lastY[id] ?: y)
                     lastX[id] = x; lastY[id] = y
@@ -251,17 +306,19 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                     if (d != 0f) turn(before, d)
                 } else if (layout.slide) {
                     var now = hit(e.getX(idx), e.getY(idx))
-                    if (now >= 0 && (buttons[now].isKnob || buttons[now].isPad)) now = -1   // 미끄러져서 노브·트랙패드를 잡지는 않는다
+                    if (now >= 0 && (buttons[now].isKnob || buttons[now].isPad || buttons[now].isMouse)) now = -1   // 미끄러져서 노브·트랙패드를 잡지는 않는다
                     if (now != before) { up(before); pointers[id] = now; down(now) }
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 val id = e.getPointerId(e.actionIndex)
-                lastAngle.remove(id); lastX.remove(id); lastY.remove(id)
-                up(pointers.remove(id) ?: -1)
+                lastAngle.remove(id)
+                val b = pointers.remove(id) ?: -1
+                if (b >= 0 && buttons[b].isMouse) mouseUp(id)
+                else { lastX.remove(id); lastY.remove(id); up(b) }
             }
             MotionEvent.ACTION_CANCEL -> {
-                for (b in pointers.values) up(b)
+                for ((id, b) in pointers.entries.toList()) if (b >= 0 && buttons[b].isMouse) mouseUp(id) else up(b)
                 pointers.clear(); lastAngle.clear(); lastX.clear(); lastY.clear()
             }
         }
@@ -275,7 +332,9 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
             val lit = if (b.isKnob) holds[i] > 0
             else flash[i] || toggled[i] || (holds[i] > 0 && b.mode == PadButton.MODE_HOLD)
-            painter.draw(c, b, rect, lit, false, knobAngle[i])
+            var parts = 0
+            if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)
+            painter.draw(c, b, rect, lit, false, knobAngle[i], parts)
         }
         statusPaint.color = if (connected) 0x9981C784.toInt() else 0xFFFFB74D.toInt()
         c.drawText((if (connected) "● " else "○ ") + status, statusPaint.textSize, statusPaint.textSize * 1.6f, statusPaint)
