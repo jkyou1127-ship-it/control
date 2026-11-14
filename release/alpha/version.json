@@ -1,5 +1,5 @@
 {
-  "versionCode": 36,
-  "versionName": "2.13.1",
-  "notes": "앱 이름이 '리듬 컨트롤러/가상키보드'로 바뀌었습니다 (앱 안의 제목은 ControlPad 그대로)."
+  "versionCode": 37,
+  "versionName": "2.14",
+  "notes": "키보드 방식 노브에 '계속 누름'이 추가되었습니다. 돌리다 멈춰도 손을 뗄 때까지 키를 누르고 있습니다."
 }

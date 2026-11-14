@@ -81,6 +81,8 @@ class PadButton(
         const val TYPE_MOUSE = 3     // 마우스 모양: 좌·우 버튼, 휠, 몸통(이동)
         const val TYPE_SHOW = 4      // 누르면 target 그룹의 버튼들이 나타나는 버튼
         const val GROUPS = 8
+        const val KNOB_UNTIL_STOP = 0    // 키 방식 노브: 돌리는 동안만 누르고 멈추면 뗀다 (mode 값)
+        const val KNOB_UNTIL_RELEASE = 1 // 키 방식 노브: 돌리기 시작하면 손을 뗄 때까지 계속 누른다
         const val PAD_TAP = 0
         const val PAD_NO_TAP = 1
         const val OUT_MOUSE_X = 0  // 마우스 좌우 이동 (아날로그)

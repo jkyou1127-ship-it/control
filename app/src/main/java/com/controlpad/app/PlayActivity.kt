@@ -299,7 +299,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 knobKey(i, if (knobRem[i] > 0) 1 else -1)
                 knobRem[i] = 0f
                 taps.removeCallbacks(knobStop[i])
-                taps.postDelayed(knobStop[i], KEY_HOLD_MS)
+                // '계속 누름'이면 멈춰도 키를 유지하고, 손을 떼거나 반대로 돌릴 때만 바뀐다.
+                if (b.mode != PadButton.KNOB_UNTIL_RELEASE) taps.postDelayed(knobStop[i], KEY_HOLD_MS)
             }
         } else {
             knobRem[i] += d * b.sens

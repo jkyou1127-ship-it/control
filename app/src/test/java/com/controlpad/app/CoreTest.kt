@@ -324,4 +324,12 @@ class CoreTest {
         assertEquals("a_b_c.controlpad.json", LayoutFile.fileName("a/b:c"))
         assertEquals("layout.controlpad.json", LayoutFile.fileName("  "))
     }
+
+    @Test
+    fun knobHoldOptionRoundTrips() {
+        val k = Templates.create(4, "sdvx").buttons.first { it.isKnob }
+        assertEquals(PadButton.KNOB_UNTIL_STOP, k.mode)               // 기존 노브는 예전처럼 동작
+        k.mode = PadButton.KNOB_UNTIL_RELEASE
+        assertEquals(PadButton.KNOB_UNTIL_RELEASE, PadButton.fromJson(JSONObject(k.toJson().toString())).copy().mode)
+    }
 }

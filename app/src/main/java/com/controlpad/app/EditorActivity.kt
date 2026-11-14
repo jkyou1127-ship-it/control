@@ -277,6 +277,11 @@ class EditorActivity : BaseActivity() {
         }
         keyRow("왼쪽(↺)으로 돌릴 때", left)
         keyRow("오른쪽(↻)으로 돌릴 때", right)
+        val latch = CheckBox(this).apply {
+            text = "계속 누름 — 돌리다 멈춰도 손을 뗄 때까지 키를 누르고 있음"
+            isChecked = b.mode == PadButton.KNOB_UNTIL_RELEASE
+        }
+        keyBox.addView(latch)
         box.addView(keyBox)
 
         fun showOut() {
@@ -313,6 +318,7 @@ class EditorActivity : BaseActivity() {
                 b.knobOut = out.selectedItemPosition
                 b.sens = (sens.progress + 1).toFloat()
                 b.keys = left; b.keys2 = right
+                b.mode = if (latch.isChecked) PadButton.KNOB_UNTIL_RELEASE else PadButton.KNOB_UNTIL_STOP
                 b.invert = invert.isChecked
                 b.label = label.text.toString().trim(); b.color = color; b.textColor = textColor; b.pressColor = pressColor
                 b.group = group.selectedItemPosition
