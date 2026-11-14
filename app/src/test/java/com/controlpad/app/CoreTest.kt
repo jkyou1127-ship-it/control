@@ -16,8 +16,10 @@ class CoreTest {
         assertEquals(KeyState.REPORT_SIZE, r.size)
         assertEquals(0b11, r[0].toInt())
         assertEquals(1 shl 4, r[1].toInt())
-        s.press(listOf(0x77))                       // 비트맵의 마지막 키
-        assertEquals(0x80, s.report()[15].toInt() and 0xFF)
+        s.press(listOf(KeyState.MAX_USAGE))         // 비트맵의 마지막 키
+        assertEquals(0x80, s.report()[KeyState.REPORT_SIZE - 1].toInt() and 0xFF)
+        s.press(listOf(Keys.HANGUL))                // 한/영: 0x90 → 바이트 19 의 bit 0
+        assertEquals(0x81, s.report()[19].toInt() and 0xFF)
     }
 
     @Test
@@ -32,7 +34,7 @@ class CoreTest {
 
     @Test
     fun descriptorMatchesReportSize() {
-        // 수정키 8비트 + 비트맵 (MAX_USAGE+1)비트 = 16바이트
+        // 수정키 8비트 + 비트맵 (MAX_USAGE+1)비트 = 리포트 전체
         assertEquals(KeyState.REPORT_SIZE * 8, 8 + KeyState.MAX_USAGE + 1)
         assertTrue(Keys.groups.flatMap { it.second }.all { it.usage <= KeyState.MAX_USAGE || Keys.isModifier(it.usage) || Keys.isMouse(it.usage) })
     }
@@ -262,7 +264,7 @@ class CoreTest {
 
     @Test
     fun keyboardHasEveryLetterAndRowsFillTheWidth() {
-        val keys = Keyboard.create()
+        val keys = Keyboard.create(false)
         assertEquals(('A'..'Z').map { it.toString() }, keys.map { it.label }.filter { it.length == 1 && it[0] in 'A'..'Z' }.sorted())
         assertEquals("Q", keys.first { it.keys == listOf(0x14) }.label)
         assertEquals(listOf(0xE1, 0xE5), keys.filter { it.label == "Shift" }.map { it.keys[0] })
@@ -275,5 +277,18 @@ class CoreTest {
         }
         assertEquals(keys.size, keys.map { it.keys[0] }.toSet().size)     // 같은 키가 두 번 들어가지 않는다
         assertEquals(keys.size, Templates.create(7, "kb").buttons.size)
+
+        // 한글 키보드: 같은 자리의 키는 같은 입력이고, 이름만 자모다.
+        val ko = Keyboard.create(true)
+        assertEquals("ㅂ", ko.first { it.keys == listOf(0x14) }.label)
+        assertEquals("ㅁ", ko.first { it.keys == listOf(0x04) }.label)
+        assertEquals("ㅡ", ko.first { it.keys == listOf(0x10) }.label)
+        assertEquals(26, ko.count { it.label.length == 1 && it.label[0] in 'ㄱ'..'ㅣ' })
+        assertEquals(listOf(Keys.HANGUL), ko.first { it.label == "한/영" }.keys)
+        assertEquals(listOf(Keys.HANJA), ko.first { it.label == "한자" }.keys)
+        assertTrue(keys.none { it.keys[0] == Keys.HANGUL })
+        val koEnds = ko.groupBy { it.y }.values.map { row -> row.maxOf { it.x + it.w } }
+        for (e in koEnds) assertEquals(ends[0], e, 1e-3f)
+        assertEquals(ko.size, Templates.create(8, "kb").buttons.size)
     }
 }

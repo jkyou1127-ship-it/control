@@ -271,7 +271,7 @@ class BtHid(private val ctx: Context) {
         const val REPORT_ID = 1
         const val MOUSE_ID = 2
 
-        /** 수정키 8비트 + usage 0x00~0x77 비트맵(동시 입력 제한 없음). KeyState.report() 와 같은 형식. */
+        /** 수정키 8비트 + usage 0x00~0x97 비트맵(동시 입력 제한 없음). KeyState.report() 와 같은 형식. */
         val DESCRIPTOR: ByteArray = intArrayOf(
             0x05, 0x01,       // Usage Page (Generic Desktop)
             0x09, 0x06,       // Usage (Keyboard)
@@ -304,7 +304,7 @@ class BtHid(private val ctx: Context) {
 
 /**
  * UDP 로 PC 수신 프로그램(receiver/controlpad_receiver.py)에 키 상태를 보낸다.
- * 키 패킷: 'C' 'P' 버전(1) 순번(4바이트, big-endian) 리포트(16바이트). 수신 측은 'C' 'A' + 순번으로 답한다.
+ * 키 패킷: 'C' 'P' 버전(1) 순번(4바이트, big-endian) 리포트(20바이트). 수신 측은 'C' 'A' + 순번으로 답한다.
  * 마우스 패킷: 'C' 'M' 버전(1) 순번(4바이트) dx(2바이트) dy(2바이트) 버튼(1바이트) 휠(1바이트), 부호 있는 big-endian.
  */
 class UdpLink(val host: String, val port: Int) {

@@ -7,8 +7,8 @@
     python controlpad_receiver.py            # Windows 에서 실행
     python controlpad_receiver.py --dry-run  # 입력을 넣지 않고 받은 키만 출력
 
-키 패킷: 'C' 'P' 버전(1) 순번(4바이트 big-endian) 리포트(16바이트)
-리포트: [0] 수정키 비트(HID usage 0xE0~0xE7), [1..15] usage 0x00~0x77 비트맵
+키 패킷: 'C' 'P' 버전(1) 순번(4바이트 big-endian) 리포트(20바이트)
+리포트: [0] 수정키 비트(HID usage 0xE0~0xE7), [1..19] usage 0x00~0x97 비트맵
 마우스 패킷(노브·트랙패드): 'C' 'M' 버전(1) 순번(4바이트) dx(2바이트) dy(2바이트) 버튼(1바이트) 휠(1바이트)
   dx, dy, 휠은 부호 있는 big-endian. 버튼은 bit0 좌, bit1 우, bit2 휠클릭
 """
@@ -18,7 +18,7 @@ import sys
 import time
 
 DEFAULT_PORT = 34555
-REPORT_SIZE = 16
+REPORT_SIZE = 20
 TIMEOUT = 1.0  # 이 시간 동안 패킷이 없으면 눌린 키를 모두 뗀다(앱 종료·연결 끊김 대비)
 
 # HID usage -> (PS/2 set 1 스캔코드, 확장 키 여부)
@@ -46,6 +46,10 @@ SCANCODES.update({
     0xE0: (0x1D, False), 0xE1: (0x2A, False), 0xE2: (0x38, False), 0xE3: (0x5B, True),
     0xE4: (0x1D, True), 0xE5: (0x36, False), 0xE6: (0x38, True), 0xE7: (0x5C, True),
 })
+
+
+# 스캔코드 대신 가상 키로 넣는 것들: 한/영(VK_HANGUL), 한자(VK_HANJA)
+VKEYS = {0x90: 0x15, 0x91: 0x19}
 
 
 def usages(report):
@@ -164,6 +168,11 @@ def windows_injector():
     send_input.restype = wintypes.UINT
 
     def inject(usage, down):
+        vk = VKEYS.get(usage)
+        if vk is not None:
+            inp = INPUT(type=1, u=UNION(ki=KEYBDINPUT(vk, 0, 0 if down else 0x0002, 0, 0)))
+            send_input(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+            return
         entry = SCANCODES.get(usage)
         if entry is None:
             return

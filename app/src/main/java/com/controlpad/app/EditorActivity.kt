@@ -113,6 +113,14 @@ class EditorActivity : BaseActivity() {
                     view.invalidate()
                 }.show()
         }
+        for ((i, name) in Keyboard.names.withIndex()) add(name) {
+            val keys = Keyboard.create(korean = i == 1)
+            pad.buttons += keys
+            // 화면을 가득 채우므로, 줄이거나 옮기기 쉽게 전부 선택해 둔다.
+            multi.isChecked = true
+            view.selection.clear(); view.selection += keys
+            view.invalidate()
+        }
         add("표시 버튼 (누르면 그룹이 나타남)") {
             // 아직 표시 버튼이 없는 가장 작은 그룹 번호를 기본으로 한다.
             val used = pad.buttons.filter { it.isShow }.map { it.target }

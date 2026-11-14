@@ -3,9 +3,9 @@ package com.controlpad.app
 /**
  * 현재 눌린 키 집합. 같은 키를 여러 버튼이 동시에 누를 수 있으므로 참조 횟수로 센다.
  *
- * 리포트 형식(16바이트, 블루투스 HID 와 UDP 가 같이 쓴다):
+ * 리포트 형식(20바이트, 블루투스 HID 와 UDP 가 같이 쓴다):
  *   [0]      수정키 비트(usage 0xE0~0xE7 → bit 0~7)
- *   [1..15]  usage 0x00~0x77 비트맵 (usage u → 바이트 1+u/8 의 bit u%8)
+ *   [1..19]  usage 0x00~0x97 비트맵 (usage u → 바이트 1+u/8 의 bit u%8)
  */
 class KeyState {
     private val counts = IntArray(Keys.MOUSE_MIDDLE + 1)
@@ -43,7 +43,7 @@ class KeyState {
     }
 
     companion object {
-        const val REPORT_SIZE = 16
-        const val MAX_USAGE = 0x77
+        const val REPORT_SIZE = 20
+        const val MAX_USAGE = 0x97   // 한/영(0x90), 한자(0x91)까지 포함
     }
 }

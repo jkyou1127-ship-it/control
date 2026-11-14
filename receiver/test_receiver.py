@@ -71,9 +71,14 @@ class ReceiverTest(unittest.TestCase):
     def test_every_app_key_has_a_scancode(self):
         # 앱의 Keys.kt 에 있는 usage 범위
         app = list(range(0x04, 0x28)) + list(range(0x28, 0x3A)) + list(range(0x3A, 0x47)) + \
-            list(range(0x49, 0x64)) + list(range(0xE0, 0xE7))
+            list(range(0x49, 0x64)) + list(range(0xE0, 0xE7)) + [0x90, 0x91]
         app.remove(0x32)
-        self.assertEqual([hex(u) for u in app if u not in r.SCANCODES], [])
+        self.assertEqual([hex(u) for u in app if u not in r.SCANCODES and u not in r.VKEYS], [])
+
+    def test_hangul_key_is_in_the_last_report_byte(self):
+        self.rx.feed(packet(1, 0x90, 0x04))
+        self.assertEqual(self.rx.down, {0x90, 0x04})
+        self.assertEqual(len(packet(1)), 7 + 20)
 
     def test_end_to_end_over_udp(self):
         port = 34999
