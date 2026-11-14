@@ -154,6 +154,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             val b = buttons[i]
             if (b.group != g) continue
             holds[i] = 0
+            if (b.isStick && stickMask[i] != 0) { state.release(Stick.keysFor(stickMask[i], b.keys)); stickMask[i] = 0 }
+            if (b.isStick) { stickX[i] = 0f; stickY[i] = 0f }
             if (toggled[i]) { toggled[i] = false; state.release(b.keys) }
             if (timedOn[i]) { taps.removeCallbacks(timedOff[i]); timedOn[i] = false; state.release(b.keys) }
             // 사라진 그룹 안의 표시 버튼이 켜 둔 그룹도 함께 닫는다.
@@ -173,6 +175,34 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             if (groupVisible(buttons[i].group) && buttons[i].contains(nx, ny)) return i
         }
         return -1
+    }
+
+    // 조이스틱 상태 (버튼 인덱스별): 지금 눌린 방향과 손잡이 위치(-1~1)
+    private val stickMask = IntArray(buttons.size)
+    private val stickX = FloatArray(buttons.size)
+    private val stickY = FloatArray(buttons.size)
+
+    /** 조이스틱 위의 손가락 위치에 맞춰 방향 키를 누르거나 뗀다. */
+    private fun stickMove(i: Int, x: Float, y: Float) {
+        val b = buttons[i]
+        var dx = (x - (b.x + b.w / 2) * width) / (b.w * width / 2)
+        var dy = (y - (b.y + b.h / 2) * height) / (b.h * height / 2)
+        val len = kotlin.math.sqrt(dx * dx + dy * dy)
+        if (len > 1f) { dx /= len; dy /= len }       // 손가락이 밖으로 나가도 손잡이는 가장자리까지만
+        stickX[i] = dx; stickY[i] = dy
+        stickSet(i, Stick.directions(dx, dy, b.mode != PadButton.STICK_4WAY))
+    }
+
+    private fun stickSet(i: Int, mask: Int) {
+        val old = stickMask[i]
+        if (old == mask) return
+        val keys = buttons[i].keys
+        // 새 방향 키를 먼저 누르고 그다음에 뗀다: 방향을 바꾸는 순간 아무 키도 안 눌린 틈이 생기지 않게.
+        state.press(Stick.keysFor(mask and old.inv(), keys))
+        state.release(Stick.keysFor(old and mask.inv(), keys))
+        stickMask[i] = mask
+        send()
+        if (haptic && mask != 0) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
     }
 
     // 가상 마우스: 포인터 id → 잡고 있는 부분(MousePart), 휠 부분에서 움직인 거리
@@ -332,6 +362,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             else padFingers[i] = maxOf(padFingers[i], n)
             return
         }
+        if (b.isStick) return                       // 방향은 손가락 위치로 정한다(stickMove)
         if (n != 1) return
         if (b.isKnob) return
         if (b.isShow) {
@@ -379,6 +410,10 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             ) click(if (padFingers[i] >= 2) Keys.MOUSE_RIGHT else Keys.MOUSE_LEFT)
             return
         }
+        if (b.isStick) {
+            if (n == 0) { stickSet(i, 0); stickX[i] = 0f; stickY[i] = 0f }
+            return
+        }
         if (n != 0) return
         if (b.isShow) {
             val g = b.target
@@ -400,6 +435,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         mouseParts.clear(); wheelTravel.clear()
         knobDir.fill(0); knobRem.fill(0f); knobAngle.fill(0f)
         groupOn.fill(false); groupHolds.fill(0); timedOn.fill(false)
+        stickMask.fill(0); stickX.fill(0f); stickY.fill(0f)
         holds.fill(0); toggled.fill(false); flash.fill(false)
         taps.removeCallbacksAndMessages(null)
         state.clear(); send()
@@ -420,13 +456,17 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                     return true
                 }
                 if (b >= 0 && buttons[b].isKnob) lastAngle[e.getPointerId(idx)] = pointerAngle(b, e.getX(idx), e.getY(idx))
+                if (b >= 0 && buttons[b].isStick) { down(b); stickMove(b, e.getX(idx), e.getY(idx)); invalidate(); return true }
                 if (b >= 0 && buttons[b].isPad) { lastX[e.getPointerId(idx)] = e.getX(idx); lastY[e.getPointerId(idx)] = e.getY(idx) }
                 down(b)
             }
             MotionEvent.ACTION_MOVE -> for (idx in 0 until e.pointerCount) {
                 val id = e.getPointerId(idx)
                 val before = pointers[id] ?: -1
-                if (before >= 0 && buttons[before].isMouse) {
+                if (before >= 0 && buttons[before].isStick) {
+                    // 조이스틱을 잡은 손가락은 밖으로 나가도 계속 그 조이스틱을 움직인다.
+                    stickMove(before, e.getX(idx), e.getY(idx))
+                } else if (before >= 0 && buttons[before].isMouse) {
                     mouseMove(id, before, e.getX(idx), e.getY(idx))
                 } else if (before >= 0 && buttons[before].isPad) {
                     val x = e.getX(idx); val y = e.getY(idx)
@@ -449,7 +489,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                     if (d != 0f) turn(before, d)
                 } else if (layout.slide) {
                     var now = hit(e.getX(idx), e.getY(idx))
-                    if (now >= 0 && (buttons[now].isKnob || buttons[now].isPad || buttons[now].isMouse)) now = -1   // 미끄러져서 노브·트랙패드를 잡지는 않는다
+                    if (now >= 0 && (buttons[now].isKnob || buttons[now].isPad || buttons[now].isMouse || buttons[now].isStick)) now = -1   // 미끄러져서 노브·트랙패드를 잡지는 않는다
                     if (now != before) { up(before); pointers[id] = now; down(now) }
                 }
             }
@@ -513,6 +553,12 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             else flash[i] || toggled[i] || timedOn[i] || (holds[i] > 0 && b.mode == PadButton.MODE_HOLD)
             var parts = 0
             if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)
+            if (b.isStick) {
+                if (holds[i] == 0) continue
+                rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
+                painter.drawStick(c, b, rect, false, stickX[i], stickY[i], stickMask[i])
+                continue
+            }
             if (!lit && parts == 0 && knobAngle[i] == 0f) continue    // 미리 그린 모습 그대로
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)

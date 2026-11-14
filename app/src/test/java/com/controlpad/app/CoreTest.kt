@@ -352,4 +352,30 @@ class CoreTest {
         assertFalse(Knob.sameWay(1, -0.1f))        // 반대로 돌면 유지하지 않는다
         assertFalse(Knob.sameWay(0, 5f))           // 아직 아무 키도 누르지 않은 상태
     }
+
+    @Test
+    fun stickDirections() {
+        val U = Stick.UP; val D = Stick.DOWN; val L = Stick.LEFT; val R = Stick.RIGHT
+        assertEquals(0, Stick.directions(0.1f, -0.1f, true))                 // 가운데는 입력 없음
+        assertEquals(R, Stick.directions(0.9f, 0f, true))
+        assertEquals(U, Stick.directions(0f, -0.9f, true))                   // 화면 위쪽은 dy 가 음수
+        assertEquals(D, Stick.directions(0.1f, 0.9f, true))
+        assertEquals(L, Stick.directions(-0.9f, 0.1f, true))
+        assertEquals(U or R, Stick.directions(0.6f, -0.6f, true))
+        assertEquals(D or L, Stick.directions(-0.6f, 0.6f, true))
+        // 4방향 전용이면 대각선에서도 한 방향만
+        for ((x, y) in listOf(0.6f to -0.5f, -0.5f to 0.6f, 0.7f to 0.69f, -0.6f to -0.61f)) {
+            assertEquals(1, Integer.bitCount(Stick.directions(x, y, false)))
+        }
+        assertEquals(R, Stick.directions(0.6f, -0.5f, false))
+        assertEquals(D, Stick.directions(-0.5f, 0.6f, false))
+
+        assertEquals(listOf(0x52, 0x4F), Stick.keysFor(U or R, Stick.ARROWS))
+        assertEquals(listOf(0x16, 0x04), Stick.keysFor(D or L, Stick.WASD))
+        assertEquals(listOf(0x4F), Stick.keysFor(U or R, listOf(0, 0, 0, 0x4F)))   // 키가 없는 방향은 건너뜀
+        val s = PadButton(0f, 0f, 0.2f, 0.2f, keys = Stick.WASD.toMutableList(), type = PadButton.TYPE_STICK, mode = PadButton.STICK_4WAY)
+        val back = PadButton.fromJson(JSONObject(s.toJson().toString()))
+        assertTrue(back.isStick && back.mode == PadButton.STICK_4WAY && back.keys == Stick.WASD)
+        assertFalse(back.contains(0.005f, 0.005f))                                 // 원형
+    }
 }

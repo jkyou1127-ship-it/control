@@ -80,6 +80,16 @@ class EditorActivity : BaseActivity() {
             pad.buttons += k; view.selected = k; view.invalidate()
             editButton(k, isNew = true)
         }
+        add("조이스틱 (4방향 키)") {
+            val h = 0.42f
+            val w = (h * view.height / view.width.coerceAtLeast(1)).coerceIn(0.08f, 0.6f)
+            val k = PadButton(
+                0.5f - w / 2, 0.5f - h / 2, w, h, keys = Stick.ARROWS.toMutableList(),
+                type = PadButton.TYPE_STICK, color = PadButton.PALETTE[6],
+            )
+            pad.buttons += k; view.selected = k; view.invalidate()
+            editButton(k, isNew = true)
+        }
         add("트랙패드") {
             val t = PadButton(0.3f, 0.25f, 0.4f, 0.5f, type = PadButton.TYPE_TRACKPAD, color = PadButton.PALETTE[7])
             pad.buttons += t; view.selected = t; view.invalidate()
@@ -376,6 +386,7 @@ class EditorActivity : BaseActivity() {
 
     private fun editButton(b: PadButton, isNew: Boolean = false) {
         if (b.isShow) { editShow(b, isNew); return }
+        if (b.isStick) { editStick(b, isNew); return }
         if (b.isKnob) { editKnob(b, isNew); return }
         if (b.isPad || b.isMouse) { editPad(b, isNew); return }
         val keys = b.keys.toMutableList()
@@ -455,6 +466,66 @@ class EditorActivity : BaseActivity() {
                 b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
                 b.color = color; b.textColor = textColor; b.pressColor = pressColor
                 b.group = group.selectedItemPosition
+                view.invalidate()
+            }
+            .setNegativeButton("취소", null)
+            .show().wide()
+    }
+
+    private fun editStick(b: PadButton, isNew: Boolean) {
+        val keys = IntArray(4) { b.keys.getOrNull(it) ?: 0 }
+        var color = b.color
+        val m = dp(20)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
+        box.addView(TextView(this).apply { text = "손잡이를 기울인 방향의 키를 누르고 있습니다. 손을 떼면 가운데로 돌아옵니다." })
+
+        val rows = ArrayList<() -> Unit>()
+        val presets = LinearLayout(this).apply { setPadding(0, dp(8), 0, 0) }
+        fun preset(name: String, set: List<Int>) = presets.addView(Button(this).apply {
+            text = name
+            setOnClickListener { for (i in 0..3) keys[i] = set[i]; rows.forEach { it() } }
+        })
+        preset("방향키", Stick.ARROWS)
+        preset("W A S D", Stick.WASD)
+        box.addView(presets)
+
+        listOf("위", "아래", "왼쪽", "오른쪽").forEachIndexed { i, name ->
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            val shown = TextView(this).apply { textSize = 16f; setTextColor(Themes.current.text) }
+            val show = { shown.text = name + ": " + if (keys[i] > 0) Keys.name(keys[i]) else "(없음)" }
+            show(); rows += show
+            row.addView(shown, LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(Button(this).apply {
+                text = "키 선택"
+                setOnClickListener {
+                    // 방향마다 키 하나만 쓴다. 여러 개를 고르면 수정키가 아닌 첫 키를 쓴다.
+                    pickKeys(listOfNotNull(keys[i].takeIf { it > 0 })) { picked ->
+                        keys[i] = picked.firstOrNull { !Keys.isModifier(it) } ?: picked.firstOrNull() ?: 0
+                        show()
+                    }
+                }
+            })
+            box.addView(row)
+        }
+
+        val diagonal = CheckBox(this).apply {
+            text = "대각선 입력 — 비스듬히 기울이면 두 방향 키를 함께 누름"
+            isChecked = b.mode != PadButton.STICK_4WAY
+        }
+        box.addView(diagonal)
+        val group = groupSpinner(b.group)
+        box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
+        box.addView(group)
+        box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
+
+        AlertDialog.Builder(this).setTitle(if (isNew) "새 조이스틱" else "조이스틱 속성")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인") { _, _ ->
+                checkpoint()
+                b.keys = keys.toMutableList()
+                b.mode = if (diagonal.isChecked) PadButton.STICK_8WAY else PadButton.STICK_4WAY
+                b.group = group.selectedItemPosition
+                b.color = color
                 view.invalidate()
             }
             .setNegativeButton("취소", null)

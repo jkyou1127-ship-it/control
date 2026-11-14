@@ -35,6 +35,7 @@ class PadButton(
     var label2: String = "",
 ) {
     val isShow: Boolean get() = type == TYPE_SHOW
+    val isStick: Boolean get() = type == TYPE_STICK
     val isKnob: Boolean get() = type == TYPE_KNOB
     val isPad: Boolean get() = type == TYPE_TRACKPAD
     val isMouse: Boolean get() = type == TYPE_MOUSE
@@ -46,7 +47,7 @@ class PadButton(
 
     fun contains(px: Float, py: Float): Boolean {
         if (px < x || py < y || px > x + w || py > y + h) return false
-        if (shape != SHAPE_OVAL && !isKnob) return true
+        if (shape != SHAPE_OVAL && !isKnob && !isStick) return true
         val dx = (px - (x + w / 2)) / (w / 2)
         val dy = (py - (y + h / 2)) / (h / 2)
         return dx * dx + dy * dy <= 1f
@@ -80,6 +81,9 @@ class PadButton(
         const val TYPE_TRACKPAD = 2  // 마우스를 움직이는 영역. mode 가 PAD_NO_TAP 이면 탭 클릭을 끈다
         const val TYPE_MOUSE = 3     // 마우스 모양: 좌·우 버튼, 휠, 몸통(이동)
         const val TYPE_SHOW = 4      // 누르면 target 그룹의 버튼들이 나타나는 버튼
+        const val TYPE_STICK = 5     // 조이스틱. keys 는 위, 아래, 왼쪽, 오른쪽 키 순서(없는 방향은 0)
+        const val STICK_8WAY = 0     // 대각선으로 기울이면 두 방향 키를 함께 누른다 (mode 값)
+        const val STICK_4WAY = 1     // 항상 한 방향만
         const val GROUPS = 8
         const val KNOB_UNTIL_STOP = 0    // 키 방식 노브: 돌리는 동안만 누르고 멈추면 뗀다 (mode 값)
         const val KNOB_UNTIL_RELEASE = 1 // 키 방식 노브: 돌리기 시작하면 손을 뗄 때까지 계속 누른다
@@ -455,4 +459,37 @@ object LayoutFile {
         if (l.name.isBlank()) l.name = "불러온 레이아웃"
         return l
     }
+}
+
+/** 조이스틱: 기울인 위치를 방향 키로 바꾼다. */
+object Stick {
+    const val UP = 1
+    const val DOWN = 2
+    const val LEFT = 4
+    const val RIGHT = 8
+    const val DEAD_ZONE = 0.28f     // 반지름 대비 이만큼 안쪽은 입력 없음
+
+    val ARROWS = listOf(0x52, 0x51, 0x50, 0x4F)    // ↑ ↓ ← →
+    val WASD = listOf(0x1A, 0x16, 0x04, 0x07)      // W S A D
+    val BITS = listOf(UP, DOWN, LEFT, RIGHT)       // keys 의 순서와 같다
+
+    /**
+     * 중심에서 (dx, dy) 만큼 기울였을 때 눌러야 할 방향들(UP/DOWN/LEFT/RIGHT 의 조합).
+     * dx, dy 는 반지름을 1 로 본 값이고 dy 는 아래쪽이 양수다. diagonal 이 거짓이면 항상 한 방향만 고른다.
+     */
+    fun directions(dx: Float, dy: Float, diagonal: Boolean): Int {
+        if (dx * dx + dy * dy < DEAD_ZONE * DEAD_ZONE) return 0
+        val angle = Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble()))   // 0 = 오른쪽, 90 = 아래
+        val step = if (diagonal) 45.0 else 90.0
+        val sector = Math.floorMod(Math.round(angle / step).toInt(), (360 / step).toInt())
+        val eight = if (diagonal) sector else sector * 2
+        return when (eight) {
+            0 -> RIGHT; 1 -> RIGHT or DOWN; 2 -> DOWN; 3 -> DOWN or LEFT
+            4 -> LEFT; 5 -> LEFT or UP; 6 -> UP; else -> UP or RIGHT
+        }
+    }
+
+    /** 방향 조합에 해당하는 키들. keys 는 위, 아래, 왼쪽, 오른쪽 순서다. */
+    fun keysFor(mask: Int, keys: List<Int>): List<Int> =
+        BITS.indices.filter { mask and BITS[it] != 0 }.mapNotNull { keys.getOrNull(it) }.filter { it > 0 }
 }

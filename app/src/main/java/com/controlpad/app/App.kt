@@ -122,9 +122,35 @@ class PadPainter(ctx: Context, private val theme: PadTheme = Themes.current) {
         c.drawText(text, r.left + w / 2, r.top + 12 * density, sub)
     }
 
+    /** sx, sy 는 손잡이가 기울어진 정도(-1~1), mask 는 지금 눌린 방향(Stick.UP 등). */
+    fun drawStick(c: Canvas, b: PadButton, r: RectF, selected: Boolean, sx: Float, sy: Float, mask: Int) {
+        fill.color = shade(b.color, 0.22f)
+        c.drawOval(r, fill)
+        stroke.color = if (selected) theme.text else b.color
+        stroke.strokeWidth = density * if (selected) 3f else theme.stroke
+        c.drawOval(r, stroke)
+        // 가장자리에 방향별 키 이름. 눌린 방향은 밝게.
+        sub.textSize = (minOf(r.width(), r.height()) * 0.1f).coerceIn(9f * density, 18f * density)
+        val ox = floatArrayOf(0f, 0f, -0.8f, 0.8f)
+        val oy = floatArrayOf(-0.8f, 0.8f, 0f, 0f)
+        for (i in 0..3) {
+            val key = b.keys.getOrNull(i) ?: 0
+            if (key <= 0) continue
+            sub.color = if (mask and Stick.BITS[i] != 0) b.color else theme.text and 0x00FFFFFF or 0x88000000.toInt()
+            c.drawText(Keys.name(key), r.centerX() + ox[i] * r.width() / 2, r.centerY() + oy[i] * r.height() / 2 + sub.textSize * 0.35f, sub)
+        }
+        // 손잡이
+        fill.color = if (b.pressColor != 0 && mask != 0) b.pressColor else b.color
+        c.drawCircle(
+            r.centerX() + sx * r.width() * 0.25f, r.centerY() + sy * r.height() * 0.25f,
+            minOf(r.width(), r.height()) * 0.2f, fill,
+        )
+    }
+
     /** alt: 0 = 기본 이름, 1 = 한글 상태 이름, 2 = 둘 다(편집 화면). */
     fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f, parts: Int = 0, alt: Int = 0) {
         if (b.isMouse) { drawMouse(c, b, r, selected, parts); return }
+        if (b.isStick) { drawStick(c, b, r, selected, 0f, 0f, 0); return }
         val lit = if (b.pressColor != 0) b.pressColor else b.color      // 눌렸을 때 채우는 색
         // 눌렸을 때 글자는 채운 색의 밝기에 맞춰 검정/흰색 중 잘 보이는 쪽
         val onLit = if (b.textColor != 0) b.textColor else if (Themes.luminance(lit) > 0.5f) Color.BLACK else Color.WHITE
