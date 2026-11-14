@@ -46,10 +46,11 @@ class EditorActivity : BaseActivity() {
             text = "격자 맞춤"; isChecked = true
             setOnCheckedChangeListener { _, on -> view.snap = on; view.invalidate() }
         })
-        bar.addView(CheckBox(this).apply {
+        val multi = CheckBox(this).apply {
             text = "다중 선택"
             setOnCheckedChangeListener { _, on -> view.multi = on; view.invalidate() }
-        })
+        }
+        bar.addView(multi)
         bar.addView(CheckBox(this).apply {
             text = "슬라이드 입력"; isChecked = pad.slide
             setOnCheckedChangeListener { _, on -> pad.slide = on }
@@ -87,6 +88,20 @@ class EditorActivity : BaseActivity() {
                     val w = 0.14f
                     val r = Restart.button(which, 0.5f - w / 2, 0.04f, w, 0.2f)
                     pad.buttons += r; view.selected = r; view.invalidate()
+                }.show()
+        }
+        tool("＋키패드") {
+            AlertDialog.Builder(this).setTitle("숫자 키패드 추가")
+                .setItems(Keypad.names.toTypedArray()) { _, which ->
+                    // 화면에서 칸이 대략 정사각형이 되도록 폭을 정해 가운데에 놓는다.
+                    val h = 0.9f
+                    val w = (h * 0.8f * view.height / view.width.coerceAtLeast(1)).coerceIn(0.2f, 0.9f)
+                    val keys = Keypad.create(which == 0, 0.5f - w / 2, 0.05f, w, h)
+                    pad.buttons += keys
+                    // 한 덩어리로 옮길 수 있게 전부 선택해 둔다.
+                    multi.isChecked = true
+                    view.selection.clear(); view.selection += keys
+                    view.invalidate()
                 }.show()
         }
         tool("＋표시 버튼") {

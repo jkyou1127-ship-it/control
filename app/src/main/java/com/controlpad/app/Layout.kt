@@ -167,10 +167,46 @@ object Restart {
     )
 }
 
+/** 숫자 키패드 한 벌을 버튼들로 만든다. 만든 뒤에는 보통 버튼처럼 하나씩 고칠 수 있다. */
+object Keypad {
+    val names = listOf("숫자패드 키 (Num 0~9, PC의 Num Lock이 켜져 있어야 숫자 입력)", "일반 숫자 키 (키보드 윗줄 0~9)")
+
+    // (이름, 숫자패드 키, 일반 키, 열, 행, 가로 칸 수, 세로 칸 수)
+    private class Cell(val label: String, val num: Int, val plain: List<Int>, val col: Int, val row: Int, val cw: Int = 1, val rh: Int = 1)
+
+    private val shift = 0xE1
+    private val cells = listOf(
+        Cell("⌫", 0x2A, listOf(0x2A), 0, 0), Cell("/", 0x54, listOf(0x38), 1, 0),
+        Cell("*", 0x55, listOf(shift, 0x25), 2, 0), Cell("-", 0x56, listOf(0x2D), 3, 0),
+        Cell("7", 0x5F, listOf(0x24), 0, 1), Cell("8", 0x60, listOf(0x25), 1, 1), Cell("9", 0x61, listOf(0x26), 2, 1),
+        Cell("+", 0x57, listOf(shift, 0x2E), 3, 1, rh = 2),
+        Cell("4", 0x5C, listOf(0x21), 0, 2), Cell("5", 0x5D, listOf(0x22), 1, 2), Cell("6", 0x5E, listOf(0x23), 2, 2),
+        Cell("1", 0x59, listOf(0x1E), 0, 3), Cell("2", 0x5A, listOf(0x1F), 1, 3), Cell("3", 0x5B, listOf(0x20), 2, 3),
+        Cell("Enter", 0x58, listOf(0x28), 3, 3, rh = 2),
+        Cell("0", 0x62, listOf(0x27), 0, 4, cw = 2), Cell(".", 0x63, listOf(0x37), 2, 4),
+    )
+
+    /** (x, y, w, h) 영역 안에 4열 5행으로 놓는다. numpad 가 참이면 숫자패드 키, 아니면 일반 키를 쓴다. */
+    fun create(numpad: Boolean, x: Float, y: Float, w: Float, h: Float): List<PadButton> {
+        val gap = 0.012f
+        val cw = (w - gap * 3) / 4
+        val rh = (h - gap * 4) / 5
+        return cells.map { c ->
+            val digit = c.label.length == 1 && c.label[0].isDigit()
+            PadButton(
+                x + c.col * (cw + gap), y + c.row * (rh + gap),
+                cw * c.cw + gap * (c.cw - 1), rh * c.rh + gap * (c.rh - 1),
+                c.label, if (numpad) mutableListOf(c.num) else c.plain.toMutableList(),
+                color = PadButton.PALETTE[if (digit || c.label == ".") 7 else if (c.label == "Enter") 2 else if (c.label == "⌫") 3 else 1],
+            )
+        }
+    }
+}
+
 object Templates {
     val names = listOf(
         "빈 레이아웃", "리듬게임 4키 (D F J K)", "리듬게임 7키 (S D F Space J K L)", "작업용 단축키",
-        "사운드 볼텍스 · KSM (노브 2개)", "트랙패드 + 마우스 버튼",
+        "사운드 볼텍스 · KSM (노브 2개)", "트랙패드 + 마우스 버튼", "숫자 키패드",
     )
 
     fun create(index: Int, name: String): PadLayout = when (index) {
@@ -182,6 +218,7 @@ object Templates {
         3 -> shortcuts(name)
         4 -> voltex(name)
         5 -> trackpad(name)
+        6 -> PadLayout(name = name, buttons = Keypad.create(true, 0.3f, 0.03f, 0.4f, 0.94f).toMutableList())
         else -> PadLayout(name = name)
     }
 

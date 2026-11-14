@@ -59,7 +59,7 @@ class CoreTest {
 
     @Test
     fun templatesStayOnScreen() {
-        for (i in 1..5) for (b in Templates.create(i, "t").buttons) {
+        for (i in 1..6) for (b in Templates.create(i, "t").buttons) {
             assertTrue(b.x >= 0 && b.y >= 0 && b.x + b.w <= 1.0001f && b.y + b.h <= 1.0001f)
             assertTrue(b.isPad || b.keys.isNotEmpty())
         }
@@ -239,5 +239,24 @@ class CoreTest {
         val b = PadButton(0f, 0f, 0.1f, 0.1f, mode = PadButton.MODE_TIMED, holdMs = 3000)
         assertEquals(3000, PadButton.fromJson(JSONObject(b.toJson().toString())).copy().holdMs)
         assertEquals(1000, PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1}""")).holdMs)
+    }
+
+    @Test
+    fun keypadHasAllKeysWithoutOverlap() {
+        for (numpad in listOf(true, false)) {
+            val keys = Keypad.create(numpad, 0.3f, 0.05f, 0.4f, 0.9f)
+            assertEquals(17, keys.size)
+            assertEquals(('0'..'9').map { it.toString() }, keys.map { it.label }.filter { it[0].isDigit() }.sorted())
+            for (b in keys) {
+                assertTrue(b.label, b.x >= 0.3f - 1e-4f && b.x + b.w <= 0.7f + 1e-4f && b.y >= 0.05f - 1e-4f && b.y + b.h <= 0.95f + 1e-4f)
+                assertTrue(b.keys.all { it <= KeyState.MAX_USAGE || Keys.isModifier(it) })
+            }
+            for (a in keys) for (b in keys) if (a !== b) {
+                assertFalse(a.label + "/" + b.label, a.x < b.x + b.w - 1e-4f && b.x < a.x + a.w - 1e-4f && a.y < b.y + b.h - 1e-4f && b.y < a.y + a.h - 1e-4f)
+            }
+        }
+        assertEquals("Num 5", Keys.combo(Keypad.create(true, 0f, 0f, 1f, 1f).first { it.label == "5" }.keys))
+        assertEquals("5", Keys.combo(Keypad.create(false, 0f, 0f, 1f, 1f).first { it.label == "5" }.keys))
+        assertEquals("Shift + =", Keys.combo(Keypad.create(false, 0f, 0f, 1f, 1f).first { it.label == "+" }.keys))
     }
 }
