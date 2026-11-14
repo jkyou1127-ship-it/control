@@ -45,6 +45,12 @@ class ReceiverTest(unittest.TestCase):
         self.assertIsNone(self.rx.feed(packet(1)[:-1]))
         self.assertEqual(self.events, [])
 
+    def test_mouse_packet(self):
+        pkt = b"CM\x01" + (9).to_bytes(4, "big") + (-300).to_bytes(2, "big", signed=True) + (7).to_bytes(2, "big")
+        self.assertEqual(r.parse_mouse(pkt), (-300, 7))
+        self.assertIsNone(r.parse_mouse(packet(1, 0x07)))
+        self.assertIsNone(self.rx.feed(pkt))          # 키 처리 쪽은 건드리지 않는다
+
     def test_every_app_key_has_a_scancode(self):
         # 앱의 Keys.kt 에 있는 usage 범위
         app = list(range(0x04, 0x28)) + list(range(0x28, 0x3A)) + list(range(0x3A, 0x47)) + \
@@ -69,11 +75,14 @@ class ReceiverTest(unittest.TestCase):
             else:
                 self.fail("no ack")
             self.assertEqual(ack, b"CA" + (1).to_bytes(4, "big"))
+            s.sendto(b"CM\x01" + (2).to_bytes(4, "big") + (5).to_bytes(2, "big") + (-3).to_bytes(2, "big", signed=True),
+                     ("127.0.0.1", port))
             time.sleep(r.TIMEOUT * 2 + 0.3)  # 패킷이 끊기면 스스로 키를 떼야 한다
         finally:
             proc.terminate()
             out = proc.communicate()[0]
         self.assertIn("누름 0x07", out)
+        self.assertIn("마우스 +5 -3", out)
         self.assertIn("뗌   0x07", out)
 
 

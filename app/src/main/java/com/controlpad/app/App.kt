@@ -33,22 +33,35 @@ class PadPainter(ctx: Context) {
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; isFakeBoldText = true }
     private val sub = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
 
-    fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean) {
+    /** angle 은 노브가 지금까지 돌아간 각도(표시용). */
+    fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f) {
         fill.color = if (pressed) b.color else shade(b.color, 0.38f)
         stroke.color = if (selected) Color.WHITE else b.color
         stroke.strokeWidth = density * if (selected) 3f else 1.5f
         val rad = minOf(r.width(), r.height()) * 0.14f
-        if (b.shape == PadButton.SHAPE_OVAL) {
+        if (b.shape == PadButton.SHAPE_OVAL || b.isKnob) {
             c.drawOval(r, fill); c.drawOval(r, stroke)
         } else {
             c.drawRoundRect(r, rad, rad, fill); c.drawRoundRect(r, rad, rad, stroke)
         }
 
-        val combo = Keys.combo(b.keys)
-        val label = b.label.ifEmpty { combo.ifEmpty { "키 없음" } }
+        if (b.isKnob) {
+            // 돌아간 정도를 보여 주는 표시점
+            val rad2 = Math.toRadians(angle.toDouble() - 90)
+            fill.color = if (pressed) Color.BLACK else b.color
+            c.drawCircle(
+                r.centerX() + (Math.cos(rad2) * r.width() * 0.36).toFloat(),
+                r.centerY() + (Math.sin(rad2) * r.height() * 0.36).toFloat(),
+                minOf(r.width(), r.height()) * 0.07f, fill,
+            )
+        }
+
+        val combo = if (b.isKnob) Knob.describe(b) else Keys.combo(b.keys)
+        val label = b.label.ifEmpty { if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
         text.color = if (pressed) Color.BLACK else Color.WHITE
         text.textSize = (r.height() * 0.3f)
-            .coerceAtMost(r.width() * 1.5f / label.length.coerceAtLeast(2))
+            .coerceAtMost(r.width() * (if (b.isKnob) 0.9f else 1.5f) / label.length.coerceAtLeast(2))
+            .coerceAtMost(if (b.isKnob) r.height() * 0.16f else Float.MAX_VALUE)
             .coerceIn(9f * density, 56f * density)
         val cy = r.centerY() - (text.descent() + text.ascent()) / 2
         c.drawText(label, r.centerX(), cy, text)
@@ -56,7 +69,8 @@ class PadPainter(ctx: Context) {
         if (combo.isNotEmpty() && combo != label && r.height() > 56 * density) {
             sub.color = if (pressed) 0xAA000000.toInt() else 0xAAFFFFFF.toInt()
             sub.textSize = (text.textSize * 0.45f).coerceIn(9f * density, 16f * density)
-            c.drawText(combo, r.centerX(), r.bottom - sub.textSize * 0.7f, sub)
+            val sy = if (b.isKnob) cy + sub.textSize * 1.5f else r.bottom - sub.textSize * 0.7f
+            c.drawText(combo, r.centerX(), sy, sub)
         }
     }
 

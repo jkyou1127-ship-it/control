@@ -68,6 +68,15 @@ object Link {
         worker.post { transmit(report) }
     }
 
+    /** 노브용 마우스 상대 이동. */
+    fun sendMouse(dx: Int, dy: Int) {
+        if (dx == 0 && dy == 0) return
+        worker.post {
+            runCatching { bt?.sendMouse(dx, dy) }
+            runCatching { udp?.sendMouse(dx, dy) }
+        }
+    }
+
     private fun transmit(report: ByteArray) {
         runCatching { bt?.send(report) }
         runCatching { udp?.send(report) }
@@ -142,7 +151,7 @@ class BtHid(private val ctx: Context) {
         }
 
         override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
-            runCatching { hid?.replyReport(device, type, id, last) }
+            runCatching { hid?.replyReport(device, type, id, if (id.toInt() == MOUSE_ID) ByteArray(3) else last) }
         }
 
         override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
@@ -165,8 +174,8 @@ class BtHid(private val ctx: Context) {
         val h = hid ?: return
         if (registered) return
         val sdp = BluetoothHidDeviceAppSdpSettings(
-            "ControlPad", "ControlPad Keyboard", "ControlPad",
-            BluetoothHidDevice.SUBCLASS1_KEYBOARD, DESCRIPTOR,
+            "ControlPad", "ControlPad Keyboard and Mouse", "ControlPad",
+            BluetoothHidDevice.SUBCLASS1_COMBO, DESCRIPTOR,
         )
         runCatching { h.registerApp(sdp, null, null, ctx.mainExecutor, callback) }
     }
@@ -200,6 +209,18 @@ class BtHid(private val ctx: Context) {
         hid?.sendReport(d, REPORT_ID, report)
     }
 
+    fun sendMouse(dx: Int, dy: Int) {
+        val d = host ?: return
+        var x = dx
+        var y = dy
+        while (x != 0 || y != 0) {   // 한 리포트는 축마다 -127~127 까지만 담는다
+            val sx = x.coerceIn(-127, 127)
+            val sy = y.coerceIn(-127, 127)
+            hid?.sendReport(d, MOUSE_ID, byteArrayOf(0, sx.toByte(), sy.toByte()))
+            x -= sx; y -= sy
+        }
+    }
+
     fun stop() {
         val h = hid
         runCatching { host?.let { h?.disconnect(it) } }
@@ -223,6 +244,7 @@ class BtHid(private val ctx: Context) {
 
     companion object {
         const val REPORT_ID = 1
+        const val MOUSE_ID = 2
 
         /** 수정키 8비트 + usage 0x00~0x77 비트맵(동시 입력 제한 없음). KeyState.report() 와 같은 형식. */
         val DESCRIPTOR: ByteArray = intArrayOf(
@@ -240,13 +262,25 @@ class BtHid(private val ctx: Context) {
             0x75, 0x01, 0x95, KeyState.MAX_USAGE + 1,
             0x81, 0x02,
             0xC0,
+            // 노브용 마우스: 버튼 3개(쓰지 않음) + X, Y 상대 이동
+            0x05, 0x01, 0x09, 0x02, 0xA1, 0x01,
+            0x85, MOUSE_ID,
+            0x09, 0x01, 0xA1, 0x00,
+            0x05, 0x09, 0x19, 0x01, 0x29, 0x03, 0x15, 0x00, 0x25, 0x01,
+            0x95, 0x03, 0x75, 0x01, 0x81, 0x02,
+            0x95, 0x01, 0x75, 0x05, 0x81, 0x01,
+            0x05, 0x01, 0x09, 0x30, 0x09, 0x31,
+            0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x02,
+            0x81, 0x06,
+            0xC0, 0xC0,
         ).map { it.toByte() }.toByteArray()
     }
 }
 
 /**
  * UDP 로 PC 수신 프로그램(receiver/controlpad_receiver.py)에 키 상태를 보낸다.
- * 패킷: 'C' 'P' 버전(1) 순번(4바이트, big-endian) 리포트(16바이트). 수신 측은 'C' 'A' + 순번으로 답한다.
+ * 키 패킷: 'C' 'P' 버전(1) 순번(4바이트, big-endian) 리포트(16바이트). 수신 측은 'C' 'A' + 순번으로 답한다.
+ * 마우스 패킷: 'C' 'M' 버전(1) 순번(4바이트) dx(2바이트) dy(2바이트), 부호 있는 big-endian.
  */
 class UdpLink(val host: String, val port: Int) {
     private val socket = DatagramSocket()
@@ -278,13 +312,27 @@ class UdpLink(val host: String, val port: Int) {
     fun send(report: ByteArray) {
         if (closed) return
         val a = addr ?: InetAddress.getByName(host).also { addr = it }
-        val s = ++seq
-        val data = ByteArray(7 + report.size)
-        data[0] = 'C'.code.toByte(); data[1] = 'P'.code.toByte(); data[2] = 1
-        data[3] = (s ushr 24).toByte(); data[4] = (s ushr 16).toByte()
-        data[5] = (s ushr 8).toByte(); data[6] = s.toByte()
+        val data = header('P', report.size)
         System.arraycopy(report, 0, data, 7, report.size)
         socket.send(DatagramPacket(data, data.size, a, port))
+    }
+
+    fun sendMouse(dx: Int, dy: Int) {
+        if (closed) return
+        val a = addr ?: InetAddress.getByName(host).also { addr = it }
+        val data = header('M', 4)
+        data[7] = (dx shr 8).toByte(); data[8] = dx.toByte()
+        data[9] = (dy shr 8).toByte(); data[10] = dy.toByte()
+        socket.send(DatagramPacket(data, data.size, a, port))
+    }
+
+    private fun header(kind: Char, payload: Int): ByteArray {
+        val s = ++seq
+        val data = ByteArray(7 + payload)
+        data[0] = 'C'.code.toByte(); data[1] = kind.code.toByte(); data[2] = 1
+        data[3] = (s ushr 24).toByte(); data[4] = (s ushr 16).toByte()
+        data[5] = (s ushr 8).toByte(); data[6] = s.toByte()
+        return data
     }
 
     fun close() {

@@ -7,8 +7,9 @@
     python controlpad_receiver.py            # Windows 에서 실행
     python controlpad_receiver.py --dry-run  # 입력을 넣지 않고 받은 키만 출력
 
-패킷: 'C' 'P' 버전(1) 순번(4바이트 big-endian) 리포트(16바이트)
+키 패킷: 'C' 'P' 버전(1) 순번(4바이트 big-endian) 리포트(16바이트)
 리포트: [0] 수정키 비트(HID usage 0xE0~0xE7), [1..15] usage 0x00~0x77 비트맵
+마우스 패킷(노브): 'C' 'M' 버전(1) 순번(4바이트) dx(2바이트) dy(2바이트), 부호 있는 big-endian
 """
 import argparse
 import socket
@@ -63,6 +64,14 @@ def parse(packet):
     if len(packet) != 7 + REPORT_SIZE or packet[:2] != b"CP" or packet[2] != 1:
         return None
     return int.from_bytes(packet[3:7], "big"), packet[7:]
+
+
+def parse_mouse(packet):
+    """노브가 보낸 마우스 이동 (dx, dy) 또는 형식이 다르면 None."""
+    if len(packet) != 11 or packet[:2] != b"CM" or packet[2] != 1:
+        return None
+    return (int.from_bytes(packet[7:9], "big", signed=True),
+            int.from_bytes(packet[9:11], "big", signed=True))
 
 
 class Receiver:
@@ -131,7 +140,11 @@ def windows_injector():
         inp = INPUT(type=1, u=UNION(ki=KEYBDINPUT(0, scan, flags, 0, 0)))
         send_input(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
-    return inject
+    def move(dx, dy):
+        inp = INPUT(type=0, u=UNION(mi=MOUSEINPUT(dx, dy, 0, 0x0001, 0, 0)))  # MOUSEEVENTF_MOVE
+        send_input(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+
+    return inject, move
 
 
 def local_addresses():
@@ -159,8 +172,11 @@ def main(argv=None):
     if args.dry_run:
         def inject(usage, down):
             print(("누름 " if down else "뗌   ") + "0x%02X" % usage, flush=True)
+
+        def move(dx, dy):
+            print("마우스 %+d %+d" % (dx, dy), flush=True)
     elif sys.platform == "win32":
-        inject = windows_injector()
+        inject, move = windows_injector()
     else:
         sys.exit("키 입력은 Windows 에서만 지원합니다. 다른 OS 에서는 --dry-run 으로 수신만 확인할 수 있습니다.")
 
@@ -181,6 +197,11 @@ def main(argv=None):
             except socket.timeout:
                 packet = None
             if packet is not None:
+                delta = parse_mouse(packet)
+                if delta is not None:
+                    move(*delta)
+                    last = time.monotonic()
+                    continue
                 seq = rx.feed(packet, sender)
                 if seq is not None:
                     last = time.monotonic()

@@ -52,6 +52,19 @@ class EditorActivity : BaseActivity() {
         })
         fun tool(label: String, action: () -> Unit) =
             bar.addView(Button(this).apply { text = label; setOnClickListener { action() } })
+        tool("＋노브") {
+            // 화면에서 정사각형이 되도록 가로세로 비율을 맞춰 가운데에 놓는다.
+            val h = 0.36f
+            val w = (h * view.height / view.width.coerceAtLeast(1)).coerceIn(0.08f, 0.5f)
+            val n = pad.buttons.count { it.isKnob }
+            val k = PadButton(
+                0.5f - w / 2, 0.5f - h / 2, w, h, type = PadButton.TYPE_KNOB,
+                knobOut = if (n % 2 == 0) PadButton.OUT_MOUSE_X else PadButton.OUT_MOUSE_Y,
+                color = PadButton.PALETTE[if (n % 2 == 0) 0 else 3],
+            )
+            pad.buttons += k; view.selected = k; view.invalidate()
+            editButton(k, isNew = true)
+        }
         tool("속성") { view.selected?.let { editButton(it) } ?: hint() }
         tool("복제") {
             view.selected?.let {
@@ -81,7 +94,104 @@ class EditorActivity : BaseActivity() {
 
     private fun hint() = android.widget.Toast.makeText(this, "먼저 버튼을 눌러 선택하세요", android.widget.Toast.LENGTH_SHORT).show()
 
+    private fun editKnob(b: PadButton, isNew: Boolean) {
+        val left = b.keys.toMutableList()
+        val right = b.keys2.toMutableList()
+        var color = b.color
+        val m = dp(20)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
+
+        box.addView(TextView(this).apply { text = "노브를 돌리면 보낼 입력" })
+        val out = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@EditorActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("마우스 X축 (아날로그)", "마우스 Y축 (아날로그)", "키보드 (돌리는 동안 키 입력)"),
+            )
+            setSelection(b.knobOut)
+        }
+        box.addView(out)
+
+        val sensBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val sensText = TextView(this).apply { setPadding(0, dp(8), 0, 0) }
+        val sens = android.widget.SeekBar(this).apply { max = 19; progress = (b.sens.toInt() - 1).coerceIn(0, 19) }
+        fun showSens() { sensText.text = "감도: ${sens.progress + 1}" }
+        showSens()
+        sens.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(s: android.widget.SeekBar?, p: Int, fromUser: Boolean) = showSens()
+            override fun onStartTrackingTouch(s: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
+        })
+        sensBox.addView(sensText); sensBox.addView(sens)
+        box.addView(sensBox)
+
+        val keyBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun keyRow(title: String, keys: MutableList<Int>) {
+            val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            val shown = TextView(this).apply { textSize = 16f; setTextColor(Color.WHITE) }
+            fun show() { shown.text = title + ": " + Keys.combo(keys).ifEmpty { "(없음)" } }
+            show()
+            row.addView(shown, LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(Button(this).apply {
+                text = "키 선택"
+                setOnClickListener { pickKeys(keys) { keys.clear(); keys += it; show() } }
+            })
+            keyBox.addView(row)
+        }
+        keyRow("왼쪽(↺)으로 돌릴 때", left)
+        keyRow("오른쪽(↻)으로 돌릴 때", right)
+        box.addView(keyBox)
+
+        fun showOut() {
+            val keysMode = out.selectedItemPosition == PadButton.OUT_KEYS
+            keyBox.visibility = if (keysMode) View.VISIBLE else View.GONE
+            sensBox.visibility = if (keysMode) View.GONE else View.VISIBLE
+        }
+        out.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) = showOut()
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        showOut()
+
+        val invert = CheckBox(this).apply { text = "회전 방향 반대로"; isChecked = b.invert }
+        box.addView(invert)
+
+        box.addView(TextView(this).apply { text = "노브에 표시할 이름"; setPadding(0, dp(8), 0, 0) })
+        val label = EditText(this).apply { setText(b.label); setSingleLine() }
+        box.addView(label)
+
+        val swatches = LinearLayout(this).apply { setPadding(0, dp(8), 0, 0) }
+        fun paint() {
+            for (i in 0 until swatches.childCount) {
+                val c = PadButton.PALETTE[i]
+                swatches.getChildAt(i).background = GradientDrawable().apply {
+                    setColor(c); cornerRadius = dp(6).toFloat()
+                    if (c == color) setStroke(dp(3), Color.WHITE)
+                }
+            }
+        }
+        for (c in PadButton.PALETTE) {
+            swatches.addView(View(this).apply { setOnClickListener { color = c; paint() } },
+                LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(8) })
+        }
+        paint()
+        box.addView(swatches)
+
+        AlertDialog.Builder(this).setTitle(if (isNew) "새 노브" else "노브 속성")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인") { _, _ ->
+                b.knobOut = out.selectedItemPosition
+                b.sens = (sens.progress + 1).toFloat()
+                b.keys = left; b.keys2 = right
+                b.invert = invert.isChecked
+                b.label = label.text.toString().trim(); b.color = color
+                view.invalidate()
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
     private fun editButton(b: PadButton, isNew: Boolean = false) {
+        if (b.isKnob) { editKnob(b, isNew); return }
         val keys = b.keys.toMutableList()
         var color = b.color
         val m = dp(20)

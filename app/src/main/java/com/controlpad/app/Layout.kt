@@ -14,12 +14,24 @@ class PadButton(
     var mode: Int = MODE_HOLD,
     var shape: Int = SHAPE_RECT,
     var color: Int = PALETTE[0],
+    /** TYPE_KNOB 이면 돌리는 노브다. 이때 keys 는 왼쪽(반시계) 회전 키, keys2 는 오른쪽(시계) 회전 키. */
+    var type: Int = TYPE_BUTTON,
+    var keys2: MutableList<Int> = mutableListOf(),
+    var knobOut: Int = OUT_MOUSE_X,
+    /** 마우스 출력일 때 1도 돌릴 때마다 보내는 이동량. */
+    var sens: Float = 4f,
+    var invert: Boolean = false,
 ) {
-    fun copy() = PadButton(x, y, w, h, label, keys.toMutableList(), mode, shape, color)
+    val isKnob: Boolean get() = type == TYPE_KNOB
+
+    fun copy() = PadButton(
+        x, y, w, h, label, keys.toMutableList(), mode, shape, color,
+        type, keys2.toMutableList(), knobOut, sens, invert,
+    )
 
     fun contains(px: Float, py: Float): Boolean {
         if (px < x || py < y || px > x + w || py > y + h) return false
-        if (shape != SHAPE_OVAL) return true
+        if (shape != SHAPE_OVAL && !isKnob) return true
         val dx = (px - (x + w / 2)) / (w / 2)
         val dy = (py - (y + h / 2)) / (h / 2)
         return dx * dx + dy * dy <= 1f
@@ -29,6 +41,8 @@ class PadButton(
         .put("x", x.toDouble()).put("y", y.toDouble()).put("w", w.toDouble()).put("h", h.toDouble())
         .put("label", label).put("keys", JSONArray(keys))
         .put("mode", mode).put("shape", shape).put("color", color)
+        .put("type", type).put("keys2", JSONArray(keys2)).put("knobOut", knobOut)
+        .put("sens", sens.toDouble()).put("invert", invert)
 
     companion object {
         const val MODE_HOLD = 0    // 누르고 있는 동안 입력 (게임)
@@ -36,6 +50,11 @@ class PadButton(
         const val MODE_TOGGLE = 2  // 누를 때마다 켜짐/꺼짐
         const val SHAPE_RECT = 0
         const val SHAPE_OVAL = 1
+        const val TYPE_BUTTON = 0
+        const val TYPE_KNOB = 1
+        const val OUT_MOUSE_X = 0  // 마우스 좌우 이동 (아날로그)
+        const val OUT_MOUSE_Y = 1  // 마우스 상하 이동 (아날로그)
+        const val OUT_KEYS = 2     // 돌리는 동안 키를 누름
 
         val PALETTE = intArrayOf(
             0xFF4FC3F7.toInt(), 0xFFFFB74D.toInt(), 0xFF81C784.toInt(), 0xFFE57373.toInt(),
@@ -44,12 +63,15 @@ class PadButton(
 
         fun fromJson(o: JSONObject): PadButton {
             val ks = o.optJSONArray("keys") ?: JSONArray()
+            val ks2 = o.optJSONArray("keys2") ?: JSONArray()
             return PadButton(
                 o.getDouble("x").toFloat(), o.getDouble("y").toFloat(),
                 o.getDouble("w").toFloat(), o.getDouble("h").toFloat(),
                 o.optString("label"),
                 MutableList(ks.length()) { ks.getInt(it) },
                 o.optInt("mode"), o.optInt("shape"), o.optInt("color", PALETTE[0]),
+                o.optInt("type"), MutableList(ks2.length()) { ks2.getInt(it) },
+                o.optInt("knobOut"), o.optDouble("sens", 4.0).toFloat(), o.optBoolean("invert"),
             )
         }
     }
@@ -104,7 +126,10 @@ object LayoutStore {
 }
 
 object Templates {
-    val names = listOf("빈 레이아웃", "리듬게임 4키 (D F J K)", "리듬게임 7키 (S D F Space J K L)", "작업용 단축키")
+    val names = listOf(
+        "빈 레이아웃", "리듬게임 4키 (D F J K)", "리듬게임 7키 (S D F Space J K L)", "작업용 단축키",
+        "사운드 볼텍스 · KSM (노브 2개)",
+    )
 
     fun create(index: Int, name: String): PadLayout = when (index) {
         1 -> row(name, listOf("D" to 0x07, "F" to 0x09, "J" to 0x0D, "K" to 0x0E))
@@ -113,6 +138,7 @@ object Templates {
             listOf("S" to 0x16, "D" to 0x07, "F" to 0x09, "Space" to 0x2C, "J" to 0x0D, "K" to 0x0E, "L" to 0x0F),
         )
         3 -> shortcuts(name)
+        4 -> voltex(name)
         else -> PadLayout(name = name)
     }
 
@@ -126,6 +152,25 @@ object Templates {
                 color = PadButton.PALETTE[if (label == "Space") 1 else if (i % 2 == 0) 0 else 2],
             )
         }
+        return l
+    }
+
+    /** K-Shoot MANIA 기본 키 배치: BT = S D K L, FX = C M, 노브 = Q/W, O/P, 스타트 = Enter. */
+    private fun voltex(name: String): PadLayout {
+        val l = PadLayout(name = name)
+        val p = PadButton.PALETTE
+        fun knob(x: Float, label: String, left: Int, right: Int, color: Int) = PadButton(
+            x, 0.03f, 0.2f, 0.36f, label, mutableListOf(left), color = color,
+            type = PadButton.TYPE_KNOB, keys2 = mutableListOf(right), knobOut = PadButton.OUT_KEYS,
+        )
+        l.buttons += knob(0.02f, "VOL-L", 0x14, 0x1A, p[0])
+        l.buttons += knob(0.78f, "VOL-R", 0x12, 0x13, p[3])
+        l.buttons += PadButton(0.42f, 0.05f, 0.16f, 0.16f, "START", mutableListOf(0x28), color = p[4])
+        listOf("BT-A" to 0x16, "BT-B" to 0x07, "BT-C" to 0x0E, "BT-D" to 0x0F).forEachIndexed { i, (label, key) ->
+            l.buttons += PadButton(0.1f + i * 0.205f, 0.42f, 0.185f, 0.3f, label, mutableListOf(key), color = p[7])
+        }
+        l.buttons += PadButton(0.2f, 0.76f, 0.29f, 0.2f, "FX-L", mutableListOf(0x06), color = p[1])
+        l.buttons += PadButton(0.51f, 0.76f, 0.29f, 0.2f, "FX-R", mutableListOf(0x10), color = p[1])
         return l
     }
 
@@ -149,5 +194,24 @@ object Templates {
             )
         }
         return l
+    }
+}
+
+object Knob {
+    /** 화면 좌표에서 중심 기준 각도(도). y 가 아래로 커지므로 값이 커질수록 시계 방향이다. */
+    fun angle(dx: Float, dy: Float): Float = Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble())).toFloat()
+
+    /** 이전 각도에서 현재 각도까지의 회전량. 180도 경계를 넘어도 짧은 쪽으로 계산한다. */
+    fun delta(prev: Float, now: Float): Float {
+        var d = (now - prev) % 360f
+        if (d > 180f) d -= 360f
+        if (d < -180f) d += 360f
+        return d
+    }
+
+    fun describe(b: PadButton): String = when (b.knobOut) {
+        PadButton.OUT_MOUSE_X -> "마우스 X축"
+        PadButton.OUT_MOUSE_Y -> "마우스 Y축"
+        else -> Keys.combo(b.keys).ifEmpty { "?" } + " ↺ ↻ " + Keys.combo(b.keys2).ifEmpty { "?" }
     }
 }

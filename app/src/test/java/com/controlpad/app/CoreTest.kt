@@ -59,7 +59,7 @@ class CoreTest {
 
     @Test
     fun templatesStayOnScreen() {
-        for (i in 1..3) for (b in Templates.create(i, "t").buttons) {
+        for (i in 1..4) for (b in Templates.create(i, "t").buttons) {
             assertTrue(b.x >= 0 && b.y >= 0 && b.x + b.w <= 1.0001f && b.y + b.h <= 1.0001f)
             assertTrue(b.keys.isNotEmpty())
         }
@@ -72,5 +72,31 @@ class CoreTest {
         assertFalse(b.contains(0.01f, 0.01f))
         b.shape = PadButton.SHAPE_RECT
         assertTrue(b.contains(0.01f, 0.01f))
+    }
+
+    @Test
+    fun knobDeltaTakesShortWayAcrossWrap() {
+        assertEquals(20f, Knob.delta(170f, -170f), 1e-4f)    // 180도 경계를 시계 방향으로 넘음
+        assertEquals(-20f, Knob.delta(-170f, 170f), 1e-4f)
+        assertEquals(5f, Knob.delta(10f, 15f), 1e-4f)
+        // 화면에서 오른쪽(0도) → 아래(90도)는 시계 방향
+        assertEquals(90f, Knob.delta(Knob.angle(1f, 0f), Knob.angle(0f, 1f)), 1e-3f)
+    }
+
+    @Test
+    fun knobSurvivesJsonRoundTripAndOldFilesLoadAsButtons() {
+        val k = Templates.create(4, "sdvx").buttons.first { it.isKnob }.apply { sens = 7f; invert = true }
+        val back = PadButton.fromJson(JSONObject(k.toJson().toString()))
+        assertTrue(back.isKnob)
+        assertEquals(PadButton.OUT_KEYS, back.knobOut)
+        assertEquals(listOf(0x14), back.keys)
+        assertEquals(listOf(0x1A), back.keys2)
+        assertEquals(7f, back.sens, 0f)
+        assertTrue(back.invert)
+        assertFalse(back.contains(back.x + 0.001f, back.y + 0.001f))   // 노브는 항상 원형
+
+        val old = PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1,"keys":[4]}"""))
+        assertFalse(old.isKnob)
+        assertEquals(4f, old.sens, 0f)
     }
 }
