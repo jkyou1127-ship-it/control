@@ -735,4 +735,16 @@ class CoreTest {
         assertEquals("모든 키 떼기", Options.title(Options.RELEASE_ALL))
         assertEquals(Options.all.size, Options.all.map { it.id }.toSet().size)
     }
+
+    @Test
+    fun clickSoundIsAValidShortWav() {
+        val wav = Wav.click()
+        val b = java.nio.ByteBuffer.wrap(wav).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        assertEquals("RIFF", String(wav, 0, 4)); assertEquals("WAVE", String(wav, 8, 4)); assertEquals("data", String(wav, 36, 4))
+        assertEquals(wav.size - 8, b.getInt(4))
+        assertEquals(1, b.getShort(20).toInt()); assertEquals(1, b.getShort(22).toInt())   // PCM, 모노
+        assertEquals(44100, b.getInt(24))
+        assertEquals(44100 * 25 / 1000 * 2, b.getInt(40))                                   // 25ms 분량
+        assertTrue((44 until wav.size step 2).any { b.getShort(it).toInt() != 0 })          // 무음이 아님
+    }
 }

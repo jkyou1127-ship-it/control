@@ -259,7 +259,9 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     /** 최근 입력 기록을 남겨야 하는지: 실험실 표시가 켜져 있거나, 최근 입력 기록 패널을 넣어 둔 경우. */
     private val recordHistory = labHistory || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.HISTORY }
     private val history = ArrayDeque<String>()          // 최근에 누른 버튼의 키들
-    private val audio = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+    init {
+        if (labSound) ClickSound.prepare(context)
+    }
 
     private val labFlash = Labs.isOn("edge-flash")
     private val labBottom = Labs.isOn("status-bottom")
@@ -273,7 +275,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         combo = Combo.next(combo, lastPress, now)
         lastPress = now
         total++
-        if (labSound) audio?.playSoundEffect(android.media.AudioManager.FX_KEY_CLICK, 0.6f)
+        if (labSound) ClickSound.play()
         if (recordHistory) {
             Combo.remember(history, if (b.mode == PadButton.MODE_MACRO) "매크로" else Keys.combo(b.keys))
         }
