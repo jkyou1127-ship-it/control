@@ -30,6 +30,11 @@ class MainActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 마지막 레이아웃 바로 실행(실험실 기능): 앱을 처음 켤 때만(화면을 돌리거나 돌아올 때는 아님).
+        if (savedInstanceState == null && Labs.isOn("open-last")) {
+            val last = Link.prefs.getString("lastLayout", null)
+            if (last != null && LayoutStore.load(this, last) != null) startActivity(Intent(this, PlayActivity::class.java).putExtra("id", last))
+        }
         val pad = dp(16)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
 
@@ -122,6 +127,12 @@ class MainActivity : BaseActivity() {
         val everything = LayoutStore.list(this)
         val pinOn = Labs.isOn("list-pin")
         val layouts = LayoutList.arrange(ListSort.apply(everything, Link.listSort), if (Labs.isOn("list-search")) search.text.toString() else "", pinOn)
+        if (Labs.isOn("list-count") && everything.isNotEmpty()) list.addView(TextView(this).apply {
+            text = "레이아웃 ${everything.size}개" + if (layouts.size != everything.size) " 중 ${layouts.size}개" else ""
+            setPadding(0, dp(8), 0, 0)
+        })
+        val compact = Labs.isOn("list-compact")
+        val kinds = Labs.isOn("list-kinds")
         if (layouts.isEmpty()) {
             list.addView(TextView(this).apply {
                 text = if (everything.isEmpty()) "레이아웃이 없습니다. '＋ 새 레이아웃'으로 만들어 보세요." else "검색 결과가 없습니다."
@@ -131,15 +142,16 @@ class MainActivity : BaseActivity() {
         for (l in layouts) {
             val row = LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(12), dp(8), dp(4), dp(8))
+                if (compact) setPadding(dp(10), dp(2), dp(4), dp(2)) else setPadding(dp(12), dp(8), dp(4), dp(8))
                 setBackgroundColor(Themes.current.card)
                 isClickable = true
                 setOnClickListener { open(PlayActivity::class.java, l.id) }
             }
-            if (Link.thumbnails) row.addView(LayoutThumb(this, l), LinearLayout.LayoutParams(dp(112), dp(63)).apply { rightMargin = dp(12) })
+            if (Link.thumbnails && !compact) row.addView(LayoutThumb(this, l), LinearLayout.LayoutParams(dp(112), dp(63)).apply { rightMargin = dp(12) })
             val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             texts.addView(TextView(this).apply { text = (if (pinOn && l.pinned) "★ " else "") + l.name; textSize = 18f; setTextColor(Themes.current.text) })
-            texts.addView(TextView(this).apply { text = "버튼 ${l.buttons.size}개 · 눌러서 실행"; textSize = 13f })
+            if (!compact) texts.addView(TextView(this).apply { text = "버튼 ${l.buttons.size}개 · 눌러서 실행"; textSize = 13f })
+            if (kinds) texts.addView(TextView(this).apply { text = LayoutKinds.describe(l); textSize = 12f })
             row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(Button(this).apply { text = "편집"; setOnClickListener { open(EditorActivity::class.java, l.id) } })
             row.addView(Button(this).apply {

@@ -146,7 +146,7 @@ class CoreTest {
 
     @Test
     fun builtInThemesAreDistinctAndReadable() {
-        assertEquals(14, Themes.all.size)
+        assertEquals(20, Themes.all.size)
         assertEquals(Themes.all.size, Themes.all.map { it.name }.toSet().size)
         for (t in Themes.all) {
             // 글자가 배경과 충분히 구분되어야 하고, 밝은 테마 표시는 실제 배경 밝기와 맞아야 한다.
@@ -601,7 +601,7 @@ class CoreTest {
         for (k in listOf("A", "", "S", "D", "F", "J", "K")) Combo.remember(h, k)
         assertEquals(listOf("S", "D", "F", "J", "K"), h.toList())          // 빈 것은 넣지 않고, 오래된 것부터 버린다
         assertEquals("가로 12.5% · 세로 30.0% · 너비 20.0% · 높이 15.0%", Geometry.describe(0.125f, 0.3f, 0.2f, 0.15f))
-        assertEquals(Labs.features.size, Labs.features.map { it.id }.toSet().size)
+        assertEquals(Labs.allFeatures.size, Labs.allFeatures.map { it.id }.toSet().size)
     }
 
     @Test
@@ -654,7 +654,7 @@ class CoreTest {
 
     @Test
     fun optionButtonsCoverSettingsAndRealLabsFeatures() {
-        val ids = Labs.features.map { it.id }
+        val ids = Labs.allFeatures.map { it.id }
         assertTrue(Options.labIds.all { it in ids })                       // 없는 실험실 기능을 가리키지 않는다
         val all = Options.all
         assertEquals(all.size, all.map { it.id }.toSet().size)
@@ -669,9 +669,9 @@ class CoreTest {
 
     @Test
     fun labsFeaturesSplitIntoButtonsAndSettings() {
-        val buttons = Labs.features.filter { it.button }.map { it.id }.toSet()
+        val buttons = Labs.allFeatures.filter { it.button }.map { it.id }.toSet()
         assertEquals(
-            setOf("list-search", "list-pin", "home-shortcut", "select-all", "align", "distribute", "lock", "opacity", "text-scale", "option-buttons"),
+            setOf("list-search", "list-pin", "home-shortcut", "select-all", "align", "distribute", "lock", "opacity", "text-scale", "option-buttons", "nudge"),
             buttons,
         )
         // 옵션 버튼으로 켜고 끄는 것은 모두 설정형이어야 한다(버튼형은 끌 수 없다).
@@ -746,5 +746,27 @@ class CoreTest {
         assertEquals(44100, b.getInt(24))
         assertEquals(44100 * 25 / 1000 * 2, b.getInt(40))                                   // 25ms 분량
         assertTrue((44 until wav.size step 2).any { b.getShort(it).toInt() != 0 })          // 무음이 아님
+    }
+
+    @Test
+    fun graduatedFeaturesLeaveLabsButStayAvailable() {
+        val labIds = Labs.features.map { it.id }.toSet()
+        val permanentIds = Labs.permanent.map { it.id }.toSet()
+        assertTrue(labIds.intersect(permanentIds).isEmpty())                 // 실험실 목록과 겹치지 않는다
+        assertTrue("align" in permanentIds && "touch-dots" in permanentIds)
+        assertEquals(20, listOf("press-count", "release-haptic", "release-sound", "hide-labels", "dim-buttons", "pressed-outline",
+            "kps-peak", "clock-seconds", "session-summary", "status-large", "snap-edges", "selection-count", "grid-dots",
+            "show-hidden-outline", "nudge", "random-color", "list-count", "list-compact", "open-last", "list-kinds").count { it in labIds })
+        assertEquals(null, Labs.feature("confirm-delete"))                     // 숨겼던 기능은 지움
+        assertEquals("맞춤", Labs.feature("align")?.title)
+    }
+
+    @Test
+    fun layoutKindsDescribeTheMix() {
+        val l = PadLayout(name = "t")
+        assertEquals("비어 있음", LayoutKinds.describe(l))
+        l.buttons += PadButton(0f, 0f, 0.1f, 0.1f); l.buttons += PadButton(0f, 0f, 0.1f, 0.1f)
+        l.buttons += PadButton(0f, 0f, 0.1f, 0.1f, type = PadButton.TYPE_KNOB)
+        assertEquals("버튼 2 · 노브 1", LayoutKinds.describe(l))
     }
 }

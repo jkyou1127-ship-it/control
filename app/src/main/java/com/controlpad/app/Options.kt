@@ -21,11 +21,13 @@ object Options {
     /** 실행 중에 바꿔서 의미가 있는 실험실 기능들. */
     val labIds = listOf(
         "kps", "battery", "exit-guard", "hide-status", "press-sound", "key-history",
-        "touch-dots", "hold-time", "auto-dim", "edge-flash", "status-bottom",
+        "touch-dots", "hold-time", "auto-dim", "status-bottom",
+        "press-count", "release-haptic", "release-sound", "hide-labels", "dim-buttons", "pressed-outline",
+        "kps-peak", "clock-seconds", "session-summary", "status-large",
     )
 
     val all: List<Option>
-        get() = settings + labIds.mapNotNull { id -> Labs.features.firstOrNull { it.id == id }?.let { Option(id, it.title) } }
+        get() = settings + labIds.mapNotNull { id -> Labs.feature(id)?.let { Option(id, it.title) } }
 
     fun title(id: String): String = all.firstOrNull { it.id == id }?.title ?: "옵션"
 

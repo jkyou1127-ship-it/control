@@ -90,6 +90,8 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; isFakeBoldText = true }
     private val sub = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
     private val keyNames = Link.showKeyNames
+    /** 버튼 글자 숨기기(실험실 기능): 실행 화면에서만 켠다. */
+    var hideLabels = false
     private val opacityOn = Labs.isOn("opacity")
     private val textScaleOn = Labs.isOn("text-scale")
 
@@ -351,6 +353,7 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
             else -> b.label + "/" + b.label2
         }
         if (photo != null && name.isEmpty()) return      // 사진이 있으면 이름을 적었을 때만 글자를 올린다
+        if (hideLabels) return
         val label = name.ifEmpty { if (b.isOption) Options.title(b.link) else if (b.isShow) "그룹 ${b.target}" else if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
         text.color = if (pressed) onLit else if (b.textColor != 0) b.textColor else if (theme.colorText) b.color else theme.text
         text.textSize = (r.height() * 0.3f)
@@ -411,6 +414,12 @@ object Themes {
         PadTheme("라벤더", c(0xFFEDE7F6), Color.WHITE, 1.2f, c(0xFF311B92), 1.5f, light = true, card = Color.WHITE),
         PadTheme("민트", c(0xFFE0F2F1), Color.WHITE, 1.2f, c(0xFF004D40), 1.5f, light = true, card = Color.WHITE),
         PadTheme("벚꽃", c(0xFFFCE4EC), Color.WHITE, 1.2f, c(0xFF880E4F), 1.5f, light = true, card = Color.WHITE),
+        PadTheme("레트로", c(0xFF0A0F0A), Color.BLACK, 0.4f, c(0xFF39FF14), 2f, colorText = true, card = c(0xFF122012)),
+        PadTheme("오로라", c(0xFF0B1A24), c(0xFF06121A), 1f, c(0xFFB9FBE8), 1.5f, card = c(0xFF14303A)),
+        PadTheme("코랄", c(0xFF2A1416), c(0xFF180A0B), 1.1f, c(0xFFFFDAD3), 1.5f, card = c(0xFF3D1E21)),
+        PadTheme("슬레이트", c(0xFF1E2430), c(0xFF121722), 1f, c(0xFFE6EBF5), 1.5f, card = c(0xFF2A3242)),
+        PadTheme("크림", c(0xFFFFF8E1), Color.WHITE, 1.2f, c(0xFF4E342E), 1.5f, light = true, card = Color.WHITE),
+        PadTheme("고대비", Color.BLACK, Color.BLACK, 1.3f, Color.WHITE, 3f, card = c(0xFF1A1A1A)),
     )
 
     /** 고를 수 있는 이름들: 기본 테마 다음에 테마 에디터로 직접 만든 테마가 온다. */

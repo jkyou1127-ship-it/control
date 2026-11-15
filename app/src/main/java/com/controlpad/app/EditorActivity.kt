@@ -207,6 +207,11 @@ class EditorActivity : BaseActivity() {
         view.divisions = GridSize.divisions[Link.gridSize]
         view.guidesOn = Labs.isOn("center-guides")
         if (Labs.isOn("big-handle")) view.handleScale = 1.8f
+        view.snapEdges = Labs.isOn("snap-edges")
+        view.countOn = Labs.isOn("selection-count")
+        view.dots = Labs.isOn("grid-dots")
+        view.outlineHidden = Labs.isOn("show-hidden-outline")
+        view.randomColor = Labs.isOn("random-color")
         view.longPressOn = Labs.isOn("long-press-edit")
         val alignOn = Labs.isOn("align")
         val distributeOn = Labs.isOn("distribute")
@@ -312,8 +317,7 @@ class EditorActivity : BaseActivity() {
             if (sel.isEmpty()) hint()
             else {
                 checkpoint()
-                // 제자리 복제(실험실 기능)면 같은 자리에, 아니면 조금 비켜 놓는다.
-                val shift = if (Labs.isOn("dup-in-place")) 0f else 0.03f
+                val shift = 0.03f
                 val copies = sel.map { it.copy().apply { x = min(x + shift, 1f - w); y = min(y + shift, 1f - h) } }
                 pad.buttons += copies
                 view.selection.clear(); view.selection += copies
@@ -321,13 +325,11 @@ class EditorActivity : BaseActivity() {
             }
         }
         tool("삭제") {
-            fun remove() { checkpoint(); pad.buttons.removeAll(view.selection); view.selection.clear(); view.invalidate() }
             if (view.selection.isEmpty()) hint()
-            else if (Labs.isOn("confirm-delete")) AlertDialog.Builder(this)
-                .setMessage("선택한 ${view.selection.size}개를 지울까요?")
-                .setPositiveButton("삭제") { _, _ -> remove() }
-                .setNegativeButton("취소", null).show()
-            else remove()
+            else { checkpoint(); pad.buttons.removeAll(view.selection); view.selection.clear(); view.invalidate() }
+        }
+        if (Labs.isOn("nudge")) for ((label, dx, dy) in listOf(Triple("←", -1, 0), Triple("→", 1, 0), Triple("↑", 0, -1), Triple("↓", 0, 1))) tool(label) {
+            if (view.selection.isEmpty()) hint() else { checkpoint(); view.nudge(dx, dy) }
         }
         tool("실행") {
             LayoutStore.save(this, pad)
@@ -414,6 +416,12 @@ class EditorActivity : BaseActivity() {
         for (name in listOf("전체 선택", "속성", "형변환", "모양", "복제", "삭제", "잠금")) pending.remove(name)?.let { railItem(it) }
         section("배치")
         for (name in listOf("맞춤", "크기·위치", "순서", "숨김")) pending.remove(name)?.let { railItem(it) }
+        // 한 칸씩 옮기기(실험실 기능): 네 방향 버튼을 한 줄에
+        if (listOf("←", "→", "↑", "↓").all { it in pending }) {
+            val arrows = LinearLayout(this)
+            for (name in listOf("←", "↑", "↓", "→")) arrows.addView(pending.remove(name), LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(2) })
+            railItem(arrows)
+        }
         section("옵션")
         railItem(snapBox); railItem(slideBox)
         // 나머지(되돌리기, 저장, 실행, 완료)는 위쪽 막대에.
@@ -1240,6 +1248,29 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     /** 선택한 것의 위치·크기를 화면 아래쪽에 보여 줄지(실험실 기능). */
     var coordsOn = false
 
+    // 실험실 기능들
+    var snapEdges = false
+    var countOn = false
+    var dots = false
+    var outlineHidden = false
+    var randomColor = false
+    private val dashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeWidth = ctx.dp(1).toFloat()
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(ctx.dp(6).toFloat(), ctx.dp(4).toFloat()), 0f)
+    }
+
+    /** 한 칸씩 옮기기: 선택한 것을 격자 한 칸만큼 옮긴다(화면 밖으로는 안 나감, 잠긴 것은 그대로). */
+    fun nudge(dx: Int, dy: Int) {
+        val movable = selection.filter { !lockOn || !it.locked }
+        if (movable.isEmpty() || width == 0) return
+        val sx = cell / width * dx
+        val sy = cell / height * dy
+        val mx = sx.coerceIn(-movable.minOf { it.x }, 1f - movable.maxOf { it.x + it.w })
+        val my = sy.coerceIn(-movable.minOf { it.y }, 1f - movable.maxOf { it.y + it.h })
+        for (b in movable) { b.x += mx; b.y += my }
+        invalidate()
+    }
+
     /** 화면 가운데 안내선(실험실 기능). */
     var guidesOn = false
 
@@ -1417,7 +1448,13 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     private fun rectOf(b: PadButton) = rect.apply { set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height) }
 
     override fun onDraw(c: Canvas) {
-        if (snap) {
+        if (snap && dots) {
+            // 점 격자(실험실 기능)
+            gridPaint.strokeWidth = context.dp(2).toFloat()
+            var y = 0f
+            while (y < height) { var x = 0f; while (x < width) { c.drawPoint(x, y, gridPaint); x += cell }; y += cell }
+            gridPaint.strokeWidth = 1f
+        } else if (snap) {
             var x = 0f
             while (x < width) { c.drawLine(x, 0f, x, height.toFloat(), gridPaint); x += cell }
             var y = 0f
@@ -1427,10 +1464,19 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             c.drawText("빈 곳을 손가락으로 드래그해서 버튼을 그리세요", width / 2f, height / 2f, hintPaint)
         }
         for (b in pad.buttons) {
-            if (b in hidden) continue
+            if (b in hidden) {
+                if (outlineHidden) {
+                    dashPaint.color = theme.text and 0x00FFFFFF or 0x88000000.toInt()
+                    c.drawRect(rectOf(b), dashPaint)
+                }
+                continue
+            }
             painter.draw(c, b, rectOf(b), false, b in selection, alt = 2)
             val marks = listOfNotNull(if (b.group > 0) "그룹 ${b.group}" else null, if (lockOn && b.locked) "잠금" else null)
             if (marks.isNotEmpty()) painter.badge(c, rectOf(b), marks.joinToString(" · "))
+        }
+        if (countOn && selection.isNotEmpty()) {
+            c.drawText("선택 ${selection.size}개", width / 2f, hintPaint.textSize * (if (hidden.isNotEmpty()) 2.6f else 1.4f), hintPaint)
         }
         if (guidesOn) {
             guidePaint.color = theme.text and 0x00FFFFFF or 0x66000000
@@ -1510,8 +1556,14 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                     Drag.MOVE -> if (moved && starts.isNotEmpty()) {
                         beforeChange()
                         // 선택된 것들이 함께 움직이되, 어느 것도 화면 밖으로 나가지 않게 한다.
-                        val dx = (snapPx(x - downX) / width).coerceIn(-box.left, 1f - box.right)
-                        val dy = (snapPx(y - downY) / height).coerceIn(-box.top, 1f - box.bottom)
+                        var dx = (snapPx(x - downX) / width).coerceIn(-box.left, 1f - box.right)
+                        var dy = (snapPx(y - downY) / height).coerceIn(-box.top, 1f - box.bottom)
+                        if (snapEdges) {
+                            // 가장자리에서 1.5% 안으로 오면 딱 붙인다.
+                            val e = 0.015f
+                            if (box.left + dx < e) dx = -box.left else if (1f - (box.right + dx) < e) dx = 1f - box.right
+                            if (box.top + dy < e) dy = -box.top else if (1f - (box.bottom + dy) < e) dy = 1f - box.bottom
+                        }
                         for ((b, s) in starts) { b.x = s[0] + dx; b.y = s[1] + dy }
                     }
                     Drag.RESIZE -> if (starts.isNotEmpty()) {
@@ -1537,7 +1589,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                         val w = abs(curX - downX); val h = abs(curY - downY)
                         if (w >= minSize && h >= minSize) {
                             val b = PadButton(l / width, t / height, w / width, h / height,
-                                color = PadButton.PALETTE[pad.buttons.size % PadButton.PALETTE.size])
+                                color = if (randomColor) PadButton.PALETTE.random() else PadButton.PALETTE[pad.buttons.size % PadButton.PALETTE.size])
                             beforeChange()
                             pad.buttons += b
                             selected = b

@@ -45,6 +45,22 @@ object Link {
     val mode: Int get() = prefs.getInt("mode", MODE_BT)
     val haptic: Boolean get() = prefs.getBoolean("haptic", true)
 
+    /** 터치 위치 보정(dp). 양수면 오른쪽·아래로 옮겨서 판정한다. */
+    var touchOffsetX: Int
+        get() = prefs.getInt("touchOffsetX", 0).coerceIn(-OFFSET_MAX, OFFSET_MAX)
+        set(v) = prefs.edit().putInt("touchOffsetX", v.coerceIn(-OFFSET_MAX, OFFSET_MAX)).apply()
+    var touchOffsetY: Int
+        get() = prefs.getInt("touchOffsetY", 0).coerceIn(-OFFSET_MAX, OFFSET_MAX)
+        set(v) = prefs.edit().putInt("touchOffsetY", v.coerceIn(-OFFSET_MAX, OFFSET_MAX)).apply()
+
+    /** 입력 지연 오프셋(ms): 다른 기기·소리와 박자를 맞추려고 PC 로 보내는 입력을 이만큼 늦춘다. */
+    var inputDelay: Int
+        get() = prefs.getInt("inputDelay", 0).coerceIn(0, DELAY_MAX)
+        set(v) = prefs.edit().putInt("inputDelay", v.coerceIn(0, DELAY_MAX)).apply()
+
+    const val OFFSET_MAX = 40
+    const val DELAY_MAX = 200
+
     /** 목록 정렬 방식(ListSort). */
     var listSort: Int
         get() = prefs.getInt("listSort", 0).coerceIn(0, ListSort.names.size - 1)
@@ -98,8 +114,14 @@ object Link {
     }
 
     fun send(report: ByteArray) {
-        lastReport = report
-        worker.post { transmit(report) }
+        val delay = inputDelay
+        if (delay <= 0) {
+            lastReport = report
+            worker.post { transmit(report) }
+        } else {
+            // 늦출 때는 상태 다시 보내기(lastReport)도 함께 늦춰야, 새 상태가 먼저 새어 나가지 않는다.
+            worker.postDelayed({ lastReport = report; transmit(report) }, delay.toLong())
+        }
     }
 
     @Volatile private var mouseButtons = 0
@@ -108,20 +130,20 @@ object Link {
     fun sendMouse(dx: Int, dy: Int, wheel: Int = 0) {
         if (dx == 0 && dy == 0 && wheel == 0) return
         val buttons = mouseButtons
-        worker.post {
+        worker.postDelayed({
             runCatching { bt?.sendMouse(dx, dy, wheel, buttons) }
             runCatching { udp?.sendMouse(dx, dy, wheel, buttons) }
-        }
+        }, inputDelay.toLong())
     }
 
     /** 눌린 마우스 버튼이 바뀌었을 때만 보낸다. */
     fun setMouseButtons(buttons: Int) {
         if (buttons == mouseButtons) return
         mouseButtons = buttons
-        worker.post {
+        worker.postDelayed({
             runCatching { bt?.sendMouse(0, 0, 0, buttons) }
             runCatching { udp?.sendMouse(0, 0, 0, buttons) }
-        }
+        }, inputDelay.toLong())
     }
 
     private fun transmit(report: ByteArray) {
@@ -253,13 +275,9 @@ class BtHid(private val ctx: Context) {
             "ControlPad", "ControlPad Keyboard and Mouse", "ControlPad",
             BluetoothHidDevice.SUBCLASS1_COMBO, DESCRIPTOR,
         )
-        // 블루투스가 허용하는 가장 짧은 전송 간격(11.25ms)을 요청한다. 받아들이지 않는 기기에서는 기본값으로 등록한다.
-        val qos = android.bluetooth.BluetoothHidDeviceAppQosSettings(
-            android.bluetooth.BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT, 800, 9, 0, 11250,
-            android.bluetooth.BluetoothHidDeviceAppQosSettings.MAX,
-        )
-        val ok = runCatching { h.registerApp(sdp, null, qos, ctx.mainExecutor, callback) }.getOrDefault(false)
-        if (!ok) runCatching { h.registerApp(sdp, null, null, ctx.mainExecutor, callback) }
+        // 전송 품질(QoS)은 따로 정하지 않는다. 예전에 넣었던 값(초당 800바이트, 한 번에 9바이트)은
+        // 키 입력 하나(21바이트)보다 작아서, 입력이 늦게 가거나 연결이 안 되는 원인이었다.
+        runCatching { h.registerApp(sdp, null, null, ctx.mainExecutor, callback) }
     }
 
     /**

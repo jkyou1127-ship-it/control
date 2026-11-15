@@ -185,6 +185,25 @@ class SettingsActivity : BaseActivity() {
             })
         }
 
+        root.addView(title("오프셋"))
+        root.addView(note("손가락이 닿는 자리와 버튼이 눌리는 자리가 어긋나거나, 다른 기기와 박자가 안 맞을 때 맞춥니다."))
+        fun offsetSlider(label: (Int) -> String, min: Int, max: Int, value: Int, set: (Int) -> Unit) {
+            val shown = TextView(this).apply { setPadding(0, dp(8), 0, 0) }
+            val bar = android.widget.SeekBar(this).apply { this.max = max - min; progress = value - min }
+            shown.text = label(value)
+            bar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: android.widget.SeekBar?, p: Int, fromUser: Boolean) { shown.text = label(p + min); set(p + min) }
+                override fun onStartTrackingTouch(s: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
+            })
+            root.addView(shown); root.addView(bar)
+        }
+        offsetSlider({ "터치 가로 보정: " + (if (it > 0) "오른쪽 " else if (it < 0) "왼쪽 " else "") + "${kotlin.math.abs(it)}dp" },
+            -Link.OFFSET_MAX, Link.OFFSET_MAX, Link.touchOffsetX) { Link.touchOffsetX = it }
+        offsetSlider({ "터치 세로 보정: " + (if (it > 0) "아래 " else if (it < 0) "위 " else "") + "${kotlin.math.abs(it)}dp" },
+            -Link.OFFSET_MAX, Link.OFFSET_MAX, Link.touchOffsetY) { Link.touchOffsetY = it }
+        offsetSlider({ "입력 지연: ${it}ms" + if (it == 0) " (바로 보냄)" else "" }, 0, Link.DELAY_MAX, Link.inputDelay) { Link.inputDelay = it }
+
         root.addView(title("화면"))
         fun choice(label: String, names: List<String>, selected: Int, set: (Int) -> Unit) {
             root.addView(TextView(this).apply { text = label; setPadding(0, dp(6), 0, 0) })

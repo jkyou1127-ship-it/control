@@ -26,8 +26,38 @@ object Labs {
      */
     class Feature(val id: String, val title: String, val description: String, val button: Boolean = false)
 
+    /** 지금 실험실에 있는 기능들. */
     val features = listOf(
         Feature("kps", "초당 입력 수 표시", "실행 화면 왼쪽 위에 최근 1초 동안 버튼을 누른 횟수를 보여 줍니다."),
+        Feature("big-handle", "큰 크기 조절 손잡이", "편집 화면의 크기 조절 손잡이(흰 점)를 크게 그리고, 잡히는 범위도 넓힙니다."),
+        Feature("status-bottom", "상태 표시를 아래로", "실행 화면의 연결 상태와 실험실 표시를 왼쪽 위 대신 왼쪽 아래에 보여 줍니다."),
+        Feature("press-count", "버튼별 누른 횟수", "실행 화면의 각 버튼 오른쪽 위에 그 버튼을 누른 횟수를 작게 보여 줍니다."),
+        Feature("release-haptic", "뗄 때도 진동", "버튼을 뗄 때도 짧게 진동합니다('버튼을 누를 때 진동'이 켜져 있어야 합니다)."),
+        Feature("release-sound", "뗄 때도 소리", "버튼을 뗄 때도 클릭 소리를 냅니다."),
+        Feature("hide-labels", "버튼 글자 숨기기", "실행 화면에서 버튼의 이름과 키 글자를 감춥니다. 편집 화면에서는 그대로 보입니다."),
+        Feature("dim-buttons", "눌리지 않은 버튼 흐리게", "실행 화면에서 누르지 않은 버튼을 흐리게 그려, 누른 버튼이 더 눈에 띕니다."),
+        Feature("pressed-outline", "눌린 버튼 테두리 강조", "누르고 있는 버튼에 굵은 테두리를 그립니다."),
+        Feature("kps-peak", "최고 초당 입력 수", "실행 화면을 연 뒤로 가장 빨랐던 초당 입력 수를 상태 줄에 보여 줍니다."),
+        Feature("clock-seconds", "시각에 초 표시", "배터리 · 시각 표시와 패널의 시각에 초까지 보여 줍니다."),
+        Feature("session-summary", "나갈 때 기록 요약", "실행 화면을 나갈 때 누른 횟수와 시간을 알려 줍니다."),
+        Feature("status-large", "상태 글자 크게", "실행 화면 왼쪽 위(또는 아래)의 상태 글자를 크게 보여 줍니다."),
+        Feature("snap-edges", "화면 가장자리에 붙이기", "편집 화면에서 옮길 때 화면 가장자리에 가까워지면 딱 붙습니다."),
+        Feature("selection-count", "선택 개수 표시", "편집 화면 위쪽에 지금 선택한 것이 몇 개인지 보여 줍니다."),
+        Feature("grid-dots", "점 격자", "편집 화면의 격자를 선 대신 점으로 그려 덜 복잡해 보이게 합니다."),
+        Feature("show-hidden-outline", "숨긴 버튼 윤곽", "편집 화면에서 '숨김'으로 감춘 버튼의 자리를 점선으로 보여 줍니다."),
+        Feature("nudge", "한 칸씩 옮기기", "편집 화면 도구 모음에 ← ↑ ↓ → 버튼이 생겨, 선택한 것을 격자 한 칸씩 옮깁니다.", button = true),
+        Feature("random-color", "새 버튼 색 무작위", "편집 화면에서 새로 그린 버튼의 색을 무작위로 고릅니다."),
+        Feature("list-count", "레이아웃 개수 표시", "목록 화면 위쪽에 레이아웃이 모두 몇 개인지 보여 줍니다."),
+        Feature("list-compact", "목록 작게", "목록의 각 줄을 낮게 만들어 한 화면에 더 많이 보이게 합니다."),
+        Feature("open-last", "마지막 레이아웃 바로 실행", "앱을 켜면 마지막으로 쓴 레이아웃을 바로 실행합니다."),
+        Feature("list-kinds", "레이아웃 구성 표시", "목록의 각 레이아웃 아래에 노브·조이스틱 등 버튼 종류별 개수를 보여 줍니다."),
+    )
+
+    /**
+     * 실험실에서 정식으로 올라간 뒤 다음 업데이트에서 실험실 목록을 떠난 기능들.
+     * 이제 늘 있는 기능이다: 버튼형은 그 버튼이 그냥 있고, 설정형은 설정 화면 '기능'에서 켜고 끈다(처음엔 켜짐).
+     */
+    val permanent = listOf(
         Feature("battery", "배터리 · 시각 표시", "실행 화면에 태블릿의 배터리 잔량과 현재 시각을 보여 줍니다."),
         Feature("list-search", "레이아웃 검색", "목록 화면 위쪽에 검색창이 생겨, 이름으로 레이아웃을 찾습니다.", button = true),
         Feature("list-pin", "맨 위에 고정", "목록의 ⋮ 메뉴에서 자주 쓰는 레이아웃을 맨 위에 고정합니다(★ 표시).", button = true),
@@ -48,13 +78,11 @@ object Labs {
         Feature("touch-dots", "터치 위치 표시", "실행 화면에서 손가락이 닿은 자리에 원을 그려 보여 줍니다."),
         Feature("hold-time", "누른 시간 표시", "실행 화면에서 누르고 있는 버튼 위에 몇 초째 누르고 있는지 보여 줍니다."),
         Feature("auto-dim", "쉬는 동안 어둡게", "실행 화면에서 30초 동안 아무것도 누르지 않으면 화면을 어둡게 합니다. 누르면 바로 돌아옵니다."),
-        Feature("big-handle", "큰 크기 조절 손잡이", "편집 화면의 크기 조절 손잡이(흰 점)를 크게 그리고, 잡히는 범위도 넓힙니다."),
-        Feature("confirm-delete", "삭제 전에 확인", "편집 화면에서 '삭제'를 누르면 정말 지울지 한 번 더 묻습니다."),
-        Feature("dup-in-place", "제자리 복제", "편집 화면에서 복제할 때 옆으로 비켜 놓지 않고 같은 자리에 겹쳐 놓습니다."),
-        Feature("edge-flash", "누를 때 화면 테두리 번쩍", "실행 화면에서 버튼을 누를 때마다 화면 테두리가 잠깐 빛나, 입력이 들어갔는지 알 수 있습니다."),
-        Feature("status-bottom", "상태 표시를 아래로", "실행 화면의 연결 상태와 실험실 표시를 왼쪽 위 대신 왼쪽 아래에 보여 줍니다."),
         Feature("option-buttons", "옵션 버튼", "편집 화면 ＋추가에 '옵션 버튼'이 생깁니다. 실행 중에 누르면 진동, 키 표시, 실험실 기능 같은 설정을 바로 켜고 끕니다.", button = true),
     )
+
+    /** 이름으로 찾을 때 쓰는 전체 목록. */
+    val allFeatures: List<Feature> get() = features + permanent
 
     const val REQUEST_PREFIX = "[정식 요청]"
     private const val ISSUES = "https://github.com/jkyou1127-ship-it/control/issues/new"
@@ -88,15 +116,17 @@ object Labs {
         get() = prefs.getBoolean("labsEnabled", true)
         set(on) = prefs.edit().putBoolean("labsEnabled", on).apply()
 
-    fun feature(id: String): Feature? = features.firstOrNull { it.id == id }
+    fun feature(id: String): Feature? = allFeatures.firstOrNull { it.id == id }
 
     /** 이 사람에게 알파·정식으로 올라와 있는지(실험실을 벗어난 기능). */
-    fun promoted(id: String): Boolean = id !in hidden && (id in graduated || (Updater.alpha && id in alphaWide))
+    fun promoted(id: String): Boolean =
+        permanent.any { it.id == id } || (id !in hidden && (id in graduated || (Updater.alpha && id in alphaWide)))
 
     /** 올라온 기능 중 설정 화면에서 켜고 끄는 것들. */
-    fun settingFeatures(): List<Feature> = features.filter { !it.button && promoted(it.id) }
+    fun settingFeatures(): List<Feature> = allFeatures.filter { !it.button && promoted(it.id) }
 
     fun isOn(id: String): Boolean = when {
+        permanent.any { it.id == id } -> feature(id)?.button != false || prefs.getBoolean("set_$id", true)
         id in hidden -> false
         // 올라온 기능: 버튼형은 늘 있고, 설정형은 설정 화면의 켜기/끄기를 따른다(처음엔 켜짐).
         promoted(id) -> feature(id)?.button != false || prefs.getBoolean("set_$id", true)

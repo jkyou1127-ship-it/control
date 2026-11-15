@@ -61,6 +61,7 @@ class PlayActivity : BaseActivity() {
 
     private fun show(layout: PadLayout) {
         current = layout
+        Link.prefs.edit().putString("lastLayout", layout.id).apply()     // '마지막 레이아웃 바로 실행'(실험실 기능)용
         view = PlayView(this, layout).also {
             it.onSwitch = { id -> switchTo(id) }
             it.onOption = { id -> toggleOption(id) }
@@ -115,6 +116,9 @@ class PlayActivity : BaseActivity() {
 
     override fun onPause() {
         super.onPause()
+        if (isFinishing && Labs.isOn("session-summary")) view?.summary()?.let { (n, ms) ->
+            android.widget.Toast.makeText(this, "이번 기록: ${n}번 누름 · ${Combo.format(ms)}", android.widget.Toast.LENGTH_LONG).show()
+        }
         ui.removeCallbacks(tick)
         view?.releaseAll()   // 화면을 떠날 때 PC 에 키가 눌린 채로 남지 않게 한다.
         Link.setActive(false)
@@ -193,7 +197,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     // 실험실 기능
     private val labKps = Labs.isOn("kps")
     /** 초당 입력 수를 세야 하는지: 실험실 표시가 켜져 있거나, 초당 입력 수 패널을 넣어 둔 경우. */
-    private val countKps = labKps || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.KPS }
+    private val countKps = labKps || Labs.isOn("kps-peak") || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.KPS }
     private val pressTimes = ArrayDeque<Long>()         // 최근에 버튼을 누른 시각들(초당 입력 수 계산용)
     private val labBattery = Labs.isOn("battery")
     private val hapticKind = HapticFeedbackConstants.KEYBOARD_TAP
@@ -263,14 +267,34 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         if (labSound) ClickSound.prepare(context)
     }
 
-    private val labFlash = Labs.isOn("edge-flash")
     private val labBottom = Labs.isOn("status-bottom")
-    private var flashAt = 0L
-    private val flashPaint = Paint().apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(8).toFloat() }
+
+    // 실험실 기능들(실행 화면)
+    private val labCount = Labs.isOn("press-count")
+    private val labReleaseHaptic = Labs.isOn("release-haptic")
+    private val labReleaseSound = Labs.isOn("release-sound")
+    private val labDimButtons = Labs.isOn("dim-buttons")
+    private val labOutline = Labs.isOn("pressed-outline")
+    private val labPeak = Labs.isOn("kps-peak")
+    private val labSeconds = Labs.isOn("clock-seconds")
+    private val pressCount = IntArray(layout.buttons.size)
+    private var peak = 0
+    private val countPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.RIGHT; textSize = ctx.dp(11).toFloat() }
+    private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(4).toFloat() }
+    private val dimLayer = Paint().apply { alpha = 110 }
+
+    /** 나갈 때 기록 요약(실험실 기능)에 쓰는 값: 누른 횟수와 실행한 시간(ms). */
+    fun summary(): Pair<Int, Long> = total to (SystemClock.uptimeMillis() - startedAt)
+
+    init {
+        if (Labs.isOn("hide-labels")) painter.hideLabels = true
+        if (Labs.isOn("status-large")) statusPaint.textSize = ctx.dp(18).toFloat()
+        if (labReleaseSound) ClickSound.prepare(ctx)
+    }
 
     private fun notePress(b: PadButton) {
         val now = SystemClock.uptimeMillis()
-        if (labFlash) flashAt = now
+        buttons.indexOf(b).takeIf { it >= 0 }?.let { pressCount[it]++ }
         if (countKps) pressTimes.addLast(now)
         combo = Combo.next(combo, lastPress, now)
         lastPress = now
@@ -290,10 +314,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 (context.getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager)
                     .getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
             }.getOrDefault(-1)
-            val clock = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date())
-            batteryText = (if (level in 0..100) "배터리 $level% · " else "") + clock
+            batteryText = if (level in 0..100) "배터리 $level% · " else ""
         }
-        return batteryText
+        // 시각은 매번 새로 읽는다(초 표시가 켜져 있으면 초까지).
+        val clock = java.text.SimpleDateFormat(if (labSeconds) "HH:mm:ss" else "HH:mm", java.util.Locale.US).format(java.util.Date())
+        return batteryText + clock
     }
 
     /** 최근 1초 동안 누른 횟수. */
@@ -652,6 +677,10 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             return
         }
         if (n != 0) return
+        if (b.type == PadButton.TYPE_BUTTON) {
+            if (labReleaseHaptic && haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            if (labReleaseSound) ClickSound.play()
+        }
         if (b.isShow) {
             val g = b.target
             if (b.mode == PadButton.MODE_HOLD && groupHolds[g] > 0 && --groupHolds[g] == 0 && !groupVisible(g)) hideGroup(g)
@@ -681,7 +710,12 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         invalidate()
     }
 
+    // 터치 위치 보정(설정 > 오프셋): 손가락이 닿는 자리와 눌렀다고 느끼는 자리의 차이를 맞춘다.
+    private val offsetX = ctx.dp(Link.touchOffsetX).toFloat()
+    private val offsetY = ctx.dp(Link.touchOffsetY).toFloat()
+
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (offsetX != 0f || offsetY != 0f) e.offsetLocation(offsetX, offsetY)
         trackTouches(e)
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
@@ -784,7 +818,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     override fun onDraw(c: Canvas) {
         if (width == 0 || height == 0) return
-        c.drawBitmap(idleLayer(), 0f, 0f, null)
+        c.drawBitmap(idleLayer(), 0f, 0f, if (labDimButtons) dimLayer else null)
         for (i in buttons.indices) {
             val b = buttons[i]
             if (!groupVisible(b.group)) continue
@@ -832,6 +866,15 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             if (!lit && parts == 0 && knobAngle[i] == 0f) continue    // 미리 그린 모습 그대로
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)
+            if (labOutline && lit) { outlinePaint.color = theme.text; c.drawRect(rect, outlinePaint) }
+        }
+        if (labCount) {
+            countPaint.color = theme.text and 0x00FFFFFF or 0xAA000000.toInt()
+            for (i in buttons.indices) {
+                val b = buttons[i]
+                if (pressCount[i] == 0 || !groupVisible(b.group)) continue
+                c.drawText(pressCount[i].toString(), (b.x + b.w) * width - countPaint.textSize * 0.4f, b.y * height + countPaint.textSize * 1.2f, countPaint)
+            }
         }
         if (showPressed && !hasPanel && pressedText.isNotEmpty()) {
             val held = pressedAt == Long.MAX_VALUE
@@ -849,9 +892,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         // 왼쪽 위 한 줄: 연결 상태와, 켜 둔 실험실 표시들
         val parts = ArrayList<String>()
         if (!labHideStatus) parts += (if (connected) "● " else "○ ") + status
-        if (labKps) {
+        if (labKps || labPeak) {
             val n = kps()
-            parts += "${n}회/초"
+            if (n > peak) peak = n
+            if (labKps) parts += "${n}회/초"
+            if (labPeak) parts += "최고 ${peak}회/초"
             if (n > 0) postInvalidateDelayed(200)       // 손을 떼도 숫자가 0 으로 내려가게
         }
         if (labBattery) { parts += battery(); postInvalidateDelayed(1000) }
@@ -863,20 +908,10 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             c.drawText(history.joinToString("  ›  "), statusPaint.textSize, line2, statusPaint)
         }
         drawLabOverlays(c)
-        if (labFlash) {
-            val age = SystemClock.uptimeMillis() - flashAt
-            if (age < FLASH_MS) {
-                flashPaint.color = theme.text and 0x00FFFFFF or ((0xCC * (FLASH_MS - age) / FLASH_MS).toInt() shl 24)
-                val half = flashPaint.strokeWidth / 2
-                c.drawRect(half, half, width - half, height - half, flashPaint)
-                postInvalidateDelayed(16)
-            }
-        }
     }
 
     companion object {
         const val TAP_MS = 40L
-        const val FLASH_MS = 150L            // 누를 때 화면 테두리 번쩍(실험실 기능)이 사라지는 데 걸리는 시간
         const val DIM_AFTER_MS = 30000L      // 이만큼 아무것도 누르지 않으면 어둡게(실험실 기능)
         const val MACRO_GAP_MS = 40L         // 매크로: 한 조합을 뗀 뒤 다음 조합을 누르기까지
         const val PRESSED_LINGER_MS = 600L   // 키를 뗀 뒤 표시를 남겨 두는 시간

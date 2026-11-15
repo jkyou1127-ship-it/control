@@ -803,3 +803,16 @@ object ScreenOrientation {
         android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR,
     )
 }
+
+/** 레이아웃 구성 표시(실험실 기능): 종류별 개수. */
+object LayoutKinds {
+    fun describe(l: PadLayout): String {
+        val names = linkedMapOf(
+            "버튼" to l.buttons.count { it.type == PadButton.TYPE_BUTTON },
+            "노브" to l.buttons.count { it.isKnob }, "조이스틱" to l.buttons.count { it.isStick },
+            "트랙패드" to l.buttons.count { it.isPad }, "마우스" to l.buttons.count { it.isMouse },
+            "패널" to l.buttons.count { it.isDisplay }, "사진" to l.buttons.count { it.isImage },
+        )
+        return names.filter { it.value > 0 }.entries.joinToString(" · ") { "${it.key} ${it.value}" }.ifEmpty { "비어 있음" }
+    }
+}
