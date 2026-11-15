@@ -286,9 +286,46 @@ func TestWindowThemes(t *testing.T) {
 	}
 }
 
+func TestMouseScaleKeepsFractions(t *testing.T) {
+	r := &recorder{}
+	m := &Mouse{inj: r, Scale: 0.5}
+	for i := 0; i < 4; i++ {
+		m.Feed(mousePacket{seq: uint32(i + 1), dx: 1, dy: -3})
+	}
+	// 1 × 0.5 × 4 = 2, -3 × 0.5 × 4 = -6 (반 칸씩 버려지지 않고 모인다)
+	sx, sy := 0, 0
+	for _, e := range r.events {
+		var dx, dy int
+		if _, err := fmt.Sscanf(e, "move %d %d", &dx, &dy); err == nil {
+			sx, sy = sx+dx, sy+dy
+		}
+	}
+	if sx != 2 || sy != -6 {
+		t.Fatalf("moved %d %d (%v)", sx, sy, r.events)
+	}
+	if mouseScale(3) != 1 || mouseScale(99) != 1 || mouseScale(7) != 3 {
+		t.Fatal("scales")
+	}
+}
+
+func TestResetStatsKeepsTotal(t *testing.T) {
+	s := newState()
+	s.TotalBase = 100
+	now := time.Now()
+	s.pressed("A", now)
+	s.pressed("B", now)
+	if v := s.view(now); v.Total != 102 || v.Presses != 2 {
+		t.Fatalf("%+v", v)
+	}
+	s.resetStats()
+	if v := s.view(now); v.Total != 102 || v.Presses != 0 || v.Peak != 0 || len(v.Recent) != 0 || v.History[59] != 0 {
+		t.Fatalf("after reset %+v", v)
+	}
+}
+
 func TestSettingsRoundTrip(t *testing.T) {
 	path := t.TempDir() + "/sub/receiver.json"
-	if loadSettings(path).OnTop {
+	if d := loadSettings(path); d.OnTop || d.Mouse != 3 {
 		t.Fatal("default")
 	}
 	if err := saveSettings(path, settings{OnTop: true}); err != nil || !loadSettings(path).OnTop {

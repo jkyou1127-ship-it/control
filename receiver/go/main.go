@@ -195,11 +195,29 @@ type Mouse struct {
 	inj     Injector
 	buttons int
 	seq     uint32
+	Scale   float64 // 마우스 감도 배율(0 이면 1배). 창에서 바꾼다.
+	fx, fy  float64 // 배율을 곱하고 남은 소수 부분(느리게 움직여도 버려지지 않게)
+}
+
+// moveScaled 는 배율을 곱한 이동량을 돌려준다. 남은 소수는 다음 이동에 더한다.
+func (m *Mouse) moveScaled(dx, dy int) (int, int) {
+	s := m.Scale
+	if s <= 0 {
+		s = 1
+	}
+	m.fx += float64(dx) * s
+	m.fy += float64(dy) * s
+	ox, oy := int(m.fx), int(m.fy)
+	m.fx -= float64(ox)
+	m.fy -= float64(oy)
+	return ox, oy
 }
 
 func (m *Mouse) Feed(p mousePacket) {
 	if p.dx != 0 || p.dy != 0 {
-		m.inj.Move(p.dx, p.dy)
+		if dx, dy := m.moveScaled(p.dx, p.dy); dx != 0 || dy != 0 {
+			m.inj.Move(dx, dy)
+		}
 	}
 	if p.wheel != 0 {
 		m.inj.Wheel(p.wheel)
@@ -261,6 +279,8 @@ type app struct {
 	keys    *Keys
 	mouse   *Mouse
 	inputMu sync.Mutex
+
+	startFull bool // -fullscreen: 전체 화면으로 시작
 }
 
 // SetPaused 는 입력 일시정지를 켜고 끈다. 켜는 순간 누르고 있던 것을 모두 뗀다.
@@ -280,6 +300,13 @@ func (a *app) Paused() bool {
 	a.state.mu.Lock()
 	defer a.state.mu.Unlock()
 	return a.state.Paused
+}
+
+// SetMouseScale 은 마우스 감도 배율을 바꾼다.
+func (a *app) SetMouseScale(s float64) {
+	a.inputMu.Lock()
+	a.mouse.Scale = s
+	a.inputMu.Unlock()
 }
 
 // ReleaseAll 은 키가 눌린 채로 남았을 때 모두 뗀다.
@@ -347,6 +374,7 @@ func main() {
 	dry := flag.Bool("dry-run", false, "입력을 넣지 않고 받은 내용만 출력")
 	noUpdate := flag.Bool("no-update", false, "시작할 때 새 버전을 확인하지 않음")
 	noAdmin := flag.Bool("no-admin", false, "관리자 권한을 요청하지 않음")
+	full := flag.Bool("fullscreen", false, "전체 화면으로 시작")
 	flag.Parse()
 	setupConsole()
 	// 관리자 권한으로 실행된 게임에는 일반 프로그램이 입력을 넣을 수 없다(Windows 의 보안 규칙).
@@ -379,7 +407,7 @@ func main() {
 	state := newState()
 	state.Version, state.Hostname, state.Addresses, state.Port, state.Admin = version, hostname, localAddresses(), *port, isAdmin()
 	inj = uiInjector{inner: inj, state: state}
-	a := &app{state: state, keys: &Keys{inj: inj, down: map[int]bool{}}, mouse: &Mouse{inj: inj}}
+	a := &app{state: state, keys: &Keys{inj: inj, down: map[int]bool{}}, mouse: &Mouse{inj: inj}, startFull: *full}
 
 	fmt.Printf("Control Pad 수신 프로그램 · 버전 %d · 포트 %d\n", version, *port)
 	for _, addr := range state.Addresses {

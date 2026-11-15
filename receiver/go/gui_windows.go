@@ -51,6 +51,10 @@ var (
 	pSetDpiAwareness   = user32.NewProc("SetProcessDpiAwarenessContext")
 	pSetProcessDPIAwar = user32.NewProc("SetProcessDPIAware")
 	pRegisterHotKey    = user32.NewProc("RegisterHotKey")
+	pSetWindowLongPtr  = user32.NewProc("SetWindowLongPtrW")
+	pMonitorFromWindow = user32.NewProc("MonitorFromWindow")
+	pGetMonitorInfo    = user32.NewProc("GetMonitorInfoW")
+	pMessageBeep       = user32.NewProc("MessageBeep")
 	pGetWindowRect     = user32.NewProc("GetWindowRect")
 	pGetModuleHandle   = kernel32.NewProc("GetModuleHandleW")
 	pGlobalAlloc       = kernel32.NewProc("GlobalAlloc")
@@ -145,7 +149,14 @@ const (
 	idAuto
 	idThemePrev
 	idThemeNext
+	idReset
+	idFull
+	idBeep
+	idMousePrev
+	idMouseNext
 )
+
+const wmKeyDown = 0x0100
 
 // 색(0x00BBGGRR)
 func rgb(c uint32) uintptr { return uintptr((c>>16)&0xFF | (c & 0xFF00) | (c&0xFF)<<16) }
@@ -180,6 +191,13 @@ type window struct {
 	toastTill time.Time
 	height    int32
 	lastKeys  int
+
+	full       bool    // 전체 화면
+	normalRect rect    // 전체 화면 전의 창 자리
+	baseScale  float64 // 창 모드의 배율(DPI)
+	ox, oy     int32   // 전체 화면에서 내용을 가운데 두려고 민 만큼
+	contentH   int32   // 마지막으로 그린 내용의 높이
+	wasLive    bool    // 지난번에 태블릿이 연결돼 있었는지(알림음용)
 }
 
 var win *window
@@ -376,7 +394,7 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 	for _, n := range v.History {
 		total += n
 	}
-	text(dc, "최근 1분 입력  ·  "+strconv.Itoa(total)+"번", rect{pad + w.px(16), y + w.px(10), pad + inner - w.px(16), y + w.px(30)}, w.normal(12), cSub, dtSingleLine)
+	text(dc, "최근 1분 입력  ·  "+strconv.Itoa(total)+"번  ·  누적 "+itoa(v.Total)+"번", rect{pad + w.px(16), y + w.px(10), pad + inner - w.px(16), y + w.px(30)}, w.normal(12), cSub, dtSingleLine)
 	gx, gy, gw, gh := pad+w.px(16), y+w.px(36), inner-w.px(32), w.px(46)
 	most := 1
 	for _, n := range v.History {
@@ -471,26 +489,40 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 	w.button(dc, rect{pad, y, pad + bw, y + bh}, pauseLabel, idPause, v.Paused)
 	w.button(dc, rect{pad + bw + gap, y, pad + inner, y + bh}, "모든 키 떼기", idRelease, false)
 	y += bh + gap
+	fullLabel := "⛶  전체 화면 (F11)"
+	if w.full {
+		fullLabel = "창 모드로 (Esc)"
+	}
+	w.button(dc, rect{pad, y, pad + bw, y + bh}, "통계 초기화", idReset, false)
+	w.button(dc, rect{pad + bw + gap, y, pad + inner, y + bh}, fullLabel, idFull, false)
+	y += bh + gap
 
-	h = w.px(8) + w.px(52)*3 + w.px(8)
+	h = w.px(8) + w.px(52)*5 + w.px(8)
 	w.card(dc, pad, y, inner, h, cLine)
 	ty := y + w.px(8)
 	w.toggle(dc, rect{pad + w.px(4), ty, pad + inner - w.px(4), ty + w.px(52)}, "항상 위에 표시", "게임 위에 이 창을 띄워 둡니다", w.set.OnTop, idTop)
 	ty += w.px(52)
 	w.toggle(dc, rect{pad + w.px(4), ty, pad + inner - w.px(4), ty + w.px(52)}, "Windows 시작 시 자동 실행", "로그인하면 관리자 권한으로 바로 켜집니다", w.autostart, idAuto)
 	ty += w.px(52)
-	// 테마: ◀ 이름 ▶
+	w.toggle(dc, rect{pad + w.px(4), ty, pad + inner - w.px(4), ty + w.px(52)}, "연결 알림음", "태블릿이 연결되거나 끊기면 소리로 알려 줍니다", w.set.Beep, idBeep)
+	ty += w.px(52)
+	// ◀ 값 ▶ 로 고르는 줄
+	stepper := func(label, value string, prev, next int) {
+		text(dc, label, rect{pad + w.px(16), ty + w.px(6), pad + inner - w.px(180), ty + w.px(26)}, w.bold(14), cText, dtSingleLine)
+		text(dc, value, rect{pad + w.px(16), ty + w.px(26), pad + inner - w.px(110), ty + w.px(48)}, w.normal(12), cSub, dtSingleLine|dtEllipsis)
+		sw := w.px(40)
+		bx := pad + inner - w.px(16) - sw*2 - w.px(6)
+		w.button(dc, rect{bx, ty + w.px(8), bx + sw, ty + w.px(44)}, "◀", prev, false)
+		w.button(dc, rect{bx + sw + w.px(6), ty + w.px(8), bx + sw*2 + w.px(6), ty + w.px(44)}, "▶", next, false)
+	}
+	stepper("마우스 감도", "트랙패드 · 가상 마우스 이동 "+strconv.FormatFloat(mouseScale(w.set.Mouse), 'g', -1, 64)+"배", idMousePrev, idMouseNext)
+	ty += w.px(52)
 	th := themeAt(w.set.Theme)
-	text(dc, "테마", rect{pad + w.px(16), ty + w.px(6), pad + inner - w.px(180), ty + w.px(26)}, w.bold(14), cText, dtSingleLine)
-	text(dc, th.Name+"  ("+strconv.Itoa(w.set.Theme+1)+"/"+strconv.Itoa(len(windowThemes))+")", rect{pad + w.px(16), ty + w.px(26), pad + inner - w.px(110), ty + w.px(48)}, w.normal(12), cSub, dtSingleLine|dtEllipsis)
-	sw := w.px(40)
-	bx := pad + inner - w.px(16) - sw*2 - w.px(6)
-	w.button(dc, rect{bx, ty + w.px(8), bx + sw, ty + w.px(44)}, "◀", idThemePrev, false)
-	w.button(dc, rect{bx + sw + w.px(6), ty + w.px(8), bx + sw*2 + w.px(6), ty + w.px(44)}, "▶", idThemeNext, false)
+	stepper("테마", th.Name+"  ("+strconv.Itoa(w.set.Theme+1)+"/"+strconv.Itoa(len(windowThemes))+")", idThemePrev, idThemeNext)
 	y += h + w.px(10)
 
 	// 바닥글(알림이 있으면 알림)
-	foot, color := "Ctrl+Alt+P 로 어디서든 입력 일시정지  ·  창을 닫으면 꺼집니다", cSub
+	foot, color := "Ctrl+Alt+P 일시정지  ·  F11 전체 화면  ·  창을 닫으면 꺼집니다", cSub
 	if time.Now().Before(w.toastTill) {
 		foot, color = w.toast, cAccent
 	}
@@ -548,6 +580,22 @@ func (w *window) click(id int) {
 		w.set.OnTop = !w.set.OnTop
 		w.applyOnTop()
 		saveSettings(w.setPath, w.set)
+	case idReset:
+		w.a.state.resetStats()
+		w.say("이번 실행의 통계를 지웠습니다 (누적은 남김)")
+	case idFull:
+		w.toggleFull()
+	case idBeep:
+		w.set.Beep = !w.set.Beep
+		saveSettings(w.setPath, w.set)
+	case idMousePrev, idMouseNext:
+		if id == idMousePrev && w.set.Mouse > 0 {
+			w.set.Mouse--
+		} else if id == idMouseNext && w.set.Mouse < len(mouseScales)-1 {
+			w.set.Mouse++
+		}
+		w.a.SetMouseScale(mouseScale(w.set.Mouse))
+		saveSettings(w.setPath, w.set)
 	case idThemePrev, idThemeNext:
 		step := 1
 		if id == idThemePrev {
@@ -584,6 +632,72 @@ func (w *window) applyTheme() {
 	pInvalidateRect.Call(w.hwnd, 0, 0)
 }
 
+// workArea 는 창이 있는 모니터의 작업 영역(작업 표시줄 제외)이다.
+func (w *window) workArea() rect {
+	mon, _, _ := pMonitorFromWindow.Call(w.hwnd, 2)
+	info := struct {
+		size        uint32
+		monitor, wk rect
+		flags       uint32
+	}{size: 40}
+	pGetMonitorInfo.Call(mon, uintptr(unsafe.Pointer(&info)))
+	return info.wk
+}
+
+// clearFonts 는 배율이 바뀌었을 때 글꼴을 다시 만들게 한다.
+func (w *window) clearFonts() {
+	for _, f := range w.fonts {
+		pDeleteObject.Call(f)
+	}
+	w.fonts = map[string]uintptr{}
+}
+
+// toggleFull 은 전체 화면과 창 모드를 오간다. 전체 화면에서는 테두리 없이 모니터를 덮고,
+// 내용을 모니터 높이에 맞게 키워 가운데에 둔다.
+func (w *window) toggleFull() {
+	const gwlStyle = ^uintptr(15) // -16
+	if !w.full {
+		pGetWindowRect.Call(w.hwnd, uintptr(unsafe.Pointer(&w.normalRect)))
+		mon, _, _ := pMonitorFromWindow.Call(w.hwnd, 2) // MONITOR_DEFAULTTONEAREST
+		info := struct {
+			size        uint32
+			monitor, wk rect
+			flags       uint32
+		}{size: 40}
+		pGetMonitorInfo.Call(mon, uintptr(unsafe.Pointer(&info)))
+		mw, mh := info.monitor.r-info.monitor.l, info.monitor.b-info.monitor.t
+		// 창 모드에서의 내용 높이(배율 1 기준)로 얼마나 키울지 정한다.
+		logical := float64(w.contentH) / w.scale
+		if logical <= 0 {
+			logical = 900
+		}
+		zoom := float64(mh) * 0.94 / (logical * w.baseScale)
+		if wz := float64(mw) * 0.9 / (460 * w.baseScale); wz < zoom {
+			zoom = wz
+		}
+		if zoom < 0.6 {
+			zoom = 0.6 // 아주 낮은 화면에서도 글자가 너무 작아지지 않게
+		}
+		w.full = true
+		w.scale = w.baseScale * zoom
+		w.clearFonts()
+		pSetWindowLongPtr.Call(w.hwnd, gwlStyle, 0x80000000|0x10000000)                                                          // WS_POPUP | WS_VISIBLE
+		pSetWindowPos.Call(w.hwnd, 0, uintptr(info.monitor.l), uintptr(info.monitor.t), uintptr(mw), uintptr(mh), 0x0020|0x0004) // FRAMECHANGED | NOZORDER
+		w.say("전체 화면 · Esc 또는 F11 로 돌아갑니다")
+	} else {
+		w.full = false
+		w.scale = w.baseScale
+		w.clearFonts()
+		pSetWindowLongPtr.Call(w.hwnd, gwlStyle, style|0x10000000)
+		r := w.normalRect
+		pSetWindowPos.Call(w.hwnd, 0, uintptr(r.l), uintptr(r.t), uintptr(r.r-r.l), uintptr(r.b-r.t), 0x0020|0x0004)
+		w.height = 0 // 다음 그리기에서 창 크기를 내용에 다시 맞춘다
+	}
+	w.contentH = 0
+	w.applyOnTop()
+	pInvalidateRect.Call(w.hwnd, 0, 0)
+}
+
 func (w *window) applyOnTop() {
 	after := ^uintptr(1) // HWND_NOTOPMOST (-2)
 	if w.set.OnTop {
@@ -594,7 +708,7 @@ func (w *window) applyOnTop() {
 
 // fit 은 내용 높이에 맞춰 창 크기를 바꾼다.
 func (w *window) fit(width, height int32) {
-	if height == w.height {
+	if w.full || height == w.height {
 		return
 	}
 	w.height = height
@@ -613,39 +727,121 @@ func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		hdc, _, _ := pBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
 		var cr rect
 		pGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&cr)))
-		mem, _, _ := pCreateCompatibleDC.Call(hdc)
+		// 내용은 따로 그린 뒤(창 모드 너비) 화면 버퍼에 붙인다. 전체 화면이면 가운데에 둔다.
+		contentW := cr.r
+		if w.full {
+			contentW = w.px(460)
+		}
 		tall := cr.b
 		if tall < w.px(1400) {
 			tall = w.px(1400) // 내용이 창보다 길어도 다 그릴 수 있게 넉넉히 그린 뒤 창 크기를 맞춘다
 		}
-		bmp, _, _ := pCreateCompatibleBmp.Call(hdc, uintptr(cr.r), uintptr(tall))
-		old, _, _ := pSelectObject.Call(mem, bmp)
+		content, _, _ := pCreateCompatibleDC.Call(hdc)
+		cbmp, _, _ := pCreateCompatibleBmp.Call(hdc, uintptr(contentW), uintptr(tall))
+		cold, _, _ := pSelectObject.Call(content, cbmp)
 		bg, _, _ := pCreateSolidBrush.Call(cBg)
-		full := rect{0, 0, cr.r, tall}
-		pFillRect.Call(mem, uintptr(unsafe.Pointer(&full)), bg)
+		area := rect{0, 0, contentW, tall}
+		pFillRect.Call(content, uintptr(unsafe.Pointer(&area)), bg)
+		height := w.paint(content, contentW)
+		w.contentH = height
+
+		screen, _, _ := pCreateCompatibleDC.Call(hdc)
+		sbmp, _, _ := pCreateCompatibleBmp.Call(hdc, uintptr(cr.r), uintptr(cr.b))
+		sold, _, _ := pSelectObject.Call(screen, sbmp)
+		pFillRect.Call(screen, uintptr(unsafe.Pointer(&cr)), bg)
 		pDeleteObject.Call(bg)
-		height := w.paint(mem, cr.r)
-		pBitBlt.Call(hdc, 0, 0, uintptr(cr.r), uintptr(cr.b), mem, 0, 0, 0x00CC0020) // SRCCOPY
-		pSelectObject.Call(mem, old)
-		pDeleteObject.Call(bmp)
-		pDeleteDC.Call(mem)
+		w.ox, w.oy = 0, 0
+		if w.full {
+			w.ox = (cr.r - contentW) / 2
+			if height < cr.b {
+				w.oy = (cr.b - height) / 2
+			}
+		}
+		pBitBlt.Call(screen, uintptr(w.ox), uintptr(w.oy), uintptr(contentW), uintptr(height), content, 0, 0, 0x00CC0020) // SRCCOPY
+		pBitBlt.Call(hdc, 0, 0, uintptr(cr.r), uintptr(cr.b), screen, 0, 0, 0x00CC0020)
+		pSelectObject.Call(content, cold)
+		pDeleteObject.Call(cbmp)
+		pDeleteDC.Call(content)
+		pSelectObject.Call(screen, sold)
+		pDeleteObject.Call(sbmp)
+		pDeleteDC.Call(screen)
 		pEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
-		w.fit(cr.r, height)
+		// 전체 화면: 내용이 화면 높이의 94% 쯤이 되도록 배율을 다시 맞춘다(한 번이면 맞는다).
+		if w.full && (height > cr.b || float64(height) < float64(cr.b)*0.8) {
+			z := w.scale * float64(cr.b) * 0.94 / float64(height)
+			if lo := w.baseScale * 0.6; z < lo {
+				z = lo
+			}
+			if hi := w.baseScale * 3; z > hi {
+				z = hi
+			}
+			if z != w.scale && (z/w.scale > 1.02 || z/w.scale < 0.98) {
+				w.scale = z
+				w.clearFonts()
+				pInvalidateRect.Call(hwnd, 0, 0)
+			}
+		}
+		// 창 모드: 내용이 모니터 작업 영역보다 길면 배율을 줄여 다 보이게 한다(최대 70% 까지).
+		if !w.full {
+			if work := w.workArea(); work.b-work.t > 0 {
+				limit := float64(work.b-work.t) * 0.95
+				// 제목줄 높이를 빼고 비교한다
+				if float64(height)+float64(w.px(40)) > limit {
+					z := w.scale * (limit - float64(w.px(40))) / float64(height)
+					if lo := w.baseScale * 0.7; z < lo {
+						z = lo
+					}
+					if z/w.scale < 0.98 {
+						w.scale = z
+						w.clearFonts()
+						w.height = 0
+						pInvalidateRect.Call(hwnd, 0, 0)
+						return 0
+					}
+				}
+			}
+		}
+		w.fit(w.px(460), height)
 		return 0
 	case wmHotKey:
 		w.click(idPause) // Ctrl+Alt+P: 게임 중에도 바로 일시정지 / 다시 받기
 		return 0
 	case wmClose:
-		// 창 위치를 기억해 두고 닫는다
+		// 창 위치와 누적 횟수를 기억해 두고 닫는다
+		if w.full {
+			w.toggleFull()
+		}
 		var r rect
 		pGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&r)))
 		w.set.X, w.set.Y, w.set.Saved = r.l, r.t, true
+		w.set.Total = w.a.state.view(time.Now()).Total
 		saveSettings(w.setPath, w.set)
+	case wmKeyDown:
+		switch wParam {
+		case 0x7A: // F11
+			w.toggleFull()
+		case 0x1B: // Esc
+			if w.full {
+				w.toggleFull()
+			}
+		}
+		return 0
 	case wmTimer:
+		// 연결 알림음: 태블릿이 연결되거나 끊기는 순간 한 번
+		if live := w.a.state.view(time.Now()).Live; live != w.wasLive {
+			w.wasLive = live
+			if w.set.Beep {
+				if live {
+					pMessageBeep.Call(0x40) // MB_ICONASTERISK
+				} else {
+					pMessageBeep.Call(0x30) // MB_ICONEXCLAMATION
+				}
+			}
+		}
 		pInvalidateRect.Call(hwnd, 0, 0)
 		return 0
 	case wmMouseMove:
-		x, y := int32(int16(lParam&0xFFFF)), int32(int16((lParam>>16)&0xFFFF))
+		x, y := int32(int16(lParam&0xFFFF))-w.ox, int32(int16((lParam>>16)&0xFFFF))-w.oy
 		id := 0
 		for _, h := range w.hits {
 			if x >= h.r.l && x < h.r.r && y >= h.r.t && y < h.r.b {
@@ -677,7 +873,7 @@ func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 			return 1
 		}
 	case wmLButtonUp:
-		x, y := int32(int16(lParam&0xFFFF)), int32(int16((lParam>>16)&0xFFFF))
+		x, y := int32(int16(lParam&0xFFFF))-w.ox, int32(int16((lParam>>16)&0xFFFF))-w.oy
 		for _, h := range w.hits {
 			if x >= h.r.l && x < h.r.r && y >= h.r.t && y < h.r.b {
 				w.click(h.id)
@@ -700,6 +896,10 @@ func runWindow(a *app) {
 	}
 	w := &window{a: a, scale: 1, fonts: map[string]uintptr{}, setPath: settingsPath()}
 	w.set = loadSettings(w.setPath)
+	a.state.mu.Lock()
+	a.state.TotalBase = w.set.Total
+	a.state.mu.Unlock()
+	a.SetMouseScale(mouseScale(w.set.Mouse))
 	useTheme(themeAt(w.set.Theme))
 	w.autostart = autostartEnabled()
 	win = w
@@ -721,6 +921,7 @@ func runWindow(a *app) {
 	if dpi, _, _ := pGetDpiForWindow.Call(hwnd); dpi != 0 {
 		w.scale = float64(dpi) / 96
 	}
+	w.baseScale = w.scale
 	w.fit(w.px(460), w.px(760))
 	w.height = 0
 	w.applyOnTop()
@@ -732,6 +933,10 @@ func runWindow(a *app) {
 	syscall.NewLazyDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute").Call(hwnd, 20, uintptr(unsafe.Pointer(&dark)), 4)
 	pShowWindow.Call(hwnd, 5) // SW_SHOW
 	pSetTimer.Call(hwnd, 1, 200, 0)
+	if a.startFull {
+		w.contentH = w.px(900)
+		w.toggleFull()
+	}
 
 	var m msg
 	for {

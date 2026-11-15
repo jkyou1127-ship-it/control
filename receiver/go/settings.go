@@ -14,6 +14,20 @@ type settings struct {
 	Y     int32 `json:"y"`
 	Saved bool  `json:"saved"` // 위치를 기억해 둔 적이 있는지
 	Theme int   `json:"theme"` // 창 테마 번호(windowThemes)
+	Total int   `json:"total"` // 지금까지 누른 횟수(누적)
+	Beep  bool  `json:"beep"`  // 태블릿이 연결되거나 끊기면 알림음
+	Mouse int   `json:"mouse"` // 마우스 감도 단계(mouseScales 의 번호, 기본 3 = 1배)
+}
+
+// mouseScales 는 고를 수 있는 마우스 감도 배율이다.
+var mouseScales = []float64{0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3}
+
+// mouseScale 은 단계 번호를 배율로 바꾼다(범위를 벗어나면 1배).
+func mouseScale(i int) float64 {
+	if i < 0 || i >= len(mouseScales) {
+		return 1
+	}
+	return mouseScales[i]
 }
 
 func settingsPath() string {
@@ -25,7 +39,7 @@ func settingsPath() string {
 }
 
 func loadSettings(path string) settings {
-	var s settings
+	s := settings{Mouse: 3}
 	if b, err := os.ReadFile(path); err == nil {
 		json.Unmarshal(b, &s)
 	}

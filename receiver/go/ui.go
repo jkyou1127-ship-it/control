@@ -23,6 +23,7 @@ type uiState struct {
 	Paused     bool         // 입력 일시정지: 받기는 하되 PC 에 넣지 않는다
 	Down       map[int]bool // 지금 누르고 있는 키(usage)
 	Peak       int          // 가장 높았던 초당 입력 수
+	TotalBase  int          // 지난 실행들까지 누른 횟수(설정 파일에 저장해 둔 것)
 	pressTimes []time.Time  // 최근 1초 동안 누른 시각(초당 입력 수 계산용)
 	LastPacket time.Time    // 태블릿에서 마지막으로 패킷을 받은 시각(앱은 쉬는 동안에도 0.7초마다 보낸다)
 	perSecond  [60]int      // 최근 1분의 초별 누른 횟수(그래프용). 칸은 유닉스 초 % 60
@@ -73,6 +74,16 @@ func (s *uiState) kpsLocked(now time.Time) int {
 	return len(s.pressTimes)
 }
 
+// resetStats 는 이번 실행의 통계(누른 횟수, 최고 기록, 최근 입력, 그래프)를 지운다. 누적은 남긴다.
+func (s *uiState) resetStats() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.TotalBase += s.Presses
+	s.Presses, s.Peak = 0, 0
+	s.Recent, s.pressTimes = nil, nil
+	s.perSecond, s.secondOf = [60]int{}, [60]int64{}
+}
+
 func (s *uiState) keyDown(u int, down bool) {
 	s.mu.Lock()
 	if s.Down == nil {
@@ -100,6 +111,7 @@ type view struct {
 	Port               int
 	Admin, Paused      bool
 	Presses, KPS, Peak int
+	Total              int // 처음부터 지금까지 누른 횟수(누적)
 	Recent, Down       []string
 	LastInput, Uptime  string
 	Live               bool  // 3초 안에 태블릿에서 패킷이 왔는지
@@ -110,7 +122,7 @@ func (s *uiState) view(now time.Time) view {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	v := view{Version: s.Version, Hostname: s.Hostname, Device: s.Device, Port: s.Port, Admin: s.Admin, Paused: s.Paused,
-		Presses: s.Presses, KPS: s.kpsLocked(now), Peak: s.Peak}
+		Presses: s.Presses, KPS: s.kpsLocked(now), Peak: s.Peak, Total: s.TotalBase + s.Presses}
 	v.Addresses = append(v.Addresses, s.Addresses...)
 	v.Recent = append(v.Recent, s.Recent...)
 	var down []int
