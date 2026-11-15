@@ -48,8 +48,7 @@
     "option-buttons",
     "press-sound",
     "select-all",
-    "text-scale",
-    "touch-dots"
+    "text-scale"
   ],
   "hidden": [
     "confirm-delete",
