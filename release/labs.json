@@ -53,6 +53,7 @@
     "confirm-delete",
     "dup-in-place",
     "edge-flash",
+    "hold-time",
     "touch-dots"
   ],
   "alpha": [],
