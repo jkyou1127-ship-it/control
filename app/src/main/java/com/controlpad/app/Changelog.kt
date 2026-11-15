@@ -13,6 +13,7 @@ object Changelog {
     class Entry(val version: String, val notes: List<String>)
 
     val entries = listOf(
+        Entry("1.28", listOf("그리기: 그린 그림을 일반 버튼뿐 아니라 노브, 조이스틱, 트랙패드, 가상 마우스, 표시 버튼, 레이아웃 전환 버튼, 표시 패널로 만들기")),
         Entry("1.27", listOf("표시 패널: 키뿐 아니라 초당 입력 수, 콤보, 총 입력 수, 실행 시간도 원하는 위치·크기·색으로 넣기", "＋추가에 '초당 입력 수 패널' 추가")),
         Entry("1.26", listOf("평가단: 실험실 기능 숨김 건의와 복귀 건의 (알파)")),
         Entry("1.25", listOf("실험실: 최대 밝기, 연결 상태 숨기기, 누를 때 소리, 최근 입력 기록, 편집 화면 위치·크기 표시 (알파)")),

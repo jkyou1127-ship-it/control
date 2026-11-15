@@ -696,3 +696,33 @@ object DisplayKind {
         else -> ""
     }
 }
+
+/** 그림 에디터에서 그린 그림으로 만들 수 있는 요소들. 그림이 그 요소의 면이 된다. */
+object SketchKind {
+    const val BUTTON = 0
+    const val KNOB = 1
+    const val STICK = 2
+    const val TRACKPAD = 3
+    const val MOUSE = 4
+    const val SHOW = 5
+    const val SWITCH = 6
+    const val DISPLAY = 7
+
+    val names = listOf(
+        "일반 버튼", "노브", "조이스틱", "트랙패드", "가상 마우스", "표시 버튼 (그룹)", "레이아웃 전환 버튼", "표시 패널",
+    )
+
+    fun create(kind: Int, x: Float, y: Float, w: Float, h: Float, image: String, color: Int, freeGroup: Int): PadButton {
+        val b = PadButton(x, y, w, h, shape = PadButton.SHAPE_FREE, image = image, color = color)
+        when (kind) {
+            KNOB -> { b.type = PadButton.TYPE_KNOB; b.knobOut = PadButton.OUT_MOUSE_X }
+            STICK -> { b.type = PadButton.TYPE_STICK; b.keys = Stick.ARROWS.toMutableList() }
+            TRACKPAD -> b.type = PadButton.TYPE_TRACKPAD
+            MOUSE -> b.type = PadButton.TYPE_MOUSE
+            SHOW -> { b.type = PadButton.TYPE_SHOW; b.mode = PadButton.MODE_TOGGLE; b.target = freeGroup }
+            SWITCH -> b.type = PadButton.TYPE_SWITCH
+            DISPLAY -> b.type = PadButton.TYPE_DISPLAY
+        }
+        return b
+    }
+}

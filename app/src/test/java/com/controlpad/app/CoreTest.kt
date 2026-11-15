@@ -625,4 +625,21 @@ class CoreTest {
         assertEquals("총 340", DisplayKind.value(DisplayKind.TOTAL, 0, 0, 340, 0))
         assertEquals("1:05", DisplayKind.value(DisplayKind.TIMER, 0, 0, 0, 65000))
     }
+
+    @Test
+    fun sketchCanBecomeEveryFunctionalElement() {
+        val made = SketchKind.names.indices.map { SketchKind.create(it, 0.1f, 0.2f, 0.3f, 0.3f, "s.png", 0xFF112233.toInt(), 4) }
+        assertTrue(made.all { it.shape == PadButton.SHAPE_FREE && it.image == "s.png" && it.x == 0.1f && it.w == 0.3f })
+        assertEquals(PadButton.TYPE_BUTTON, made[SketchKind.BUTTON].type)
+        assertTrue(made[SketchKind.KNOB].isKnob)
+        assertTrue(made[SketchKind.STICK].isStick && made[SketchKind.STICK].keys == Stick.ARROWS)
+        assertTrue(made[SketchKind.TRACKPAD].isPad)
+        assertTrue(made[SketchKind.MOUSE].isMouse)
+        assertTrue(made[SketchKind.SHOW].isShow && made[SketchKind.SHOW].target == 4)
+        assertTrue(made[SketchKind.SWITCH].isSwitch)
+        assertTrue(made[SketchKind.DISPLAY].isDisplay)
+        // 그린 노브도 그대로 저장·복원된다
+        val back = PadButton.fromJson(JSONObject(made[SketchKind.KNOB].toJson().toString()))
+        assertTrue(back.isKnob && back.shape == PadButton.SHAPE_FREE)
+    }
 }

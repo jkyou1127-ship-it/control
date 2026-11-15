@@ -155,13 +155,36 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
     }
 
     /** 키 입력 표시 패널. shown 은 보여 줄 글자, dim 이면 흐리게(방금 뗀 키, 편집 화면의 안내 글자). */
+    /**
+     * 그림 에디터로 그린 모양이면 그 그림을 면으로 그리고 참을 돌려준다(눌리면 그린 부분만 눌림 색으로).
+     * 그린 모양이 아니면 아무것도 하지 않고 거짓.
+     */
+    private fun drawFreeFace(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean): Boolean {
+        if (b.shape != PadButton.SHAPE_FREE) return false
+        val lit = if (b.pressColor != 0) b.pressColor else b.color
+        val drawn = ImageStore.get(ctx, b.image)
+        if (drawn != null) {
+            bitmapPaint.colorFilter = if (pressed) android.graphics.PorterDuffColorFilter(lit, android.graphics.PorterDuff.Mode.SRC_ATOP) else null
+            c.drawBitmap(drawn, null, r, bitmapPaint)
+            bitmapPaint.colorFilter = null
+        }
+        if (selected || drawn == null) {
+            stroke.color = if (selected) theme.text else b.color
+            stroke.strokeWidth = density * if (selected) 3f else 1f
+            c.drawRect(r, stroke)
+        }
+        return true
+    }
+
     fun drawDisplay(c: Canvas, b: PadButton, r: RectF, selected: Boolean, shown: String, dim: Boolean) {
-        val rad = minOf(r.width(), r.height()) * 0.2f
-        fill.color = shade(b.color, 0.18f)
-        c.drawRoundRect(r, rad, rad, fill)
-        stroke.color = if (selected) theme.text else b.color
-        stroke.strokeWidth = density * if (selected) 3f else theme.stroke
-        c.drawRoundRect(r, rad, rad, stroke)
+        if (!drawFreeFace(c, b, r, false, selected)) {
+            val rad = minOf(r.width(), r.height()) * 0.2f
+            fill.color = shade(b.color, 0.18f)
+            c.drawRoundRect(r, rad, rad, fill)
+            stroke.color = if (selected) theme.text else b.color
+            stroke.strokeWidth = density * if (selected) 3f else theme.stroke
+            c.drawRoundRect(r, rad, rad, stroke)
+        }
         if (shown.isEmpty()) return
         val color = if (b.textColor != 0) b.textColor else theme.text
         text.color = if (dim) color and 0x00FFFFFF or 0x77000000 else color
@@ -172,12 +195,26 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
 
     /** sx, sy 는 손잡이가 기울어진 정도(-1~1), mask 는 지금 눌린 방향(Stick.UP 등). */
     fun drawStick(c: Canvas, b: PadButton, r: RectF, selected: Boolean, sx: Float, sy: Float, mask: Int) {
-        fill.color = shade(b.color, 0.22f)
-        c.drawOval(r, fill)
-        stroke.color = if (selected) theme.text else b.color
-        stroke.strokeWidth = density * if (selected) 3f else theme.stroke
-        c.drawOval(r, stroke)
+        // 그린 조이스틱은 그림이 바탕이 되고, 그 위에 손잡이만 움직인다.
+        val drawnFace = drawFreeFace(c, b, r, false, selected)
+        if (!drawnFace) {
+            fill.color = shade(b.color, 0.22f)
+            c.drawOval(r, fill)
+            stroke.color = if (selected) theme.text else b.color
+            stroke.strokeWidth = density * if (selected) 3f else theme.stroke
+            c.drawOval(r, stroke)
+        }
         // 가장자리에 방향별 키 이름. 눌린 방향은 밝게.
+        if (!drawnFace) drawStickLabels(c, b, r, mask)
+        // 손잡이
+        fill.color = if (b.pressColor != 0 && mask != 0) b.pressColor else b.color
+        c.drawCircle(
+            r.centerX() + sx * r.width() * 0.25f, r.centerY() + sy * r.height() * 0.25f,
+            minOf(r.width(), r.height()) * 0.2f, fill,
+        )
+    }
+
+    private fun drawStickLabels(c: Canvas, b: PadButton, r: RectF, mask: Int) {
         sub.textSize = (minOf(r.width(), r.height()) * 0.1f).coerceIn(9f * density, 18f * density)
         val ox = floatArrayOf(0f, 0f, -0.8f, 0.8f)
         val oy = floatArrayOf(-0.8f, 0.8f, 0f, 0f)
@@ -187,12 +224,6 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
             sub.color = if (mask and Stick.BITS[i] != 0) b.color else theme.text and 0x00FFFFFF or 0x88000000.toInt()
             c.drawText(Keys.name(key), r.centerX() + ox[i] * r.width() / 2, r.centerY() + oy[i] * r.height() / 2 + sub.textSize * 0.35f, sub)
         }
-        // 손잡이
-        fill.color = if (b.pressColor != 0 && mask != 0) b.pressColor else b.color
-        c.drawCircle(
-            r.centerX() + sx * r.width() * 0.25f, r.centerY() + sy * r.height() * 0.25f,
-            minOf(r.width(), r.height()) * 0.2f, fill,
-        )
     }
 
     /** alt: 0 = 기본 이름, 1 = 한글 상태 이름, 2 = 둘 다(편집 화면). */
@@ -206,7 +237,11 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
     }
 
     private fun drawBody(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float, parts: Int, alt: Int) {
-        if (b.isMouse) { drawMouse(c, b, r, selected, parts); return }
+        if (b.isMouse) {
+            // 그린 마우스: 그림을 그대로 쓰고, 어느 부분이든 눌리면 눌림 색으로.
+            if (!drawFreeFace(c, b, r, parts != 0, selected)) drawMouse(c, b, r, selected, parts)
+            return
+        }
         if (b.isStick) { drawStick(c, b, r, selected, 0f, 0f, 0); return }
         if (b.isDisplay) { drawDisplay(c, b, r, selected, if (alt == 2) DisplayKind.editorLabel(b) else "", alt == 2); return }
         if (b.isImage) { drawImage(c, b, r, selected, alt == 2); return }
@@ -217,15 +252,18 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
         stroke.color = if (selected) theme.text else b.color
         stroke.strokeWidth = density * if (selected) 3f else theme.stroke
         val rad = minOf(r.width(), r.height()) * 0.14f
-        if (b.shape == PadButton.SHAPE_FREE) {
-            // 그림 에디터로 그린 버튼: 그림을 그대로 그리고, 눌리면 그린 부분만 눌림 색으로 바꾼다.
-            val drawn = ImageStore.get(ctx, b.image)
-            if (drawn != null) {
-                bitmapPaint.colorFilter = if (pressed) android.graphics.PorterDuffColorFilter(lit, android.graphics.PorterDuff.Mode.SRC_ATOP) else null
-                c.drawBitmap(drawn, null, r, bitmapPaint)
-                bitmapPaint.colorFilter = null
+        if (drawFreeFace(c, b, r, pressed && !b.isPad, selected)) {
+            // 그림 에디터로 그린 버튼·노브·트랙패드 등: 그림이 면이 된다.
+            if (b.isKnob) {
+                // 노브는 돌아간 정도를 점으로 보여 준다.
+                val a = Math.toRadians(angle.toDouble() - 90)
+                fill.color = if (pressed) lit else b.color
+                c.drawCircle(
+                    r.centerX() + (Math.cos(a) * r.width() * 0.36).toFloat(),
+                    r.centerY() + (Math.sin(a) * r.height() * 0.36).toFloat(),
+                    minOf(r.width(), r.height()) * 0.07f, fill,
+                )
             }
-            if (selected || drawn == null) { stroke.strokeWidth = density * if (selected) 3f else 1f; c.drawRect(r, stroke) }
             if (b.label.isNotEmpty()) {
                 text.color = if (b.textColor != 0) b.textColor else theme.text
                 text.textSize = (r.height() * 0.28f).coerceAtMost(r.width() * 1.5f / b.label.length.coerceAtLeast(2)).coerceIn(9f * density, 56f * density)

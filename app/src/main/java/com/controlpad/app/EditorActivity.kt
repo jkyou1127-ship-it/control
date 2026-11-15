@@ -316,16 +316,29 @@ class EditorActivity : BaseActivity() {
             if (made == null) {
                 android.widget.Toast.makeText(this, "먼저 화면에 버튼 모양을 그리세요", android.widget.Toast.LENGTH_SHORT).show()
             } else {
-                checkpoint()
+                // 그린 그림을 어떤 요소로 만들지 고른다. 기본 편집 화면에서 넣을 수 있는 기능 요소는 모두 된다.
                 val (bmp, box) = made
-                val b = PadButton(
-                    box.left / view.width, box.top / view.height, box.width() / view.width, box.height() / view.height,
-                    shape = PadButton.SHAPE_FREE, image = ImageStore.save(this, bmp), color = view.penColor,
-                )
-                pad.buttons += b
-                view.clearStrokes()
-                view.selected = b
-                editButton(b, isNew = true)      // 키·이름·동작 방식 등은 다른 버튼과 똑같이 정한다
+                val kinds = SketchKind.names.toTypedArray()
+                AlertDialog.Builder(this).setTitle("무엇으로 만들까요?")
+                    .setItems(kinds) { _, which ->
+                        val others = LayoutStore.list(this).any { it.id != pad.id }
+                        if (which == SketchKind.SWITCH && !others) {
+                            android.widget.Toast.makeText(this, "넘어갈 다른 레이아웃이 없습니다. 먼저 레이아웃을 하나 더 만드세요", android.widget.Toast.LENGTH_LONG).show()
+                            return@setItems
+                        }
+                        checkpoint()
+                        val used = pad.buttons.filter { it.isShow }.map { it.target }
+                        val b = SketchKind.create(
+                            which, box.left / view.width, box.top / view.height, box.width() / view.width, box.height() / view.height,
+                            ImageStore.save(this, bmp), view.penColor, (1..PadButton.GROUPS).firstOrNull { it !in used } ?: 1,
+                        )
+                        pad.buttons += b
+                        view.clearStrokes()
+                        view.selected = b
+                        editButton(b, isNew = true)      // 키·이름·동작 방식 등은 같은 종류의 다른 요소와 똑같이 정한다
+                    }
+                    .setNegativeButton("취소", null)
+                    .show()
             }
         }
         lateinit var drawChip: TextView
