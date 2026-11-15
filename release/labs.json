@@ -58,7 +58,8 @@
   ],
   "alpha": [
     "big-handle",
-    "kps"
+    "kps",
+    "status-bottom"
   ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
