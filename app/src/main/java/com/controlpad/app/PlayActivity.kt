@@ -16,6 +16,20 @@ import android.view.WindowManager
 /** 전체 화면 컨트롤러. 뒤로 가기로 나간다. */
 class PlayActivity : BaseActivity() {
     override val avoidKeyboard = false
+    private var lastBack = 0L
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        // 연주 중에 뒤로 가기 동작이 잘못 들어가도 바로 나가지 않게 한다.
+        val now = SystemClock.uptimeMillis()
+        if (Link.exitGuard && now - lastBack > 2000) {
+            lastBack = now
+            android.widget.Toast.makeText(this, "한 번 더 누르면 나갑니다", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onBackPressed()
+    }
     private var view: PlayView? = null
     private val ui = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
@@ -158,6 +172,42 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labKps = Labs.isOn("kps")
     private val labPop = Labs.isOn("press-pop")
     private val pressTimes = ArrayDeque<Long>()         // 최근에 버튼을 누른 시각들(초당 입력 수 계산용)
+    private val labCombo = Labs.isOn("combo")
+    private val labTotal = Labs.isOn("total")
+    private val labTimer = Labs.isOn("timer")
+    private val labBattery = Labs.isOn("battery")
+    private val hapticKind =
+        if (Labs.isOn("strong-haptic")) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP
+    private var combo = 0
+    private var lastPress = 0L
+    private var total = 0
+    private val startedAt = SystemClock.uptimeMillis()
+    private var batteryText = ""
+    private var batteryAt = 0L
+
+    /** 버튼을 한 번 눌렀다고 기록한다(초당 입력 수, 콤보, 총 입력 수). */
+    private fun notePress() {
+        val now = SystemClock.uptimeMillis()
+        if (labKps) pressTimes.addLast(now)
+        combo = Combo.next(combo, lastPress, now)
+        lastPress = now
+        total++
+    }
+
+    /** 배터리 잔량과 시각. 자주 물어볼 필요가 없어 30초에 한 번만 새로 읽는다. */
+    private fun battery(): String {
+        val now = SystemClock.uptimeMillis()
+        if (batteryText.isEmpty() || now - batteryAt > 30000) {
+            batteryAt = now
+            val level = runCatching {
+                (context.getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager)
+                    .getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            }.getOrDefault(-1)
+            val clock = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date())
+            batteryText = (if (level in 0..100) "배터리 $level% · " else "") + clock
+        }
+        return batteryText
+    }
 
     /** 최근 1초 동안 누른 횟수. */
     private fun kps(): Int {
@@ -283,7 +333,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         state.release(Stick.keysFor(old and mask.inv(), keys))
         stickMask[i] = mask
         send()
-        if (haptic && mask != 0) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        if (haptic && mask != 0) performHapticFeedback(hapticKind)
     }
 
     // 가상 마우스: 포인터 id → 잡고 있는 부분(MousePart), 휠 부분에서 움직인 거리
@@ -300,7 +350,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             MousePart.RIGHT -> { state.press(listOf(Keys.MOUSE_RIGHT)); send() }
             MousePart.WHEEL -> wheelTravel[id] = 0f
         }
-        if (haptic && part != MousePart.BODY) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        if (haptic && part != MousePart.BODY) performHapticFeedback(hapticKind)
     }
 
     private fun mouseMove(id: Int, i: Int, x: Float, y: Float) {
@@ -449,7 +499,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         if (n != 1) return
         if (b.isKnob) return
         if (b.isShow) {
-            if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            if (haptic) performHapticFeedback(hapticKind)
             val g = b.target
             if (b.mode == PadButton.MODE_HOLD) groupHolds[g]++
             else {
@@ -459,11 +509,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             return
         }
         if (b.isSwitch) {
-            if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            if (haptic) performHapticFeedback(hapticKind)
             onSwitch(b.link)
             return
         }
-        if (labKps) pressTimes.addLast(SystemClock.uptimeMillis())
+        notePress()
         // 한/영을 누르면 글자 키의 표시도 함께 바꾼다(키를 R Alt 로 바꿔 둔 한/영 버튼 포함).
         if (Keys.HANGUL in b.keys || b.label == "한/영") hangul = !hangul
         when (b.mode) {
@@ -487,7 +537,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             else -> { state.press(b.keys); send() }
         }
         // 진동은 시스템 호출이라 시간이 걸릴 수 있으므로, 입력을 먼저 보낸 뒤에 울린다.
-        if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+        if (haptic) performHapticFeedback(hapticKind)
     }
 
     private fun up(i: Int) {
@@ -684,6 +734,15 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             line += " · ${n}회/초"
             if (n > 0) postInvalidateDelayed(200)       // 손을 떼도 숫자가 0 으로 내려가게
         }
+        val now = SystemClock.uptimeMillis()
+        if (labCombo) {
+            if (now - lastPress > Combo.WINDOW_MS) combo = 0
+            if (combo >= 2) { line += " · ${combo}콤보"; postInvalidateDelayed(250) }
+        }
+        if (labTotal) line += " · 총 ${total}회"
+        if (labTimer) line += " · " + Combo.format(now - startedAt)
+        if (labBattery) line += " · " + battery()
+        if (labTimer || labBattery) postInvalidateDelayed(1000)
         c.drawText(line, statusPaint.textSize, statusPaint.textSize * 1.6f, statusPaint)
     }
 

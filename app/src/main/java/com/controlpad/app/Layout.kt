@@ -41,6 +41,12 @@ class PadButton(
     var rate: Int = 10,
     /** TYPE_SWITCH 일 때 넘어갈 레이아웃의 id. */
     var link: String = "",
+    /** 편집 화면에서 실수로 옮기거나 크기를 바꾸지 않게 잠근다. */
+    var locked: Boolean = false,
+    /** 불투명도(%). 100 이면 완전히 보이고, 낮을수록 비친다. */
+    var opacity: Int = 100,
+    /** 글자 크기 배율(%). */
+    var textScale: Int = 100,
 ) {
     val isSwitch: Boolean get() = type == TYPE_SWITCH
     val isImage: Boolean get() = type == TYPE_IMAGE
@@ -53,7 +59,7 @@ class PadButton(
 
     fun copy() = PadButton(
         x, y, w, h, label, keys.toMutableList(), mode, shape, color,
-        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor, holdMs, label2, image, macro.map { it.toMutableList() }.toMutableList(), rate, link,
+        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor, holdMs, label2, image, macro.map { it.toMutableList() }.toMutableList(), rate, link, locked, opacity, textScale,
     )
 
     fun contains(px: Float, py: Float): Boolean {
@@ -74,6 +80,7 @@ class PadButton(
         .put("textColor", textColor).put("pressColor", pressColor).put("holdMs", holdMs)
         .put("label2", label2).put("image", image)
         .put("macro", JSONArray().also { a -> macro.forEach { a.put(JSONArray(it)) } }).put("rate", rate).put("link", link)
+        .put("locked", locked).put("opacity", opacity).put("textScale", textScale)
 
     companion object {
         const val MODE_HOLD = 0    // 누르고 있는 동안 입력 (게임)
@@ -82,6 +89,9 @@ class PadButton(
         const val MODE_TIMED = 3   // 누르면 holdMs 동안 입력하고 스스로 뗀다
         const val MODE_MACRO = 4   // 누르면 macro 의 키 조합들을 차례로 입력한다
         const val MODE_TURBO = 5   // 누르고 있는 동안 1초에 rate 번씩 연타한다
+        const val MIN_OPACITY = 10
+        const val MIN_TEXT_SCALE = 50
+        const val MAX_TEXT_SCALE = 200
         const val MIN_RATE = 1
         const val MAX_RATE = 30
         const val MIN_HOLD_MS = 50
@@ -137,6 +147,8 @@ class PadButton(
                     MutableList(a.length()) { i -> a.getJSONArray(i).let { s -> MutableList(s.length()) { s.getInt(it) } } }
                 },
                 o.optInt("rate", 10).coerceIn(MIN_RATE, MAX_RATE), o.optString("link"),
+                o.optBoolean("locked"), o.optInt("opacity", 100).coerceIn(MIN_OPACITY, 100),
+                o.optInt("textScale", 100).coerceIn(MIN_TEXT_SCALE, MAX_TEXT_SCALE),
             )
         }
     }
@@ -148,9 +160,11 @@ class PadLayout(
     /** 손가락을 떼지 않고 옆 버튼으로 미끄러져도 입력되게 할지. */
     var slide: Boolean = false,
     val buttons: MutableList<PadButton> = mutableListOf(),
+    /** 목록 맨 위에 고정할지. */
+    var pinned: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject()
-        .put("id", id).put("name", name).put("slide", slide)
+        .put("id", id).put("name", name).put("slide", slide).put("pinned", pinned)
         .put("buttons", JSONArray().also { a -> buttons.forEach { a.put(it.toJson()) } })
 
     companion object {
@@ -159,6 +173,7 @@ class PadLayout(
             return PadLayout(
                 o.getString("id"), o.optString("name"), o.optBoolean("slide"),
                 MutableList(bs.length()) { PadButton.fromJson(bs.getJSONObject(it)) },
+                o.optBoolean("pinned"),
             )
         }
     }
@@ -589,4 +604,54 @@ object Macro {
     /** 화면에 보여 줄 매크로 설명: "Ctrl + C → Alt + Tab → Ctrl + V". */
     fun describe(steps: List<List<Int>>): String =
         if (steps.isEmpty()) "(단계 없음)" else steps.joinToString(" → ") { Keys.combo(it) }
+}
+
+/** 편집 화면의 맞춤·균등 배치. 잠긴 버튼은 건드리지 않는다. */
+object Arrange {
+    val names = listOf(
+        "왼쪽 맞춤", "오른쪽 맞춤", "위 맞춤", "아래 맞춤", "가로 가운데 맞춤", "세로 가운데 맞춤",
+        "가로 간격 같게", "세로 간격 같게", "같은 너비", "같은 높이",
+    )
+
+    fun apply(index: Int, all: List<PadButton>) {
+        val bs = all.filter { !it.locked }
+        if (bs.size < 2) return
+        when (index) {
+            0 -> bs.minOf { it.x }.let { v -> bs.forEach { it.x = v } }
+            1 -> bs.maxOf { it.x + it.w }.let { v -> bs.forEach { it.x = v - it.w } }
+            2 -> bs.minOf { it.y }.let { v -> bs.forEach { it.y = v } }
+            3 -> bs.maxOf { it.y + it.h }.let { v -> bs.forEach { it.y = v - it.h } }
+            4 -> ((bs.minOf { it.x } + bs.maxOf { it.x + it.w }) / 2).let { c -> bs.forEach { it.x = c - it.w / 2 } }
+            5 -> ((bs.minOf { it.y } + bs.maxOf { it.y + it.h }) / 2).let { c -> bs.forEach { it.y = c - it.h / 2 } }
+            6 -> spread(bs.sortedBy { it.x }, { it.x }, { it.w }) { b, v -> b.x = v }
+            7 -> spread(bs.sortedBy { it.y }, { it.y }, { it.h }) { b, v -> b.y = v }
+            // 같은 크기: 맨 처음 선택한 것에 맞추되, 화면 밖으로 나가지 않게 한다.
+            8 -> bs.first().w.let { w -> bs.forEach { it.w = w; it.x = it.x.coerceIn(0f, 1f - w) } }
+            9 -> bs.first().h.let { h -> bs.forEach { it.h = h; it.y = it.y.coerceIn(0f, 1f - h) } }
+        }
+    }
+
+    /** 양 끝의 것은 그대로 두고, 그 사이의 간격이 모두 같아지게 놓는다. */
+    private fun spread(sorted: List<PadButton>, pos: (PadButton) -> Float, size: (PadButton) -> Float, set: (PadButton, Float) -> Unit) {
+        val start = pos(sorted.first())
+        val end = pos(sorted.last()) + size(sorted.last())
+        val gap = (end - start - sorted.sumOf { size(it).toDouble() }.toFloat()) / (sorted.size - 1)
+        var at = start
+        for (b in sorted) { set(b, at); at += size(b) + gap }
+    }
+}
+
+/** 목록 화면: 고정한 것을 위로, 검색어가 있으면 이름에 그 말이 들어간 것만. */
+object LayoutList {
+    fun arrange(all: List<PadLayout>, query: String): List<PadLayout> {
+        val q = query.trim()
+        return all.filter { q.isEmpty() || it.name.contains(q, ignoreCase = true) }.sortedByDescending { it.pinned }
+    }
+}
+
+/** 실행 화면의 연속 입력(콤보) 세기: 1초 안에 이어서 누르면 올라가고, 끊기면 다시 1부터. */
+object Combo {
+    const val WINDOW_MS = 1000L
+    fun next(current: Int, lastPress: Long, now: Long): Int = if (lastPress != 0L && now - lastPress <= WINDOW_MS) current + 1 else 1
+    fun format(ms: Long): String = "%d:%02d".format(ms / 60000, ms / 1000 % 60)
 }

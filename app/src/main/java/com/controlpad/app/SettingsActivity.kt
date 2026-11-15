@@ -165,6 +165,10 @@ class SettingsActivity : BaseActivity() {
             setOnCheckedChangeListener { _, on -> Link.showKeyNames = on; reload() }
         })
         root.addView(CheckBox(this).apply {
+            text = "실수로 나가기 방지 — 실행 화면에서 뒤로 가기를 두 번 눌러야 나감"; isChecked = Link.exitGuard
+            setOnCheckedChangeListener { _, on -> Link.exitGuard = on }
+        })
+        root.addView(CheckBox(this).apply {
             text = "버튼을 누를 때 진동"; isChecked = Link.haptic
             setOnCheckedChangeListener { _, on -> Link.prefs.edit().putBoolean("haptic", on).apply() }
         })

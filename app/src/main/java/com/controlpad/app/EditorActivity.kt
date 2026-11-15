@@ -178,6 +178,33 @@ class EditorActivity : BaseActivity() {
         }
         tool("↶ 취소") { step(undo, redo, "되돌릴 것이 없습니다") }
         tool("↷ 다시") { step(redo, undo, "다시 실행할 것이 없습니다") }
+        tool("전체 선택") {
+            multi.isChecked = true
+            view.selection.clear(); view.selection += pad.buttons.filter { it !in view.hidden }
+            view.invalidate()
+        }
+        tool("잠금") {
+            // 실수로 옮기거나 크기를 바꾸지 않게 한다. 선택한 것이 모두 잠겨 있으면 푼다.
+            val sel = view.selection.toList()
+            if (sel.isEmpty()) hint()
+            else {
+                checkpoint()
+                val lock = !sel.all { it.locked }
+                sel.forEach { it.locked = lock }
+                android.widget.Toast.makeText(this, if (lock) "${sel.size}개를 잠갔습니다" else "잠금을 풀었습니다", android.widget.Toast.LENGTH_SHORT).show()
+                view.invalidate()
+            }
+        }
+        tool("맞춤") {
+            val sel = view.selection.toList()
+            if (sel.size < 2) android.widget.Toast.makeText(this, "두 개 이상 선택하세요 ('다중 선택'을 켜고 고릅니다)", android.widget.Toast.LENGTH_SHORT).show()
+            else AlertDialog.Builder(this).setTitle("맞춤 · 균등 배치")
+                .setItems(Arrange.names.toTypedArray()) { _, which ->
+                    checkpoint()
+                    Arrange.apply(which, sel)
+                    view.invalidate()
+                }.show()
+        }
         tool("크기·위치") {
             val sel = view.selection.toList()
             if (sel.isEmpty()) hint() else editGeometry(sel)
@@ -301,9 +328,9 @@ class EditorActivity : BaseActivity() {
         for (name in listOf("＋추가", "✎ 그리기")) pending.remove(name)?.let { railItem(it) }
         section("선택한 것")
         railItem(multi)
-        for (name in listOf("속성", "복제", "삭제")) pending.remove(name)?.let { railItem(it) }
+        for (name in listOf("전체 선택", "속성", "복제", "삭제", "잠금")) pending.remove(name)?.let { railItem(it) }
         section("배치")
-        for (name in listOf("크기·위치", "순서", "숨김")) pending.remove(name)?.let { railItem(it) }
+        for (name in listOf("맞춤", "크기·위치", "순서", "숨김")) pending.remove(name)?.let { railItem(it) }
         section("옵션")
         railItem(snapBox); railItem(slideBox)
         // 나머지(되돌리기, 저장, 실행, 완료)는 위쪽 막대에.
@@ -610,6 +637,23 @@ class EditorActivity : BaseActivity() {
         photoRow.addView(Button(this).apply { text = "지우기"; setOnClickListener { image = ""; showPhoto() } })
         box.addView(photoRow)
 
+        // 투명도와 글자 크기
+        fun percent(title: String, min: Int, max: Int, step: Int, value: Int): android.widget.SeekBar {
+            val shown = TextView(this).apply { setPadding(0, dp(8), 0, 0) }
+            val bar = android.widget.SeekBar(this).apply { this.max = (max - min) / step; progress = ((value - min) / step).coerceIn(0, this.max) }
+            fun show() { shown.text = "$title: ${min + bar.progress * step}%" }
+            show()
+            bar.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: android.widget.SeekBar?, p: Int, fromUser: Boolean) = show()
+                override fun onStartTrackingTouch(s: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
+            })
+            box.addView(shown); box.addView(bar)
+            return bar
+        }
+        val opacity = percent("불투명도", PadButton.MIN_OPACITY, 100, 10, b.opacity)
+        val textScale = percent("글자 크기", PadButton.MIN_TEXT_SCALE, PadButton.MAX_TEXT_SCALE, 10, b.textScale)
+
         val group = groupSpinner(b.group)
         box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
         box.addView(group)
@@ -626,6 +670,8 @@ class EditorActivity : BaseActivity() {
                 b.keys = keys; b.label = label.text.toString().trim(); b.mode = mode.selectedItemPosition
                 b.label2 = label2.text.toString().trim()
                 b.image = image
+                b.opacity = PadButton.MIN_OPACITY + opacity.progress * 10
+                b.textScale = PadButton.MIN_TEXT_SCALE + textScale.progress * 10
                 b.holdMs = PadButton.parseHold(hold.text.toString())
                 b.rate = (rate.text.toString().toIntOrNull() ?: 10).coerceIn(PadButton.MIN_RATE, PadButton.MAX_RATE)
                 b.macro = macro
@@ -1192,8 +1238,12 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
 
     private fun remember() {
         starts.clear()
-        for (b in selection) starts[b] = floatArrayOf(b.x, b.y, b.w, b.h)
-        selectionBox(box)
+        for (b in selection) if (!b.locked) starts[b] = floatArrayOf(b.x, b.y, b.w, b.h)     // 잠긴 것은 움직이지 않는다
+        if (starts.isEmpty()) selectionBox(box)
+        else box.set(
+            starts.keys.minOf { it.x }, starts.keys.minOf { it.y },
+            starts.keys.maxOf { it.x + it.w }, starts.keys.maxOf { it.y + it.h },
+        )
     }
 
     private val cell: Float get() = width / 48f
@@ -1214,7 +1264,8 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         for (b in pad.buttons) {
             if (b in hidden) continue
             painter.draw(c, b, rectOf(b), false, b in selection, alt = 2)
-            if (b.group > 0) painter.badge(c, rectOf(b), "그룹 ${b.group}")
+            val marks = listOfNotNull(if (b.group > 0) "그룹 ${b.group}" else null, if (b.locked) "잠금" else null)
+            if (marks.isNotEmpty()) painter.badge(c, rectOf(b), marks.joinToString(" · "))
         }
         if (hidden.isNotEmpty()) {
             c.drawText("숨긴 버튼 ${hidden.size}개 — '숨김'을 누르면 다시 표시", width / 2f, hintPaint.textSize * 1.4f, hintPaint)

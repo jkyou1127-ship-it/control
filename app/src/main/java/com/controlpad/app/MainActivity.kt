@@ -17,6 +17,7 @@ import android.widget.TextView
 /** 저장된 레이아웃 목록. 누르면 바로 컨트롤러로 실행한다. */
 class MainActivity : BaseActivity() {
     private lateinit var list: LinearLayout
+    private lateinit var search: android.widget.EditText
     private lateinit var status: TextView
     private val ui = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
@@ -66,6 +67,15 @@ class MainActivity : BaseActivity() {
         })
         root.addView(header)
 
+        search = android.widget.EditText(this).apply {
+            hint = "레이아웃 검색"; setSingleLine()
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) = refresh()
+            })
+        }
+        root.addView(search)
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply { addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
@@ -102,10 +112,11 @@ class MainActivity : BaseActivity() {
 
     private fun refresh() {
         list.removeAllViews()
-        val layouts = LayoutStore.list(this)
+        val everything = LayoutStore.list(this)
+        val layouts = LayoutList.arrange(everything, search.text.toString())
         if (layouts.isEmpty()) {
             list.addView(TextView(this).apply {
-                text = "레이아웃이 없습니다. '＋ 새 레이아웃'으로 만들어 보세요."
+                text = if (everything.isEmpty()) "레이아웃이 없습니다. '＋ 새 레이아웃'으로 만들어 보세요." else "검색 결과가 없습니다."
                 setPadding(0, dp(24), 0, 0)
             })
         }
@@ -118,7 +129,7 @@ class MainActivity : BaseActivity() {
                 setOnClickListener { open(PlayActivity::class.java, l.id) }
             }
             val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            texts.addView(TextView(this).apply { text = l.name; textSize = 18f; setTextColor(Themes.current.text) })
+            texts.addView(TextView(this).apply { text = (if (l.pinned) "★ " else "") + l.name; textSize = 18f; setTextColor(Themes.current.text) })
             texts.addView(TextView(this).apply { text = "버튼 ${l.buttons.size}개 · 눌러서 실행"; textSize = 13f })
             row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(Button(this).apply { text = "편집"; setOnClickListener { open(EditorActivity::class.java, l.id) } })
@@ -126,6 +137,8 @@ class MainActivity : BaseActivity() {
                 text = "⋮"
                 setOnClickListener { v ->
                     PopupMenu(this@MainActivity, v).apply {
+                        val pin = if (l.pinned) "고정 해제" else "맨 위에 고정"
+                        menu.add(pin); menu.add("홈 화면에 추가")
                         menu.add("그림 에디터"); menu.add("이름 변경"); menu.add("복제"); menu.add("파일로 저장"); menu.add("삭제")
                         setOnMenuItemClickListener { item ->
                             when (item.title) {
@@ -150,6 +163,8 @@ class MainActivity : BaseActivity() {
                                         )
                                     }.onFailure { toast("파일을 저장할 수 있는 앱이 없습니다") }
                                 }
+                                pin -> { l.pinned = !l.pinned; LayoutStore.save(this@MainActivity, l); refresh() }
+                                "홈 화면에 추가" -> addShortcut(l)
                                 "삭제" -> AlertDialog.Builder(this@MainActivity)
                                     .setMessage("'${l.name}' 레이아웃을 삭제할까요?")
                                     .setPositiveButton("삭제") { _, _ -> LayoutStore.delete(this@MainActivity, l.id); refresh() }
@@ -162,6 +177,21 @@ class MainActivity : BaseActivity() {
             }, LinearLayout.LayoutParams(dp(56), -2))
             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         }
+    }
+
+    /** 홈 화면에 이 레이아웃을 바로 실행하는 바로가기를 만든다. */
+    private fun addShortcut(l: PadLayout) {
+        val manager = getSystemService(android.content.pm.ShortcutManager::class.java)
+        if (manager == null || !manager.isRequestPinShortcutSupported) {
+            toast("이 홈 화면은 바로가기 추가를 지원하지 않습니다")
+            return
+        }
+        val info = android.content.pm.ShortcutInfo.Builder(this, "layout-" + l.id)
+            .setShortLabel(l.name.ifBlank { "레이아웃" })
+            .setIcon(android.graphics.drawable.Icon.createWithResource(this, R.mipmap.ic_launcher))
+            .setIntent(Intent(this, PlayActivity::class.java).setAction(Intent.ACTION_VIEW).putExtra("id", l.id))
+            .build()
+        runCatching { manager.requestPinShortcut(info, null) }.onFailure { toast("바로가기를 추가하지 못했습니다") }
     }
 
     private var exporting: PadLayout? = null

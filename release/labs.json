@@ -1,7 +1,12 @@
 {
   "features": [
     "kps",
-    "press-pop"
+    "press-pop",
+    "combo",
+    "total",
+    "timer",
+    "battery",
+    "strong-haptic"
   ],
   "graduated": [],
   "relay": ""

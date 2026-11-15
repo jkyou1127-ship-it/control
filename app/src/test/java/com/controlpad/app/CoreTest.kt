@@ -534,4 +534,58 @@ class CoreTest {
         assertTrue(Labs.relayProblem(200, "<html>not json</html>") != null)     // 엉뚱한 답을 성공으로 보지 않는다
         assertTrue(Labs.relayProblem(500, "")!!.contains("500"))
     }
+
+    @Test
+    fun arrangeAlignsDistributesAndSkipsLocked() {
+        fun three() = listOf(PadButton(0.1f, 0.1f, 0.1f, 0.2f), PadButton(0.3f, 0.3f, 0.2f, 0.1f), PadButton(0.7f, 0.2f, 0.1f, 0.1f))
+        three().also { Arrange.apply(0, it) }.forEach { assertEquals(0.1f, it.x, 1e-5f) }                 // 왼쪽
+        three().also { Arrange.apply(1, it) }.forEach { assertEquals(0.8f, it.x + it.w, 1e-5f) }          // 오른쪽
+        three().also { Arrange.apply(3, it) }.forEach { assertEquals(0.4f, it.y + it.h, 1e-5f) }          // 아래
+        three().also { Arrange.apply(4, it) }.forEach { assertEquals(0.45f, it.x + it.w / 2, 1e-5f) }     // 가로 가운데
+
+        val spread = three().also { Arrange.apply(6, it) }                                                 // 가로 간격 같게
+        assertEquals(0.1f, spread[0].x, 1e-5f)
+        assertEquals(0.7f, spread[2].x, 1e-5f)                                                             // 양 끝은 그대로
+        assertEquals(spread[1].x - (spread[0].x + spread[0].w), spread[2].x - (spread[1].x + spread[1].w), 1e-5f)
+
+        three().also { Arrange.apply(8, it) }.forEach { assertEquals(0.1f, it.w, 1e-5f) }                 // 같은 너비
+        val locked = three().also { it[1].locked = true; Arrange.apply(0, it) }
+        assertEquals(0.3f, locked[1].x, 1e-5f)                                                             // 잠긴 것은 그대로
+        assertEquals(0.1f, locked[2].x, 1e-5f)
+        val one = listOf(PadButton(0.5f, 0.5f, 0.1f, 0.1f)).also { Arrange.apply(0, it) }
+        assertEquals(0.5f, one[0].x, 1e-5f)                                                                // 하나뿐이면 아무것도 안 함
+    }
+
+    @Test
+    fun newButtonAndLayoutFieldsRoundTripWithSafeDefaults() {
+        val b = PadButton(0f, 0f, 0.1f, 0.1f, locked = true, opacity = 40, textScale = 150)
+        val back = PadButton.fromJson(JSONObject(b.toJson().toString())).copy()
+        assertTrue(back.locked); assertEquals(40, back.opacity); assertEquals(150, back.textScale)
+        val old = PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1}"""))
+        assertFalse(old.locked); assertEquals(100, old.opacity); assertEquals(100, old.textScale)
+        val wild = PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1,"opacity":0,"textScale":9999}"""))
+        assertEquals(PadButton.MIN_OPACITY, wild.opacity)            // 완전히 안 보이는 버튼은 만들지 않는다
+        assertEquals(PadButton.MAX_TEXT_SCALE, wild.textScale)
+
+        val l = PadLayout(name = "즐겨찾기", pinned = true)
+        assertTrue(PadLayout.fromJson(JSONObject(l.toJson().toString())).pinned)
+        assertFalse(PadLayout.fromJson(JSONObject("""{"id":"a","name":"b"}""")).pinned)
+    }
+
+    @Test
+    fun layoutListSearchesAndPutsPinnedFirst() {
+        val all = listOf(PadLayout(name = "리듬 4키"), PadLayout(name = "작업용 단축키", pinned = true), PadLayout(name = "리듬 7키"))
+        assertEquals(listOf("작업용 단축키", "리듬 4키", "리듬 7키"), LayoutList.arrange(all, "").map { it.name })
+        assertEquals(listOf("리듬 4키", "리듬 7키"), LayoutList.arrange(all, " 리듬 ").map { it.name })
+        assertEquals(emptyList<String>(), LayoutList.arrange(all, "없는 이름").map { it.name })
+    }
+
+    @Test
+    fun comboCountsOnlyQuickFollowUps() {
+        assertEquals(1, Combo.next(0, 0, 5000))                 // 첫 입력
+        assertEquals(2, Combo.next(1, 5000, 5600))              // 1초 안에 이어서
+        assertEquals(1, Combo.next(7, 5000, 6500))              // 끊기면 다시 1부터
+        assertEquals("0:05", Combo.format(5999))
+        assertEquals("12:34", Combo.format(754000))
+    }
 }
