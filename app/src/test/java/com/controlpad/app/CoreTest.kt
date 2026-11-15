@@ -689,4 +689,36 @@ class CoreTest {
         }
         assertEquals("최근 입력 기록 표시", DisplayKind.editorLabel(PadButton(0f, 0f, 0.1f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = DisplayKind.HISTORY)))
     }
+
+    @Test
+    fun convertKeepsPlacementAndSetsSensibleDefaults() {
+        val b = PadButton(0.1f, 0.2f, 0.3f, 0.4f, "점프", mutableListOf(0x2C), color = 0xFF123456.toInt(), group = 2, mode = PadButton.MODE_TAP)
+        SketchKind.convert(b, SketchKind.STICK, 5)
+        assertTrue(b.isStick); assertEquals(Stick.ARROWS, b.keys)                   // 방향 키 4개가 아니면 방향키로
+        assertEquals(listOf(0.1f, 0.2f, 0.3f, 0.4f), listOf(b.x, b.y, b.w, b.h))
+        assertEquals("점프", b.label); assertEquals(2, b.group); assertEquals(0xFF123456.toInt(), b.color)
+        SketchKind.convert(b, SketchKind.KNOB, 5)
+        assertTrue(b.isKnob); assertEquals(PadButton.OUT_KEYS, b.knobOut); assertEquals(PadButton.KNOB_UNTIL_STOP, b.mode)
+        SketchKind.convert(b, SketchKind.SHOW, 2)
+        assertTrue(b.isShow); assertEquals(2, b.target); assertEquals(0, b.group)   // 자기가 여는 그룹에 들어가지 않게
+        SketchKind.convert(b, SketchKind.OPTION, 1)
+        assertTrue(b.isOption); assertEquals("haptic", b.link)
+        SketchKind.convert(b, SketchKind.BUTTON, 1)
+        assertEquals(PadButton.TYPE_BUTTON, b.type); assertEquals(PadButton.MODE_HOLD, b.mode)
+        assertEquals(-1, SketchKind.of(PadButton(0f, 0f, 0.1f, 0.1f, type = PadButton.TYPE_IMAGE)))
+    }
+
+    @Test
+    fun shapesHitWhereTheyAreDrawn() {
+        fun at(shape: Int, px: Float, py: Float) = PadButton(0f, 0f, 1f, 1f, shape = shape).contains(px, py)
+        assertTrue(at(PadButton.SHAPE_DIAMOND, 0.5f, 0.5f)); assertFalse(at(PadButton.SHAPE_DIAMOND, 0.1f, 0.1f))
+        assertTrue(at(PadButton.SHAPE_HEX, 0.05f, 0.5f));  assertFalse(at(PadButton.SHAPE_HEX, 0.05f, 0.05f))
+        assertTrue(at(PadButton.SHAPE_HEX, 0.3f, 0.02f))                             // 위 변은 가로 가운데 절반
+        assertTrue(at(PadButton.SHAPE_SQUARE, 0.01f, 0.01f))
+        assertFalse(at(PadButton.SHAPE_OVAL, 0.05f, 0.05f))
+        assertEquals(Shapes.ids.size, Shapes.names.size)
+        assertFalse(Shapes.ids.contains(PadButton.SHAPE_FREE))
+        assertTrue(Shapes.applies(PadButton(0f, 0f, 1f, 1f)))
+        assertFalse(Shapes.applies(PadButton(0f, 0f, 1f, 1f, type = PadButton.TYPE_KNOB)))
+    }
 }

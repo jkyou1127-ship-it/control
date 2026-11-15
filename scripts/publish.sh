@@ -17,6 +17,13 @@ notes="${1:?바뀐 점을 적어 주세요}"
 code=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
 name=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
 
+# 시험이나 빌드가 실패하면 release/ 를 시작하기 전 상태로 되돌린다(반쯤 바뀐 채로 남지 않게).
+backup=$(mktemp -d)
+cp -r release "$backup/"
+done_ok=0
+restore() { if [ "$done_ok" != 1 ]; then rm -rf release && cp -r "$backup/release" release; echo "실패해서 release/ 를 되돌렸습니다" >&2; fi; rm -rf "$backup"; }
+trap restore EXIT
+
 if [ -f release/alpha/version.json ]; then
     old=$(sed -n 's/.*"versionCode": *\([0-9]*\).*/\1/p' release/alpha/version.json)
     if [ "$code" -le "$old" ]; then
@@ -43,4 +50,5 @@ cp app/build/outputs/apk/release/app-release.apk release/alpha/ControlPad.apk
 if [ "$fix" = 1 ]; then
     cp release/alpha/version.json release/alpha/ControlPad.apk release/   # 버그 수정은 정식에도 바로
 fi
+done_ok=1
 echo "알파: $name ($code) / 정식: $(sed -n 's/.*"versionName": *"\(.*\)".*/\1/p' release/version.json)"

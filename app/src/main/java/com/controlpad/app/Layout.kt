@@ -65,10 +65,15 @@ class PadButton(
 
     fun contains(px: Float, py: Float): Boolean {
         if (px < x || py < y || px > x + w || py > y + h) return false
-        if (shape != SHAPE_OVAL && !isKnob && !isStick) return true
         val dx = (px - (x + w / 2)) / (w / 2)
         val dy = (py - (y + h / 2)) / (h / 2)
-        return dx * dx + dy * dy <= 1f
+        return when {
+            isKnob || isStick || shape == SHAPE_OVAL -> dx * dx + dy * dy <= 1f
+            shape == SHAPE_DIAMOND -> kotlin.math.abs(dx) + kotlin.math.abs(dy) <= 1f
+            // 좌우 끝이 뾰족한 육각형: 위아래 변은 가로 가운데 절반
+            shape == SHAPE_HEX -> kotlin.math.abs(dx) <= 1f - 0.5f * kotlin.math.abs(dy)
+            else -> true
+        }
     }
 
     fun toJson(): JSONObject = JSONObject()
@@ -104,6 +109,9 @@ class PadButton(
         const val SHAPE_RECT = 0
         const val SHAPE_OVAL = 1
         const val SHAPE_FREE = 2     // 그림 에디터로 그린 모양 그대로(그림은 image 에 있다)
+        const val SHAPE_DIAMOND = 3
+        const val SHAPE_HEX = 4
+        const val SHAPE_SQUARE = 5   // 모서리가 각진 사각형
         const val TYPE_BUTTON = 0
         const val TYPE_KNOB = 1
         const val TYPE_TRACKPAD = 2  // 마우스를 움직이는 영역. mode 가 PAD_NO_TAP 이면 탭 클릭을 끈다
@@ -712,22 +720,59 @@ object SketchKind {
     const val SHOW = 5
     const val SWITCH = 6
     const val DISPLAY = 7
+    const val OPTION = 8
 
     val names = listOf(
-        "일반 버튼", "노브", "조이스틱", "트랙패드", "가상 마우스", "표시 버튼 (그룹)", "레이아웃 전환 버튼", "표시 패널",
+        "일반 버튼", "노브", "조이스틱", "트랙패드", "가상 마우스", "표시 버튼 (그룹)", "레이아웃 전환 버튼", "표시 패널", "옵션 버튼",
     )
 
     fun create(kind: Int, x: Float, y: Float, w: Float, h: Float, image: String, color: Int, freeGroup: Int): PadButton {
         val b = PadButton(x, y, w, h, shape = PadButton.SHAPE_FREE, image = image, color = color)
-        when (kind) {
-            KNOB -> { b.type = PadButton.TYPE_KNOB; b.knobOut = PadButton.OUT_MOUSE_X }
-            STICK -> { b.type = PadButton.TYPE_STICK; b.keys = Stick.ARROWS.toMutableList() }
-            TRACKPAD -> b.type = PadButton.TYPE_TRACKPAD
-            MOUSE -> b.type = PadButton.TYPE_MOUSE
-            SHOW -> { b.type = PadButton.TYPE_SHOW; b.mode = PadButton.MODE_TOGGLE; b.target = freeGroup }
-            SWITCH -> b.type = PadButton.TYPE_SWITCH
-            DISPLAY -> b.type = PadButton.TYPE_DISPLAY
-        }
+        convert(b, kind, freeGroup)
+        if (kind == KNOB) b.knobOut = PadButton.OUT_MOUSE_X
         return b
     }
+
+    /** 지금 종류(위 번호). 사진은 바꿀 대상이 아니라 -1. */
+    fun of(b: PadButton): Int = when (b.type) {
+        PadButton.TYPE_BUTTON -> BUTTON
+        PadButton.TYPE_KNOB -> KNOB
+        PadButton.TYPE_STICK -> STICK
+        PadButton.TYPE_TRACKPAD -> TRACKPAD
+        PadButton.TYPE_MOUSE -> MOUSE
+        PadButton.TYPE_SHOW -> SHOW
+        PadButton.TYPE_SWITCH -> SWITCH
+        PadButton.TYPE_DISPLAY -> DISPLAY
+        PadButton.TYPE_OPTION -> OPTION
+        else -> -1
+    }
+
+    /**
+     * 형변환: 위치·크기·색·이름·그룹·모양·사진은 그대로 두고 종류만 바꾼다.
+     * 새 종류에서 뜻이 달라지는 값(동작 방식, 방향 키 등)은 그 종류의 기본값으로 맞춘다.
+     */
+    fun convert(b: PadButton, kind: Int, freeGroup: Int) {
+        if (kind == of(b)) return
+        when (kind) {
+            BUTTON -> { b.type = PadButton.TYPE_BUTTON; b.mode = PadButton.MODE_HOLD }
+            KNOB -> { b.type = PadButton.TYPE_KNOB; b.mode = PadButton.KNOB_UNTIL_STOP; if (b.keys.isEmpty()) b.knobOut = PadButton.OUT_MOUSE_X else b.knobOut = PadButton.OUT_KEYS }
+            STICK -> { b.type = PadButton.TYPE_STICK; b.mode = PadButton.STICK_8WAY; if (b.keys.size != 4) b.keys = Stick.ARROWS.toMutableList() }
+            TRACKPAD -> { b.type = PadButton.TYPE_TRACKPAD; b.mode = PadButton.PAD_TAP }
+            MOUSE -> b.type = PadButton.TYPE_MOUSE
+            SHOW -> { b.type = PadButton.TYPE_SHOW; b.mode = PadButton.MODE_TOGGLE; b.target = freeGroup; if (b.group == freeGroup) b.group = 0 }
+            SWITCH -> b.type = PadButton.TYPE_SWITCH
+            DISPLAY -> { b.type = PadButton.TYPE_DISPLAY; b.mode = DisplayKind.KEYS }
+            OPTION -> { b.type = PadButton.TYPE_OPTION; if (Options.all.none { it.id == b.link }) b.link = "haptic" }
+        }
+    }
+}
+
+/** 버튼 모양 고르기. 그린 모양(SHAPE_FREE)은 그림 에디터로만 만든다. */
+object Shapes {
+    val ids = listOf(PadButton.SHAPE_RECT, PadButton.SHAPE_OVAL, PadButton.SHAPE_DIAMOND, PadButton.SHAPE_HEX, PadButton.SHAPE_SQUARE)
+    val names = listOf("둥근 사각형", "원형", "다이아몬드", "육각형", "각진 사각형")
+
+    /** 모양을 바꿀 수 있는 종류인지. 노브·조이스틱은 늘 원형이고, 마우스·표시 패널·사진은 제 모양이 있다. */
+    fun applies(b: PadButton): Boolean =
+        b.type == PadButton.TYPE_BUTTON || b.isShow || b.isSwitch || b.isOption || b.isPad
 }

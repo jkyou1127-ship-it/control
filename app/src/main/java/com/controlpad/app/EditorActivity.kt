@@ -232,6 +232,35 @@ class EditorActivity : BaseActivity() {
             val sel = view.selection.toList()
             if (sel.isEmpty()) hint() else editGeometry(sel)
         }
+        tool("형변환") {
+            // 선택한 것의 종류를 바꾼다(위치·크기·색·이름은 그대로). 사진은 바꿀 수 없다.
+            val sel = view.selection.filter { !it.isImage }
+            if (sel.isEmpty()) hint()
+            else {
+                val others = LayoutStore.list(this).any { it.id != pad.id }
+                val kinds = SketchKind.names.indices.filter { (it != SketchKind.SWITCH || others) && (it != SketchKind.OPTION || Labs.isOn("option-buttons")) }
+                AlertDialog.Builder(this).setTitle("무엇으로 바꿀까요?")
+                    .setItems(kinds.map { SketchKind.names[it] }.toTypedArray()) { _, which ->
+                        checkpoint()
+                        val used = pad.buttons.filter { it.isShow }.map { it.target }
+                        val free = (1..PadButton.GROUPS).firstOrNull { it !in used } ?: 1
+                        for (b in sel) SketchKind.convert(b, kinds[which], free)
+                        view.invalidate()
+                        // 하나만 바꿨으면 새 종류의 속성 창을 바로 연다.
+                        if (sel.size == 1) editButton(sel[0])
+                    }.show()
+            }
+        }
+        tool("모양") {
+            val sel = view.selection.filter { Shapes.applies(it) }
+            if (sel.isEmpty()) android.widget.Toast.makeText(this, "모양을 바꿀 수 있는 버튼을 선택하세요 (노브·조이스틱·마우스·패널·사진은 제 모양이 있습니다)", android.widget.Toast.LENGTH_LONG).show()
+            else AlertDialog.Builder(this).setTitle("모양")
+                .setItems(Shapes.names.toTypedArray()) { _, which ->
+                    checkpoint()
+                    for (b in sel) b.shape = Shapes.ids[which]
+                    view.invalidate()
+                }.show()
+        }
         tool("순서") {
             val sel = view.selection.toList()
             if (sel.isEmpty()) hint()
@@ -364,7 +393,7 @@ class EditorActivity : BaseActivity() {
         for (name in listOf("＋추가", "✎ 그리기")) pending.remove(name)?.let { railItem(it) }
         section("선택한 것")
         railItem(multi)
-        for (name in listOf("전체 선택", "속성", "복제", "삭제", "잠금")) pending.remove(name)?.let { railItem(it) }
+        for (name in listOf("전체 선택", "속성", "형변환", "모양", "복제", "삭제", "잠금")) pending.remove(name)?.let { railItem(it) }
         section("배치")
         for (name in listOf("맞춤", "크기·위치", "순서", "숨김")) pending.remove(name)?.let { railItem(it) }
         section("옵션")
@@ -661,8 +690,15 @@ class EditorActivity : BaseActivity() {
         }
         showModeRows(b.mode)
 
-        val oval = CheckBox(this).apply { text = "원형 버튼"; isChecked = b.shape == PadButton.SHAPE_OVAL }
-        if (b.shape != PadButton.SHAPE_FREE) box.addView(oval)
+        // 모양: 그린 버튼이면 '그린 모양'을 맨 앞에 두어 그대로 둘 수 있게 한다.
+        val shapeIds = (if (b.shape == PadButton.SHAPE_FREE) listOf(PadButton.SHAPE_FREE) else emptyList()) + Shapes.ids
+        val shapeNames = (if (b.shape == PadButton.SHAPE_FREE) listOf("그린 모양") else emptyList()) + Shapes.names
+        box.addView(TextView(this).apply { text = "모양"; setPadding(0, dp(8), 0, 0) })
+        val shape = Spinner(this).apply {
+            adapter = ArrayAdapter(this@EditorActivity, android.R.layout.simple_spinner_dropdown_item, shapeNames)
+            setSelection(shapeIds.indexOf(b.shape).coerceAtLeast(0))
+        }
+        box.addView(shape)
 
         var image = b.image
         val photoRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -713,8 +749,7 @@ class EditorActivity : BaseActivity() {
                 b.holdMs = PadButton.parseHold(hold.text.toString())
                 b.rate = (rate.text.toString().toIntOrNull() ?: 10).coerceIn(PadButton.MIN_RATE, PadButton.MAX_RATE)
                 b.macro = macro
-                // 그림 에디터로 만든 버튼은 그린 모양을 그대로 유지한다.
-                if (b.shape != PadButton.SHAPE_FREE) b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
+                b.shape = shapeIds.getOrElse(shape.selectedItemPosition) { PadButton.SHAPE_RECT }
                 b.color = color; b.textColor = textColor; b.pressColor = pressColor
                 b.group = group.selectedItemPosition
                 view.invalidate()

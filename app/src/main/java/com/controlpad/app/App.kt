@@ -126,6 +126,30 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
         c.drawText(text, r.left + w / 2, r.top + 12 * density, sub)
     }
 
+    private val shapePath = android.graphics.Path()
+
+    /** 버튼 모양의 테두리 경로. 누르는 범위(PadButton.contains)와 같은 모양이다. */
+    private fun outline(b: PadButton, r: RectF, rad: Float): android.graphics.Path {
+        val p = shapePath
+        p.reset()
+        val cw = android.graphics.Path.Direction.CW
+        when {
+            b.isKnob || b.shape == PadButton.SHAPE_OVAL -> p.addOval(r, cw)
+            b.shape == PadButton.SHAPE_DIAMOND -> {
+                p.moveTo(r.centerX(), r.top); p.lineTo(r.right, r.centerY())
+                p.lineTo(r.centerX(), r.bottom); p.lineTo(r.left, r.centerY()); p.close()
+            }
+            b.shape == PadButton.SHAPE_HEX -> {
+                val q = r.width() / 4
+                p.moveTo(r.left, r.centerY()); p.lineTo(r.left + q, r.top); p.lineTo(r.right - q, r.top)
+                p.lineTo(r.right, r.centerY()); p.lineTo(r.right - q, r.bottom); p.lineTo(r.left + q, r.bottom); p.close()
+            }
+            b.shape == PadButton.SHAPE_SQUARE -> p.addRect(r, cw)
+            else -> p.addRoundRect(r, rad, rad, cw)
+        }
+        return p
+    }
+
     /** 사진의 가운데를 영역 비율에 맞게 잘라 낼 범위를 src 에 넣는다. */
     private fun crop(bmp: android.graphics.Bitmap, r: RectF) {
         val want = r.width() / r.height()
@@ -271,23 +295,18 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
             }
             return
         }
-        val oval = b.shape == PadButton.SHAPE_OVAL || b.isKnob
+        val outline = outline(b, r, rad)
         val photo = if (b.image.isNotEmpty() && !b.isKnob && !b.isPad) ImageStore.get(ctx, b.image) else null
         if (photo != null) {
             // 사진을 버튼 모양대로 잘라 면에 채우고, 눌렸을 때는 눌림 색을 반투명하게 덮는다.
-            clip.reset()
-            if (oval) clip.addOval(r, android.graphics.Path.Direction.CW)
-            else clip.addRoundRect(r, rad, rad, android.graphics.Path.Direction.CW)
-            c.save(); c.clipPath(clip)
+            c.save(); c.clipPath(outline)
             crop(photo, r)
             c.drawBitmap(photo, src, r, bitmapPaint)
             if (pressed) { fill.color = lit and 0x00FFFFFF or 0x88000000.toInt(); c.drawRect(r, fill) }
             c.restore()
-            if (oval) c.drawOval(r, stroke) else c.drawRoundRect(r, rad, rad, stroke)
-        } else if (oval) {
-            c.drawOval(r, fill); c.drawOval(r, stroke)
+            c.drawPath(outline, stroke)
         } else {
-            c.drawRoundRect(r, rad, rad, fill); c.drawRoundRect(r, rad, rad, stroke)
+            c.drawPath(outline, fill); c.drawPath(outline, stroke)
         }
 
         if (b.isKnob) {

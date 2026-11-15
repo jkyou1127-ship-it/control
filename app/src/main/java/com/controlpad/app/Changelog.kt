@@ -13,6 +13,7 @@ object Changelog {
     class Entry(val version: String, val notes: List<String>)
 
     val entries = listOf(
+        Entry("1.33", listOf("형변환: 선택한 버튼을 노브, 조이스틱, 트랙패드 등 다른 종류로 바꾸기 (위치·크기·색은 그대로)", "모양: 둥근 사각형, 원형, 다이아몬드, 육각형, 각진 사각형", "그림 에디터에서 그린 그림을 옵션 버튼으로도 만들기")),
         Entry("1.32", listOf("＋추가에 콤보, 총 입력 수, 실행 시간, 배터리·시각, 최근 입력 기록, 연결 상태 패널 추가 (초당 입력 수 패널처럼 원하는 곳에 배치)")),
         Entry("1.31", listOf(
             "실험실 전체 켜기/끄기 (설정, 실험실 화면)",
