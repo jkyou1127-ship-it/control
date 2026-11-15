@@ -21,7 +21,9 @@
     "list-kinds"
   ],
   "graduated": [],
-  "hidden": [],
+  "hidden": [
+    "kps-peak"
+  ],
   "alpha": [
     "dim-buttons",
     "press-count",
