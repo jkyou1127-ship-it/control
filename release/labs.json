@@ -25,13 +25,13 @@
     "list-kinds"
   ],
   "graduated": [
+    "big-handle",
     "kps"
   ],
   "hidden": [
     "hide-labels"
   ],
   "alpha": [
-    "big-handle",
     "status-bottom"
   ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
