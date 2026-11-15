@@ -171,6 +171,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     // 실험실 기능
     private val labKps = Labs.isOn("kps")
+    /** 초당 입력 수를 세야 하는지: 실험실 표시가 켜져 있거나, 초당 입력 수 패널을 넣어 둔 경우. */
+    private val countKps = labKps || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.KPS }
     private val labPop = Labs.isOn("press-pop")
     private val pressTimes = ArrayDeque<Long>()         // 최근에 버튼을 누른 시각들(초당 입력 수 계산용)
     private val labCombo = Labs.isOn("combo")
@@ -195,7 +197,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     private fun notePress(b: PadButton) {
         val now = SystemClock.uptimeMillis()
-        if (labKps) pressTimes.addLast(now)
+        if (countKps) pressTimes.addLast(now)
         combo = Combo.next(combo, lastPress, now)
         lastPress = now
         total++
@@ -397,7 +399,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     // 지금 눌리고 있는 키 표시
     private val showPressed = Link.showPressed
     /** 레이아웃에 키 입력 표시 패널이 있으면 그 패널에 보여 주고, 화면 위쪽의 기본 표시는 쓰지 않는다. */
-    private val hasPanel = buttons.any { it.isDisplay }
+    private val hasPanel = buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.KEYS }
     private var pressedText = ""
     private var pressedAt = 0L          // 마지막으로 키가 눌려 있던 시각
     private val pressedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -708,6 +710,21 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 (holds[i] > 0 && (b.mode == PadButton.MODE_HOLD || b.mode == PadButton.MODE_TURBO))
             var parts = 0
             if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)
+            if (b.isDisplay && DisplayKind.of(b) != DisplayKind.KEYS) {
+                // 숫자 패널: 항상 보이고, 숫자가 바뀌는 동안 다시 그린다.
+                val kind = DisplayKind.of(b)
+                val now = SystemClock.uptimeMillis()
+                if (now - lastPress > Combo.WINDOW_MS) combo = 0
+                val n = if (kind == DisplayKind.KPS) kps() else 0
+                rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
+                painter.drawDisplay(c, b, rect, false, DisplayKind.value(kind, n, combo, total, now - startedAt), false)
+                when (kind) {
+                    DisplayKind.KPS -> if (n > 0) postInvalidateDelayed(200)
+                    DisplayKind.COMBO -> if (combo > 0) postInvalidateDelayed(250)
+                    DisplayKind.TIMER -> postInvalidateDelayed(1000)
+                }
+                continue
+            }
             if (b.isDisplay) {
                 val held = pressedAt == Long.MAX_VALUE
                 if (pressedText.isEmpty() || !(held || SystemClock.uptimeMillis() - pressedAt < PRESSED_LINGER_MS)) continue

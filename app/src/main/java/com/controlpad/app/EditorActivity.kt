@@ -102,6 +102,13 @@ class EditorActivity : BaseActivity() {
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
+        add("초당 입력 수 패널") {
+            val t = PadButton(
+                0.4f, 0.03f, 0.2f, 0.12f, type = PadButton.TYPE_DISPLAY, mode = DisplayKind.KPS, color = PadButton.PALETTE[0],
+            )
+            pad.buttons += t; view.selected = t; view.invalidate()
+            editButton(t, isNew = true)
+        }
         add("사진") {
             pickImage { name ->
                 checkpoint()
@@ -760,9 +767,15 @@ class EditorActivity : BaseActivity() {
         val m = dp(20)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
         box.addView(TextView(this).apply {
-            text = "실행 화면에서 지금 눌리고 있는 키를 이 자리에 보여 줍니다. 버튼처럼 옮기고 크기를 바꿀 수 있고, 누를 수는 없습니다.\n" +
-                "이 패널을 넣으면 화면 위쪽의 기본 키 표시는 나오지 않습니다."
+            text = "실행 화면에서 고른 내용을 이 자리에 보여 줍니다. 버튼처럼 옮기고 크기를 바꿀 수 있고, 누를 수는 없습니다.\n" +
+                "'눌리고 있는 키' 패널을 넣으면 화면 위쪽의 기본 키 표시는 나오지 않습니다."
         })
+        box.addView(TextView(this).apply { text = "표시할 내용"; setPadding(0, dp(8), 0, 0) })
+        val kind = Spinner(this).apply {
+            adapter = ArrayAdapter(this@EditorActivity, android.R.layout.simple_spinner_dropdown_item, DisplayKind.names)
+            setSelection(DisplayKind.of(b))
+        }
+        box.addView(kind)
         val group = groupSpinner(b.group)
         box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
         box.addView(group)
@@ -770,10 +783,11 @@ class EditorActivity : BaseActivity() {
         box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
         box.addView(optionalColor("글자색", "테마 기본", textColor) { textColor = it })
 
-        AlertDialog.Builder(this).setTitle(if (isNew) "새 키 입력 표시 패널" else "키 입력 표시 패널 속성")
+        AlertDialog.Builder(this).setTitle(if (isNew) "새 표시 패널" else "표시 패널 속성")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
                 checkpoint()
+                b.mode = kind.selectedItemPosition
                 b.group = group.selectedItemPosition
                 b.color = color; b.textColor = textColor
                 view.invalidate()

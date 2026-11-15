@@ -208,7 +208,7 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
     private fun drawBody(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float, parts: Int, alt: Int) {
         if (b.isMouse) { drawMouse(c, b, r, selected, parts); return }
         if (b.isStick) { drawStick(c, b, r, selected, 0f, 0f, 0); return }
-        if (b.isDisplay) { drawDisplay(c, b, r, selected, if (alt == 2) "키 입력 표시" else "", alt == 2); return }
+        if (b.isDisplay) { drawDisplay(c, b, r, selected, if (alt == 2) DisplayKind.editorLabel(b) else "", alt == 2); return }
         if (b.isImage) { drawImage(c, b, r, selected, alt == 2); return }
         val lit = if (b.pressColor != 0) b.pressColor else b.color      // 눌렸을 때 채우는 색
         // 눌렸을 때 글자는 채운 색의 밝기에 맞춰 검정/흰색 중 잘 보이는 쪽

@@ -612,4 +612,17 @@ class CoreTest {
         assertEquals("[숨김 요청] 실험실 kps", Labs.hideTitle("kps"))
         assertEquals("[복귀 요청] 실험실 kps", Labs.restoreTitle("kps"))
     }
+
+    @Test
+    fun displayPanelKinds() {
+        val kps = PadButton(0f, 0f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = DisplayKind.KPS)
+        assertEquals(DisplayKind.KPS, DisplayKind.of(PadButton.fromJson(JSONObject(kps.toJson().toString()))))
+        assertEquals(DisplayKind.KEYS, DisplayKind.of(PadButton(0f, 0f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY)))   // 예전 패널
+        assertEquals(DisplayKind.KEYS, DisplayKind.of(PadButton(0f, 0f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = 99)))
+        assertEquals("초당 입력 수 표시", DisplayKind.editorLabel(kps))
+        assertEquals("12 회/초", DisplayKind.value(DisplayKind.KPS, 12, 0, 0, 0))
+        assertEquals("5 콤보", DisplayKind.value(DisplayKind.COMBO, 0, 5, 0, 0))
+        assertEquals("총 340", DisplayKind.value(DisplayKind.TOTAL, 0, 0, 340, 0))
+        assertEquals("1:05", DisplayKind.value(DisplayKind.TIMER, 0, 0, 0, 65000))
+    }
 }

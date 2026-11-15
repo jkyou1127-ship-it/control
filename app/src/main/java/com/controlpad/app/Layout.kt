@@ -670,3 +670,29 @@ object Combo {
         while (history.size > limit) history.removeFirst()
     }
 }
+
+/** 표시 패널에 무엇을 보여 줄지(TYPE_DISPLAY 버튼의 mode 값). */
+object DisplayKind {
+    const val KEYS = 0       // 지금 눌리고 있는 키
+    const val KPS = 1        // 초당 입력 수
+    const val COMBO = 2      // 콤보
+    const val TOTAL = 3      // 총 입력 수
+    const val TIMER = 4      // 실행 시간
+
+    val names = listOf("눌리고 있는 키", "초당 입력 수", "콤보", "총 입력 수", "실행 시간")
+
+    /** 예전 파일이나 엉뚱한 값은 '눌리고 있는 키'로 본다. */
+    fun of(b: PadButton): Int = if (b.mode in names.indices) b.mode else KEYS
+
+    /** 편집 화면에서 패널에 적어 둘 안내 글자. */
+    fun editorLabel(b: PadButton): String = names[of(b)] + " 표시"
+
+    /** 실행 화면의 숫자 패널 글자. */
+    fun value(kind: Int, kps: Int, combo: Int, total: Int, elapsedMs: Long): String = when (kind) {
+        KPS -> "$kps 회/초"
+        COMBO -> "$combo 콤보"
+        TOTAL -> "총 $total"
+        TIMER -> Combo.format(elapsedMs)
+        else -> ""
+    }
+}
