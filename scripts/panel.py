@@ -58,7 +58,8 @@ def short_name(name):
     """버전 이름에서 'NCP#' 같은 머리말을 뗀다. 건의에는 머리말 없이 '1.00.a' 처럼 온다."""
     short = name.split("#")[-1]
     # 중계 서버와 이슈 제목에는 영문 · 숫자 · 점 · 빈칸만 쓴다(예: 'UIUPV!' → 'UIUPV').
-    return "".join(c for c in short if (c.isascii() and c.isalnum()) or c in ". ").strip()
+    # 중계 서버는 20자까지만 받으므로 앞의 20자만 쓴다.
+    return "".join(c for c in short if (c.isascii() and c.isalnum()) or c in ". ").strip()[:20].strip()
 
 
 def check_build(version, alpha, stable):

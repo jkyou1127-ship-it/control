@@ -669,7 +669,8 @@ class CoreTest {
     fun buildRequestsUseTheNameWithoutPrefix() {
         assertEquals("1.00.a", Labs.shortName("NCP#1.00.a"))
         assertEquals("1.41", Labs.shortName("1.41"))
-        assertEquals("UIUPV", Labs.shortName("UIUPV!"))                     // 중계 서버가 받지 않는 기호는 뺀다
+        assertEquals("UIUPV", Labs.shortName("UIUPV!"))
+        assertEquals("HotFIx2026.11.15.9.3", Labs.shortName("HotFIx2026.11.15.9.38"))   // 20자까지                     // 중계 서버가 받지 않는 기호는 뺀다
         assertTrue(Regex("^[0-9A-Za-z][0-9A-Za-z. ]{0,19}$").matches(Labs.shortName("NCP#1.00.a")))   // 중계 서버가 받는 모양
     }
 

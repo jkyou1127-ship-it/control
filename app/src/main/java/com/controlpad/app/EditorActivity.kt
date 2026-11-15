@@ -416,18 +416,26 @@ class EditorActivity : BaseActivity() {
         // 한 칸씩 옮기기(실험실 기능): 네 방향 버튼을 한 줄에
         if (listOf("←", "→", "↑", "↓").all { it in pending }) {
             val arrows = LinearLayout(this)
-            for (name in listOf("←", "↑", "↓", "→")) arrows.addView(pending.remove(name), LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(2) })
+            for (name in listOf("←", "↑", "↓", "→")) arrows.addView(pending.remove(name)?.apply {
+                setPadding(0, dp(9), 0, dp(9))      // 좁은 칸에서 화살표가 잘리지 않게
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(2) })
             railItem(arrows)
         }
         section("옵션")
         railItem(snapBox); railItem(slideBox)
-        // 나머지(되돌리기, 저장, 실행, 완료)는 위쪽 막대에.
-        for (chip in pending.values) top.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+        // 나머지(되돌리기, 저장, 실행, 완료)는 위쪽 막대에. 화면이 좁아도 잘리지 않게 가로로 밀 수 있는 줄에 넣는다.
+        val chips = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        for (chip in pending.values) chips.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+        top.addView(android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false; isFillViewport = false
+            addView(chips)
+        }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
 
         root.addView(top)
         root.addView(penScroll)
         val body = LinearLayout(this)
-        body.addView(ScrollView(this).apply { addView(rail) }, LinearLayout.LayoutParams(dp(132), -1))
+        // 도구 모음 칸의 글자(체크 상자, 도구 이름)가 잘리지 않게 폭을 넉넉히 둔다.
+        body.addView(ScrollView(this).apply { addView(rail) }, LinearLayout.LayoutParams(dp(156), -1))
         body.addView(view, LinearLayout.LayoutParams(0, -1, 1f))
         root.addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)

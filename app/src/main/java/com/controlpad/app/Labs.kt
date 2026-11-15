@@ -228,7 +228,7 @@ object Labs {
     }
 
     /** 'NCP#1.00.a' → '1.00.a'. 건의(중계 서버 · 이슈 제목)에는 글자 · 숫자 · 점만 쓴다. */
-    fun shortName(name: String) = name.substringAfterLast('#').filter { it.isLetterOrDigit() && it.code < 128 || it == '.' || it == ' ' }.trim()
+    fun shortName(name: String) = name.substringAfterLast('#').filter { it.isLetterOrDigit() && it.code < 128 || it == '.' || it == ' ' }.trim().take(20).trim()
     fun buildTitle(version: String) = "$REQUEST_PREFIX 빌드 $version"
     fun labTitle(id: String) = "$REQUEST_PREFIX 실험실 $id"
     fun hideTitle(id: String) = "[숨김 요청] 실험실 $id"

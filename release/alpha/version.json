@@ -1,6 +1,6 @@
 {
-  "versionCode": 77,
-  "versionName": "UIUPV!",
+  "versionCode": 78,
+  "versionName": "HotFIx2026.11.15.9.38",
   "build": "lets Go V1",
-  "notes": "lets Go V1 (코드명 UIUPV!): 기능 탭을 레이아웃 목록처럼 카드 격자로 새로 꾸미고, 실험실을 따로 탭으로 분리했습니다."
+  "notes": "핫픽스(HotFIx2026.11.15.9.38): 에디터 화면에서 위쪽 버튼과 도구 모음 글자가 잘리던 문제를 고쳤습니다."
 }

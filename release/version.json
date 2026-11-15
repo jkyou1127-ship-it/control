@@ -1,6 +1,6 @@
 {
-  "versionCode": 76,
-  "versionName": "hd13",
-  "build": "NWE 02",
-  "notes": "NWE 02 (코드명 hd13): 모바일 기능 8개 추가 — 흔들어서 모든 키 떼기, 화면 방향 고정, 연결 끊기면 모든 키 떼기, 절전 모드 · 지연 · Wi-Fi 경고, 현재 시각, 연결 확인 진동."
+  "versionCode": 78,
+  "versionName": "HotFIx2026.11.15.9.38",
+  "build": "lets Go V1",
+  "notes": "핫픽스(HotFIx2026.11.15.9.38): 에디터 화면에서 위쪽 버튼과 도구 모음 글자가 잘리던 문제를 고쳤습니다."
 }

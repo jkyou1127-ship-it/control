@@ -56,6 +56,7 @@ object Ui {
                 view.buttonTintList = ColorStateList.valueOf(accent())
                 view.setTextColor(t.text)
                 view.minHeight = ctx.dp(40)
+                view.minWidth = 0; view.minimumWidth = 0
             }
             is Button -> {
                 val primary = view.tag == PRIMARY
@@ -64,7 +65,9 @@ object Ui {
                 view.background = ripple(ctx, rounded(ctx, if (primary) accent() else surface(), 12, if (primary) 0 else line()))
                 view.setTextColor(if (primary) (if (Themes.luminance(accent()) > 0.5f) 0xFF0B1A24.toInt() else 0xFFFFFFFF.toInt()) else t.text)
                 view.minHeight = ctx.dp(42); view.minimumHeight = ctx.dp(42)
-                view.setPadding(ctx.dp(14), ctx.dp(8), ctx.dp(14), ctx.dp(8))
+                // 기본 버튼의 최소 폭(64dp 남짓)을 없애고 옆 여백을 줄여, 좁은 줄에서 버튼이 밀려나 잘리지 않게 한다.
+                view.minWidth = 0; view.minimumWidth = 0
+                view.setPadding(ctx.dp(12), ctx.dp(8), ctx.dp(12), ctx.dp(8))
                 (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { it.setMargins(ctx.dp(3), ctx.dp(3), ctx.dp(3), ctx.dp(3)); view.layoutParams = it }
             }
             is EditText -> {
