@@ -96,30 +96,103 @@ object Ui {
             })
         }
 
-    /** 설정 화면들의 탭: 설정 · 기능 · 업데이트. 누르면 그 화면으로 바로 바꾼다(뒤로 가기는 목록으로). */
-    val TABS = listOf("설정" to SettingsActivity::class.java, "기능 · 기타" to FeaturesActivity::class.java, "업데이트" to UpdateActivity::class.java)
+    /** 설정 화면들의 탭: 설정 · 기능 · 실험실(알파만) · 업데이트. 누르면 그 화면으로 바로 바꾼다(뒤로 가기는 목록으로). */
+    fun tabList(): List<Pair<String, Class<*>>> = buildList {
+        add("설정" to SettingsActivity::class.java)
+        add("기능" to FeaturesActivity::class.java)
+        if (Updater.alpha) add("실험실" to LabsActivity::class.java)
+        add("업데이트" to UpdateActivity::class.java)
+    }
 
-    fun tabs(a: android.app.Activity, selected: Int): LinearLayout = LinearLayout(a).apply {
+    fun tabs(a: android.app.Activity): LinearLayout = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
         val pad = a.dp(4)
         setPadding(pad, pad, pad, pad)
         background = rounded(a, surface(), 14, line())
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, a.dp(12)) }
-        TABS.forEachIndexed { i, (label, cls) ->
-            val on = i == selected
+        for ((label, cls) in tabList()) {
+            val on = cls == a.javaClass
             addView(TextView(a).apply {
                 text = label; textSize = 15f; gravity = android.view.Gravity.CENTER
                 typeface = if (on) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
-                setTextColor(if (on) (if (Themes.luminance(accent()) > 0.5f) 0xFF0B1A24.toInt() else 0xFFFFFFFF.toInt()) else Themes.current.text)
+                setTextColor(if (on) onAccent() else Themes.current.text)
                 if (on) background = rounded(a, accent(), 10)
                 setPadding(0, a.dp(10), 0, a.dp(10))
                 isClickable = true
                 if (!on) setOnClickListener {
+                    if (cls == LabsActivity::class.java) Labs.refresh()   // 실험실은 열기 전에 최신 상태를 받아 둔다
                     a.startActivity(android.content.Intent(a, cls).addFlags(android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION))
                     a.finish()
                     @Suppress("DEPRECATION") a.overridePendingTransition(0, 0)
                 }
             }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+    }
+
+    /** 강조색 위의 글자 색. */
+    fun onAccent(): Int = if (Themes.luminance(accent()) > 0.5f) 0xFF0B1A24.toInt() else 0xFFFFFFFF.toInt()
+
+    /** 흐린 글자 색(설명용). */
+    fun muted(): Int = Themes.current.text and 0x00FFFFFF or 0x99000000.toInt()
+
+    /**
+     * 카드 격자: 레이아웃 목록처럼 화면 너비에 따라 한 줄에 카드를 여러 개 놓는다.
+     * 마지막 줄이 덜 차면 빈 칸으로 채워 카드 너비를 맞춘다.
+     */
+    fun grid(ctx: Context, cards: List<View>, minWidthDp: Int = 260): LinearLayout = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        val widthDp = ctx.resources.displayMetrics.widthPixels / ctx.resources.displayMetrics.density
+        val columns = ((widthDp - 32) / minWidthDp).toInt().coerceIn(1, 4)
+        var line: LinearLayout? = null
+        cards.forEachIndexed { i, card ->
+            if (i % columns == 0) {
+                line = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+                addView(line, LinearLayout.LayoutParams(-1, -2).apply { topMargin = ctx.dp(12) })
+            }
+            line!!.addView(card, LinearLayout.LayoutParams(0, -1, 1f).apply { if (i % columns != 0) leftMargin = ctx.dp(12) })
+        }
+        val rest = (columns - cards.size % columns) % columns
+        repeat(rest) { line?.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f).apply { leftMargin = ctx.dp(12) }) }
+    }
+
+    /**
+     * 기능 카드: 왼쪽 위 아이콘 칸, 오른쪽 위 스위치(또는 상태 표시), 아래에 제목과 설명.
+     * on 이 null 이면 스위치 없이 badge 만 보인다. 카드를 누르면 onTap.
+     */
+    fun featureCard(
+        ctx: Context, icon: String, title: String, note: String, on: Boolean?, badge: String? = null,
+        enabled: Boolean = true, onTap: (() -> Unit)? = null,
+    ): LinearLayout = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        val lit = on == true
+        background = rounded(ctx, surface(), 18, if (lit) accent() and 0x00FFFFFF or 0x99000000.toInt() else line())
+        setPadding(ctx.dp(14), ctx.dp(14), ctx.dp(14), ctx.dp(14))
+        alpha = if (enabled) 1f else 0.55f
+        val top = LinearLayout(ctx).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+        top.addView(TextView(ctx).apply {
+            text = icon; textSize = 20f; gravity = android.view.Gravity.CENTER
+            background = rounded(ctx, if (lit) accent() and 0x00FFFFFF or 0x40000000 else Themes.current.bg, 12)
+        }, LinearLayout.LayoutParams(ctx.dp(42), ctx.dp(42)))
+        top.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
+        if (badge != null) top.addView(TextView(ctx).apply {
+            text = badge; textSize = 11f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setTextColor(accent())
+            setPadding(ctx.dp(8), ctx.dp(3), ctx.dp(8), ctx.dp(3))
+            background = rounded(ctx, 0, 10, accent())
+        }, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = ctx.dp(6) })
+        val sw = if (on != null) android.widget.Switch(ctx).apply { isChecked = on; isClickable = false; isFocusable = false } else null
+        if (sw != null) top.addView(sw)
+        addView(top)
+        addView(TextView(ctx).apply {
+            text = title; textSize = 16f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setTextColor(Themes.current.text)
+            setPadding(0, ctx.dp(12), 0, 0)
+        })
+        if (note.isNotEmpty()) addView(TextView(ctx).apply {
+            text = note; textSize = 12.5f; setTextColor(muted()); setLineSpacing(0f, 1.15f); setPadding(0, ctx.dp(4), 0, 0)
+        })
+        if (onTap != null && enabled) {
+            isClickable = true
+            foreground = RippleDrawable(ColorStateList.valueOf(accent() and 0x00FFFFFF or 0x33000000), null, rounded(ctx, -1, 18))
+            setOnClickListener { onTap() }
         }
     }
 

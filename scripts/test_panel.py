@@ -156,6 +156,10 @@ class PanelTest(unittest.TestCase):
         self.assertIsNone(self.evaluate("[정식 요청] 빌드 1.00.a")[2])
         self.assertIsNotNone(self.evaluate("[정식 요청] 빌드 1.00.b")[2])
 
+    def test_codename_with_symbols_is_requested_without_them(self):
+        self.write("alpha/version.json", {"versionCode": 48, "versionName": "UIUPV!"})
+        self.assertIsNone(self.evaluate("[정식 요청] 빌드 UIUPV")[2])
+
     def test_needs_panel_flag_is_dropped_on_promotion(self):
         self.write("alpha/version.json", {"versionCode": 47, "versionName": "Uwe.1", "needsPanel": True})
         self.assertIsNone(self.evaluate("[정식 요청] 빌드 Uwe.1")[2])

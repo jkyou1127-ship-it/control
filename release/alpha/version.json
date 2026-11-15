@@ -1,6 +1,6 @@
 {
-  "versionCode": 76,
-  "versionName": "hd13",
-  "build": "NWE 02",
-  "notes": "NWE 02 (코드명 hd13): 모바일 기능 8개 추가 — 흔들어서 모든 키 떼기, 화면 방향 고정, 연결 끊기면 모든 키 떼기, 절전 모드 · 지연 · Wi-Fi 경고, 현재 시각, 연결 확인 진동."
+  "versionCode": 77,
+  "versionName": "UIUPV!",
+  "build": "lets Go V1",
+  "notes": "lets Go V1 (코드명 UIUPV!): 기능 탭을 레이아웃 목록처럼 카드 격자로 새로 꾸미고, 실험실을 따로 탭으로 분리했습니다."
 }

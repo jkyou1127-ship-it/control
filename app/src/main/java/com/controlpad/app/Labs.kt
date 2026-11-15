@@ -4,7 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
-import android.widget.CheckBox
+import android.view.Gravity
+import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -227,7 +228,7 @@ object Labs {
     }
 
     /** 'NCP#1.00.a' → '1.00.a'. 건의(중계 서버 · 이슈 제목)에는 글자 · 숫자 · 점만 쓴다. */
-    fun shortName(name: String) = name.substringAfterLast('#')
+    fun shortName(name: String) = name.substringAfterLast('#').filter { it.isLetterOrDigit() && it.code < 128 || it == '.' || it == ' ' }.trim()
     fun buildTitle(version: String) = "$REQUEST_PREFIX 빌드 $version"
     fun labTitle(id: String) = "$REQUEST_PREFIX 실험실 $id"
     fun hideTitle(id: String) = "[숨김 요청] 실험실 $id"
@@ -238,137 +239,172 @@ object Labs {
         ISSUES + "?title=" + URLEncoder.encode(title, "UTF-8") + "&body=" + URLEncoder.encode(body, "UTF-8")
 }
 
-/** 실험실과 평가단 화면. 알파 빌드를 받는 사람에게만 보인다. */
+/**
+ * 실험실 탭(UIUPV! 에서 탭으로 분리하고 새로 꾸밈). 알파 빌드를 받는 사람에게만 보인다.
+ * 위쪽: '실험실 사용' 카드와 평가단 카드(코드 · 빌드 정식 추가 요청). 아래: 실험실 기능 카드 격자, 숨긴 기능 카드.
+ */
 class LabsActivity : BaseActivity() {
+    private val viaRelay get() = Labs.relay.isNotEmpty()
+
+    /** 중계 서버가 있으면 앱에서 바로 보내고(평가단 코드만 필요), 없으면 GitHub 이슈 화면을 연다. */
+    private fun request(kind: String, target: String, titleText: String, body: String) {
+        if (!viaRelay) {
+            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Labs.requestUrl(titleText, body)))) }
+                .onFailure { Toast.makeText(this, "웹 브라우저를 열 수 없습니다", Toast.LENGTH_SHORT).show() }
+            return
+        }
+        if (Labs.code.isBlank()) {
+            Toast.makeText(this, "먼저 평가단 코드를 입력하세요", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, "요청을 보내는 중…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val problem = Labs.send(kind, target)
+            // 숨김 · 복귀는 건의한 사람의 화면에서 바로 반영한다(저장소 반영은 곧 뒤따른다).
+            if (problem == null && kind == "hide") Labs.hideNow(target)
+            if (problem == null && kind == "restore") Labs.restoreNow(target)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                android.app.AlertDialog.Builder(this)
+                    .setMessage(problem ?: Labs.plan(kind))
+                    .setPositiveButton("확인") { _, _ -> if (problem == null && (kind == "hide" || kind == "restore")) recreate() }
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun actions(vararg items: Pair<String, () -> Unit>): LinearLayout = LinearLayout(this).apply {
+        setPadding(0, dp(10), 0, 0)
+        for ((label, action) in items) addView(toolChip(this@LabsActivity, label, action), LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6) })
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pad = dp(16)
-        val root = SectionedLayout(this).apply { setPadding(pad, pad, pad, pad) }
-        val text = Themes.current.text
-        fun title(t: String) = root.addView(Ui.section(this, t))
-        fun note(t: String) = root.addView(TextView(this).apply { this.text = t; textSize = 14f; setLineSpacing(0f, 1.2f) })
-        // 중계 서버가 있으면 앱에서 바로 보내고(평가단 코드만 필요), 없으면 GitHub 이슈 화면을 연다.
-        val viaRelay = Labs.relay.isNotEmpty()
-        fun request(kind: String, target: String, titleText: String, body: String) {
-            if (!viaRelay) {
-                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Labs.requestUrl(titleText, body)))) }
-                    .onFailure { Toast.makeText(this, "웹 브라우저를 열 수 없습니다", Toast.LENGTH_SHORT).show() }
-                return
-            }
-            if (Labs.code.isBlank()) {
-                Toast.makeText(this, "먼저 평가단 코드를 입력하세요", Toast.LENGTH_SHORT).show()
-                return
-            }
-            Toast.makeText(this, "요청을 보내는 중…", Toast.LENGTH_SHORT).show()
-            Thread {
-                val problem = Labs.send(kind, target)
-                // 숨김은 기다리지 않으므로, 건의한 사람의 화면에서는 바로 숨긴다(저장소 반영은 곧 뒤따른다).
-                if (problem == null && kind == "hide") Labs.hideNow(target)
-                if (problem == null && kind == "restore") Labs.restoreNow(target)
-                runOnUiThread {
-                    if (isFinishing || isDestroyed) return@runOnUiThread
-                    android.app.AlertDialog.Builder(this)
-                        .setMessage(problem ?: Labs.plan(kind))
-                        .setPositiveButton("확인") { _, _ -> if (problem == null && (kind == "hide" || kind == "restore")) recreate() }
-                        .show()
-                }
-            }.start()
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
+        root.addView(Ui.header(this, "실험실", "다듬는 중인 기능을 써 보고 평가단으로 건의합니다"))
+        root.addView(Ui.tabs(this))
+
+        // 위쪽 카드 두 개: 실험실 사용 · 평가단
+        val master = Ui.featureCard(this, "🧪", "실험실 사용",
+            "끄면 실험실에서 켜 둔 기능이 모두 꺼집니다. 다시 켜면 전에 골라 둔 대로 돌아옵니다.", Labs.enabled) {
+            Labs.enabled = !Labs.enabled; recreate()
         }
-        fun chip(label: String, action: () -> Unit) =
-            root.addView(toolChip(this, label, action), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
-
-        root.addView(Ui.header(this, "실험실 · 평가단", "다듬는 중인 기능을 써 보고 건의합니다"))
-
-        title("평가단")
-        if (viaRelay) {
-            note("알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 바로 정식 채널에 올라갑니다. 평가단 코드가 필요합니다.")
-            root.addView(android.widget.EditText(this).apply {
-                hint = "평가단 코드"; setSingleLine(); setText(Labs.code)
-                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-                addTextChangedListener(object : android.text.TextWatcher {
-                    override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                    override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-                    override fun afterTextChanged(s: android.text.Editable?) { Labs.code = s.toString().trim() }
-                })
-            })
-        } else note(
-            "알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 바로 지금 알파 빌드가 정식 채널에 올라갑니다.\n" +
-                "· 요청은 저장소의 이슈로 접수되어 GitHub 로그인이 필요합니다.\n" +
-                "· 평가단으로 등록된 계정의 요청만 반영됩니다.\n" +
-                "· 요청은 바로 반영됩니다."
-        )
-        val versions = TextView(this).apply { textSize = 15f; setTextColor(text); setPadding(0, dp(8), 0, 0) }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = Ui.rounded(this@LabsActivity, Ui.surface(), 18, Ui.line())
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+        }
+        panel.addView(TextView(this).apply {
+            text = "🗳"; textSize = 20f; gravity = Gravity.CENTER
+            background = Ui.rounded(this@LabsActivity, Themes.current.bg, 12)
+        }, LinearLayout.LayoutParams(dp(42), dp(42)))
+        panel.addView(TextView(this).apply {
+            text = "평가단"; textSize = 16f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setTextColor(Themes.current.text)
+            setPadding(0, dp(12), 0, 0)
+        })
         val mine = Updater.installedName(this)
         val mineLabel = Updater.installedLabel(this)      // 화면에는 빌드 번호, 요청에는 코드명(mine)
-        versions.text = "지금 쓰는 빌드: $mineLabel · 정식 채널: 확인 중…"
-        root.addView(versions)
+        val versions = TextView(this).apply {
+            textSize = 12.5f; setTextColor(Ui.muted()); setPadding(0, dp(4), 0, 0)
+            text = "지금 쓰는 빌드 $mineLabel\n정식 채널 확인 중…"
+        }
+        panel.addView(versions)
         Thread {
             val stable = runCatching { Updater.parse(Labs.get(Updater.BASE + "version.json")).label }.getOrNull()
-            runOnUiThread { versions.text = "지금 쓰는 빌드: $mineLabel · 정식 채널: " + (stable ?: "확인하지 못함") }
+            runOnUiThread { versions.text = "지금 쓰는 빌드 $mineLabel\n정식 채널 " + (stable ?: "확인하지 못함") }
         }.start()
-        chip("이 빌드($mineLabel)를 정식에 추가 요청") {
-            request("build", Labs.shortName(mine), Labs.buildTitle(Labs.shortName(mine)), "알파 빌드 $mine 을(를) 써 보았고, 정식 채널에 올려 주세요.\n\n써 본 내용:\n")
-        }
-
-        title("실험실")
-        note(
-            "아직 다듬는 중인 기능입니다. 켜서 써 보고 평가단으로 건의하세요.\n" +
-                "· 정식 추가: 바로 정식 기능이 됩니다\n" +
-                "· 숨김: 바로 실험실에서 빠지고 누구에게도 켜지지 않습니다\n" +
-                "· 복귀: 바로 숨긴 기능이나 정식이 된 기능을 실험실로 되돌립니다"
-        )
-        // 실험실 전체 켜기/끄기
-        val boxes = ArrayList<CheckBox>()
-        root.addView(CheckBox(this).apply {
-            this.text = "실험실 사용"; textSize = 17f; isChecked = Labs.enabled; setPadding(0, dp(8), 0, 0)
-            setOnCheckedChangeListener { _, on ->
-                Labs.enabled = on
-                for (b in boxes) b.isEnabled = on
-            }
-        })
-        note("끄면 실험실에서 켜 둔 기능이 모두 꺼집니다. 다시 켜면 전에 골라 둔 대로 돌아옵니다. 알파·정식으로 올라간 기능은 영향을 받지 않습니다.")
-        val hidden = Labs.hidden
-        for (f in Labs.features.filter { it.id !in hidden }) {
-            val done = f.id in Labs.graduated
-            val rolling = !done && f.id in Labs.alphaWide
-            val moved = done || rolling
-            root.addView(CheckBox(this).apply {
-                this.text = f.title + when {
-                    moved && f.button -> if (done) "  (정식 · 버튼으로 추가됨)" else "  (알파 · 버튼으로 추가됨 · 곧 정식)"
-                    moved -> if (done) "  (정식 · 설정으로 옮겨짐)" else "  (알파 · 설정으로 옮겨짐 · 곧 정식)"
-                    else -> ""
-                }
-                textSize = 16f; isChecked = Labs.isOn(f.id)
-                setPadding(0, dp(10), 0, 0)
-                if (moved) isEnabled = false         // 올라간 기능은 설정 화면(또는 버튼)에서 다룬다
-                else { isEnabled = Labs.enabled; boxes += this; setOnCheckedChangeListener { _, on -> Labs.set(f.id, on) } }
+        if (viaRelay) panel.addView(android.widget.EditText(this).apply {
+            hint = "평가단 코드"; setSingleLine(); setText(Labs.code)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) { Labs.code = s.toString().trim() }
             })
-            note(f.description)
-            val row = LinearLayout(this)
-            fun rowChip(label: String, action: () -> Unit) =
-                row.addView(toolChip(this, label, action), LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6); topMargin = dp(6) })
-            if (done) rowChip("실험실로 복귀 건의") {
-                request("restore", f.id, Labs.restoreTitle(f.id), "정식 기능 '${f.title}' 을(를) 다시 실험실로 돌려 주세요.\n\n이유:\n")
-            } else if (!rolling) rowChip("정식 추가 건의") {
-                request("lab", f.id, Labs.labTitle(f.id), "실험실 기능 '${f.title}' 을(를) 써 보았고, 정식 기능으로 올려 주세요.\n\n써 본 내용:\n")
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        else panel.addView(TextView(this).apply {
+            text = "요청은 저장소의 이슈로 접수되어 GitHub 로그인이 필요합니다. 평가단으로 등록된 계정의 요청만 반영됩니다."
+            textSize = 12.5f; setTextColor(Ui.muted()); setPadding(0, dp(8), 0, 0)
+        })
+        panel.addView(android.widget.Button(this).apply {
+            text = "이 빌드를 정식에 추가 요청"; tag = Ui.PRIMARY
+            setOnClickListener {
+                request("build", Labs.shortName(mine), Labs.buildTitle(Labs.shortName(mine)), "알파 빌드 $mineLabel 을(를) 써 보았고, 정식 채널에 올려 주세요.\n\n써 본 내용:\n")
             }
-            rowChip("숨김 건의") {
-                request("hide", f.id, Labs.hideTitle(f.id), "기능 '${f.title}' 을(를) 숨겨 주세요.\n\n이유:\n")
-            }
-            root.addView(row)
-        }
-        // 숨긴 기능: 목록에서 빠져 있고, 복귀를 건의할 수 있다.
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        root.addView(Ui.grid(this, listOf(master, panel), 300))
+
+        // 실험실 기능
+        val hidden = Labs.hidden
+        val live = Labs.features.filter { it.id !in hidden }
+        root.addView(sectionTitle("🧩", "다듬는 중인 기능", "카드를 눌러 켜고 끕니다 · 정식 추가와 숨김은 바로 반영됩니다"))
+        if (live.isEmpty()) root.addView(TextView(this).apply { text = "지금은 실험 중인 기능이 없습니다"; setPadding(dp(4), dp(8), 0, 0) })
+        else root.addView(Ui.grid(this, live.map { labCard(it) }, 260))
+
+        // 숨긴 기능
         val gone = Labs.features.filter { it.id in hidden }
         if (gone.isNotEmpty()) {
-            title("숨긴 기능")
-            note("평가단 건의로 숨긴 기능입니다. 복귀를 건의하면 바로 숨기기 전 상태로 돌아옵니다.")
-            for (f in gone) {
-                root.addView(TextView(this).apply { this.text = f.title; textSize = 16f; setTextColor(text); setPadding(0, dp(10), 0, 0) })
-                chip("'${f.title}' 복귀 건의") {
-                    request("restore", f.id, Labs.restoreTitle(f.id), "숨긴 기능 '${f.title}' 을(를) 다시 실험실로 돌려 주세요.\n\n이유:\n")
+            root.addView(sectionTitle("🙈", "숨긴 기능", "평가단 건의로 숨긴 기능입니다. 다음 업데이트에서 지워집니다."))
+            root.addView(Ui.grid(this, gone.map { f ->
+                Ui.featureCard(this, "🙈", f.title, f.description, null, "숨김").apply {
+                    addView(actions("복귀 건의" to {
+                        request("restore", f.id, Labs.restoreTitle(f.id), "숨긴 기능 '${f.title}' 을(를) 다시 실험실로 돌려 주세요.\n\n이유:\n")
+                    }))
                 }
-            }
+            }, 260))
         }
+        Ui.restyle(root)
         setContentView(ScrollView(this).apply { addView(root) })
+    }
+
+    private fun sectionTitle(icon: String, title: String, note: String): View = LinearLayout(this).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(2), dp(22), dp(2), 0)
+        addView(TextView(this@LabsActivity).apply { text = icon; textSize = 20f })
+        val texts = LinearLayout(this@LabsActivity).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
+        texts.addView(TextView(this@LabsActivity).apply {
+            text = title; textSize = 19f; typeface = android.graphics.Typeface.DEFAULT_BOLD; setTextColor(Themes.current.text)
+        })
+        texts.addView(TextView(this@LabsActivity).apply { text = note; textSize = 12f; setTextColor(Ui.muted()) })
+        addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
+    }
+
+    /** 실험실 기능 카드: 스위치(또는 '정식' · '알파' 표시)와 건의 버튼들. */
+    private fun labCard(f: Labs.Feature): View {
+        val done = f.id in Labs.graduated
+        val rolling = !done && f.id in Labs.alphaWide
+        val moved = done || rolling
+        val badge = when {
+            done -> if (f.button) "정식 · 버튼" else "정식 · 기능 탭"
+            rolling -> "알파 · 곧 정식"
+            f.button -> "버튼"
+            else -> null
+        }
+        var self: View? = null
+        val card = Ui.featureCard(this, if (f.button) "🔘" else "🧪", f.title, f.description,
+            if (moved) null else Labs.isOn(f.id), badge, enabled = moved || Labs.enabled,
+            onTap = if (moved) null else ({
+                Labs.set(f.id, !Labs.isOn(f.id))
+                val old = self
+                val parent = old?.parent as? LinearLayout
+                if (old != null && parent != null) {
+                    val i = parent.indexOfChild(old)
+                    val params = old.layoutParams
+                    parent.removeViewAt(i)
+                    parent.addView(labCard(f).also { Ui.restyle(it) }, i, params)
+                }
+            }))
+        val buttons = ArrayList<Pair<String, () -> Unit>>()
+        if (done) buttons += "실험실로 복귀 건의" to {
+            request("restore", f.id, Labs.restoreTitle(f.id), "정식 기능 '${f.title}' 을(를) 다시 실험실로 돌려 주세요.\n\n이유:\n")
+        } else if (!rolling) buttons += "정식 추가 건의" to {
+            request("lab", f.id, Labs.labTitle(f.id), "실험실 기능 '${f.title}' 을(를) 써 보았고, 정식 기능으로 올려 주세요.\n\n써 본 내용:\n")
+        }
+        buttons += "숨김 건의" to { request("hide", f.id, Labs.hideTitle(f.id), "기능 '${f.title}' 을(를) 숨겨 주세요.\n\n이유:\n") }
+        card.addView(actions(*buttons.toTypedArray()))
+        card.alpha = 1f       // 꺼진 실험실에서도 건의 버튼은 또렷하게
+        self = card
+        return card
     }
 }

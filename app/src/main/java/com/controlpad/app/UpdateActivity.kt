@@ -26,7 +26,7 @@ class UpdateActivity : BaseActivity() {
         }
 
         root.addView(Ui.header(this, "업데이트", "새 버전 확인과 업데이트 내역"))
-        root.addView(Ui.tabs(this, 2))
+        root.addView(Ui.tabs(this))
 
         // 지금 버전: 강조색 띠를 두른 큰 카드
         val hero = LinearLayout(this).apply {

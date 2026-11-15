@@ -167,7 +167,7 @@ class CoreTest {
         assertEquals("hd12", info.name)
         assertEquals("NWE 01 (hd12)", info.label)
         assertEquals("1.41", Updater.parse("""{"versionCode":71,"versionName":"1.41"}""").label)
-        assertTrue(Changelog.entries.first().build.startsWith("NWE "))
+        assertTrue(Changelog.entries.first().build.isNotEmpty())
         assertEquals(Updater.BUILD, Changelog.entries.first().build)
         assertEquals(Themes.all.size, Themes.all.map { it.name }.toSet().size)
         for (t in Themes.all) {
@@ -669,6 +669,7 @@ class CoreTest {
     fun buildRequestsUseTheNameWithoutPrefix() {
         assertEquals("1.00.a", Labs.shortName("NCP#1.00.a"))
         assertEquals("1.41", Labs.shortName("1.41"))
+        assertEquals("UIUPV", Labs.shortName("UIUPV!"))                     // 중계 서버가 받지 않는 기호는 뺀다
         assertTrue(Regex("^[0-9A-Za-z][0-9A-Za-z. ]{0,19}$").matches(Labs.shortName("NCP#1.00.a")))   // 중계 서버가 받는 모양
     }
 

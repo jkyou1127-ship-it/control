@@ -46,28 +46,9 @@ class SettingsActivity : BaseActivity() {
         fun note(t: String) = TextView(this).apply { text = t; textSize = 14f; setLineSpacing(0f, 1.2f) }
 
         root.addView(Ui.header(this, "설정", "연결 · 테마 · 오프셋 · 화면"))
-        root.addView(Ui.tabs(this, 0))
+        root.addView(Ui.tabs(this))
         status = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
         root.addView(status)
-        // 실험실과 평가단은 알파 빌드를 받는 사람에게만 보인다. 자주 쓰므로 맨 위에 둔다.
-        if (Updater.alpha) root.addView(CheckBox(this).apply {
-            text = "실험실 사용 — 끄면 실험실에서 켜 둔 기능이 모두 꺼짐"; isChecked = Labs.enabled
-            setOnCheckedChangeListener { _, on -> Labs.enabled = on }
-        })
-        if (Updater.alpha) root.addView(Button(this).apply {
-            text = "실험실 · 평가단"
-            setOnClickListener {
-                // 중계 서버 주소가 바뀌었을 수 있으니 열기 전에 한 번 받아 온다(안 되면 전에 받은 값으로 연다).
-                isEnabled = false
-                Thread {
-                    Labs.fetchNow()
-                    runOnUiThread {
-                        isEnabled = true
-                        if (!isFinishing && !isDestroyed) startActivity(Intent(this@SettingsActivity, LabsActivity::class.java))
-                    }
-                }.start()
-            }
-        })
 
         root.addView(title("연결 방식"))
         val group = RadioGroup(this)
