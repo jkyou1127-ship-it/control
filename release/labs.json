@@ -33,7 +33,8 @@
     "hide-labels"
   ],
   "alpha": [
-    "press-count"
+    "press-count",
+    "release-sound"
   ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
