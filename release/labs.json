@@ -29,6 +29,7 @@
   "hidden": [
     "grid-dots",
     "kps-peak",
+    "random-color",
     "status-large"
   ],
   "alpha": [
