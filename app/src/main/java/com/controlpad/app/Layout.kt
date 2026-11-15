@@ -80,6 +80,7 @@ class PadButton(
             ((seconds.trim().replace(',', '.').toFloatOrNull() ?: 1f) * 1000).toInt().coerceIn(MIN_HOLD_MS, MAX_HOLD_MS)
         const val SHAPE_RECT = 0
         const val SHAPE_OVAL = 1
+        const val SHAPE_FREE = 2     // 그림 에디터로 그린 모양 그대로(그림은 image 에 있다)
         const val TYPE_BUTTON = 0
         const val TYPE_KNOB = 1
         const val TYPE_TRACKPAD = 2  // 마우스를 움직이는 영역. mode 가 PAD_NO_TAP 이면 탭 클릭을 끈다
@@ -431,6 +432,25 @@ object Resize {
         val lowest = minOf(min / smallest, 1f)        // 이미 min 보다 작은 버튼은 더 줄이지 않는다
         val highest = (1f - origin) / size
         return ((target - origin) / size).coerceIn(lowest, maxOf(lowest, highest))
+    }
+}
+
+/** 그림 에디터: 손으로 그린 선들을 감싸는 영역을 구한다. */
+object Sketch {
+    /**
+     * 점들(x0, y0, x1, y1, …)을 모두 감싸고 선 굵기의 절반만큼 넉넉한 영역을 [왼쪽, 위, 오른쪽, 아래]로 돌려준다.
+     * 화면(가로 width, 세로 height) 밖으로는 나가지 않는다. 점이 없으면 null.
+     */
+    fun bounds(strokes: List<FloatArray>, margin: Float, width: Float, height: Float): FloatArray? {
+        var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var r = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
+        for (s in strokes) for (i in 0 until s.size / 2) {
+            l = minOf(l, s[i * 2]); r = maxOf(r, s[i * 2]); t = minOf(t, s[i * 2 + 1]); b = maxOf(b, s[i * 2 + 1])
+        }
+        if (l > r) return null
+        return floatArrayOf(
+            (l - margin).coerceAtLeast(0f), (t - margin).coerceAtLeast(0f),
+            (r + margin).coerceAtMost(width), (b + margin).coerceAtMost(height),
+        )
     }
 }
 

@@ -426,4 +426,31 @@ class CoreTest {
         val clamped = Geometry.fit(listOf(floatArrayOf(0.5f, 0.5f, 0.2f, 0.2f)), floatArrayOf(0.95f, -1f, 0.2f, 5f))[0]
         assertArrayEquals(floatArrayOf(0.8f, 0f, 0.2f, 1f), clamped, 1e-5f)
     }
+
+    @Test
+    fun userThemesSurviveJsonAndPickLightOrDark() {
+        val t = Themes.make("바다", 0xFF06202A.toInt(), 0xFFDDF6FF.toInt(), 0.8f, 2.5f, true, 0xFF031218.toInt(), 0xFF0C303D.toInt())
+        val back = Themes.fromJson(JSONObject(Themes.toJson(t).toString()))
+        assertEquals("바다", back.name)
+        assertEquals(t.bg, back.bg); assertEquals(t.text, back.text); assertEquals(t.base, back.base); assertEquals(t.card, back.card)
+        assertEquals(0.8f, back.strength, 1e-4f); assertEquals(2.5f, back.stroke, 1e-4f)
+        assertTrue(back.colorText)
+        assertFalse(back.light)
+        // 밝은 배경이면 밝은 테마로, 바탕색·목록 배경을 주지 않으면 알아서 정한다
+        val day = Themes.fromJson(JSONObject("""{"bg":-1,"text":-16777216}"""))
+        assertTrue(day.light)
+        assertEquals(0xFFFFFFFF.toInt(), day.base)
+        assertEquals("내 테마", day.name)
+    }
+
+    @Test
+    fun sketchBoundsWrapAllStrokesAndStayOnScreen() {
+        val strokes = listOf(floatArrayOf(100f, 50f, 300f, 200f), floatArrayOf(20f, 180f, 60f, 400f))
+        assertArrayEquals(floatArrayOf(10f, 40f, 310f, 410f), Sketch.bounds(strokes, 10f, 1000f, 600f), 1e-4f)
+        assertArrayEquals(floatArrayOf(0f, 20f, 320f, 400f), Sketch.bounds(strokes, 30f, 320f, 400f), 1e-4f)   // 화면 밖으로는 안 나감
+        assertEquals(null, Sketch.bounds(emptyList(), 5f, 100f, 100f))
+        val free = PadButton(0f, 0f, 0.2f, 0.2f, shape = PadButton.SHAPE_FREE, image = "a.png")
+        assertEquals(PadButton.SHAPE_FREE, PadButton.fromJson(JSONObject(free.toJson().toString())).copy().shape)
+        assertTrue(free.contains(0.001f, 0.001f))          // 누르는 범위는 그림을 감싸는 사각형
+    }
 }

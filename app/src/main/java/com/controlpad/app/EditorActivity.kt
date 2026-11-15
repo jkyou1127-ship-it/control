@@ -314,7 +314,7 @@ class EditorActivity : BaseActivity() {
             row.addView(shown, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(Button(this).apply {
                 text = "키 선택"
-                setOnClickListener { pickKeys(keys) { keys.clear(); keys += it; show() } }
+                setOnClickListener { pickKeys(this@EditorActivity, keys) { keys.clear(); keys += it; show() } }
             })
             keyBox.addView(row)
         }
@@ -437,7 +437,7 @@ class EditorActivity : BaseActivity() {
         keyRow.addView(keyText, LinearLayout.LayoutParams(0, -2, 1f))
         keyRow.addView(Button(this).apply {
             text = "키 선택"
-            setOnClickListener { pickKeys(keys) { keys.clear(); keys += it; showKeys() } }
+            setOnClickListener { pickKeys(this@EditorActivity, keys) { keys.clear(); keys += it; showKeys() } }
         })
         box.addView(keyRow)
 
@@ -480,7 +480,7 @@ class EditorActivity : BaseActivity() {
         holdRow.visibility = if (b.mode == PadButton.MODE_TIMED) View.VISIBLE else View.GONE
 
         val oval = CheckBox(this).apply { text = "원형 버튼"; isChecked = b.shape == PadButton.SHAPE_OVAL }
-        box.addView(oval)
+        if (b.shape != PadButton.SHAPE_FREE) box.addView(oval)
 
         var image = b.image
         val photoRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
@@ -509,7 +509,8 @@ class EditorActivity : BaseActivity() {
                 b.label2 = label2.text.toString().trim()
                 b.image = image
                 b.holdMs = PadButton.parseHold(hold.text.toString())
-                b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
+                // 그림 에디터로 만든 버튼은 그린 모양을 그대로 유지한다.
+                if (b.shape != PadButton.SHAPE_FREE) b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
                 b.color = color; b.textColor = textColor; b.pressColor = pressColor
                 b.group = group.selectedItemPosition
                 view.invalidate()
@@ -545,7 +546,7 @@ class EditorActivity : BaseActivity() {
                 text = "키 선택"
                 setOnClickListener {
                     // 방향마다 키 하나만 쓴다. 여러 개를 고르면 수정키가 아닌 첫 키를 쓴다.
-                    pickKeys(listOfNotNull(keys[i].takeIf { it > 0 })) { picked ->
+                    pickKeys(this@EditorActivity, listOfNotNull(keys[i].takeIf { it > 0 })) { picked ->
                         keys[i] = picked.firstOrNull { !Keys.isModifier(it) } ?: picked.firstOrNull() ?: 0
                         show()
                     }
@@ -881,41 +882,6 @@ class EditorActivity : BaseActivity() {
         row.addView(plus, android.view.ViewGroup.LayoutParams(dp(40), dp(40)))
         paint()
         return row
-    }
-
-    /** 여러 키를 골라 조합(예: Ctrl + Shift + S)을 만든다. */
-    private fun pickKeys(current: List<Int>, done: (List<Int>) -> Unit) {
-        val chosen = LinkedHashSet(current)
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(8), dp(16), 0) }
-        for ((title, defs) in Keys.groups) {
-            box.addView(TextView(this).apply { text = title; setPadding(0, dp(10), 0, dp(4)) })
-            val grid = FlowLayout(this)
-            for (k in defs) {
-                val cell = TextView(this).apply {
-                    text = k.name; gravity = Gravity.CENTER; textSize = 15f
-                    setTextColor(Color.WHITE)
-                }
-                fun paint() {
-                    cell.background = GradientDrawable().apply {
-                        cornerRadius = dp(6).toFloat()
-                        setColor(if (k.usage in chosen) 0xFF0288D1.toInt() else 0xFF30343C.toInt())
-                    }
-                }
-                paint()
-                cell.setOnClickListener {
-                    if (!chosen.remove(k.usage)) chosen += k.usage
-                    paint()
-                }
-                grid.addView(cell, android.view.ViewGroup.LayoutParams(dp(68), dp(44)))
-            }
-            box.addView(grid, LinearLayout.LayoutParams(-1, -2))
-        }
-        AlertDialog.Builder(this).setTitle("키 선택 (여러 개를 고르면 동시에 입력)")
-            .setView(ScrollView(this).apply { addView(box) })
-            .setPositiveButton("확인") { _, _ -> done(Keys.ordered(chosen)) }
-            .setNeutralButton("모두 해제") { _, _ -> done(emptyList()) }
-            .setNegativeButton("취소", null)
-            .show().wide()
     }
 
     companion object {

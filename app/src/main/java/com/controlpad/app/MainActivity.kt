@@ -107,9 +107,10 @@ class MainActivity : BaseActivity() {
                 text = "⋮"
                 setOnClickListener { v ->
                     PopupMenu(this@MainActivity, v).apply {
-                        menu.add("이름 변경"); menu.add("복제"); menu.add("파일로 저장"); menu.add("삭제")
+                        menu.add("그림 에디터"); menu.add("이름 변경"); menu.add("복제"); menu.add("파일로 저장"); menu.add("삭제")
                         setOnMenuItemClickListener { item ->
                             when (item.title) {
+                                "그림 에디터" -> open(SketchActivity::class.java, l.id)
                                 "이름 변경" -> askName("이름 변경", l.name) { l.name = it; LayoutStore.save(this@MainActivity, l); refresh() }
                                 "복제" -> {
                                     val c = PadLayout(name = l.name + " 복사본", slide = l.slide,

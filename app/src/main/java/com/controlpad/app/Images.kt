@@ -28,6 +28,14 @@ object ImageStore {
         cache.remove(name)
     }
 
+    /** 앱에서 만든 그림(투명한 부분이 있는 PNG)을 저장하고 그 이름을 돌려준다. */
+    fun save(ctx: Context, bmp: Bitmap): String {
+        val name = UUID.randomUUID().toString() + ".png"
+        File(dir(ctx), name).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        cache[name] = bmp
+        return name
+    }
+
     /** 사용자가 고른 사진을 줄여서 저장하고 그 이름을 돌려준다. 읽을 수 없으면 null. */
     fun importFrom(ctx: Context, uri: Uri): String? = runCatching {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

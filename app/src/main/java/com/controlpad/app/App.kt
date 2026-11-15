@@ -206,6 +206,22 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
         stroke.color = if (selected) theme.text else b.color
         stroke.strokeWidth = density * if (selected) 3f else theme.stroke
         val rad = minOf(r.width(), r.height()) * 0.14f
+        if (b.shape == PadButton.SHAPE_FREE) {
+            // 그림 에디터로 그린 버튼: 그림을 그대로 그리고, 눌리면 그린 부분만 눌림 색으로 바꾼다.
+            val drawn = ImageStore.get(ctx, b.image)
+            if (drawn != null) {
+                bitmapPaint.colorFilter = if (pressed) android.graphics.PorterDuffColorFilter(lit, android.graphics.PorterDuff.Mode.SRC_ATOP) else null
+                c.drawBitmap(drawn, null, r, bitmapPaint)
+                bitmapPaint.colorFilter = null
+            }
+            if (selected || drawn == null) { stroke.strokeWidth = density * if (selected) 3f else 1f; c.drawRect(r, stroke) }
+            if (b.label.isNotEmpty()) {
+                text.color = if (b.textColor != 0) b.textColor else theme.text
+                text.textSize = (r.height() * 0.28f).coerceAtMost(r.width() * 1.5f / b.label.length.coerceAtLeast(2)).coerceIn(9f * density, 56f * density)
+                c.drawText(b.label, r.centerX(), r.centerY() - (text.descent() + text.ascent()) / 2, text)
+            }
+            return
+        }
         val oval = b.shape == PadButton.SHAPE_OVAL || b.isKnob
         val photo = if (b.image.isNotEmpty() && !b.isKnob && !b.isPad) ImageStore.get(ctx, b.image) else null
         if (photo != null) {
@@ -312,58 +328,78 @@ object Themes {
         PadTheme("벚꽃", c(0xFFFCE4EC), Color.WHITE, 1.2f, c(0xFF880E4F), 1.5f, light = true, card = Color.WHITE),
     )
 
-    /** 고를 수 있는 이름들. 마지막은 직접 만드는 커스텀 테마. */
-    val names: List<String> get() = all.map { it.name } + "커스텀"
+    /** 고를 수 있는 이름들: 기본 테마 다음에 테마 에디터로 직접 만든 테마가 온다. */
+    val names: List<String> get() = all.map { it.name } + user.map { it.name }
 
     /** 테마가 바뀔 때마다 올라간다. 떠 있는 화면이 다시 그려야 하는지 판단하는 데 쓴다. */
     var revision = 0
         private set
 
     private val prefs get() = Link.prefs
-    private fun put(edit: (android.content.SharedPreferences.Editor) -> Unit) {
-        prefs.edit().also(edit).apply()
+
+    /** 테마 에디터로 직접 만든 테마들. 처음 쓸 때 저장된 것을 읽는다. */
+    val user: MutableList<PadTheme> by lazy { load() }
+
+    private fun load(): MutableList<PadTheme> {
+        val out = ArrayList<PadTheme>()
+        val saved = prefs.getString("userThemes", null)
+        if (saved != null) {
+            runCatching {
+                val a = org.json.JSONArray(saved)
+                for (i in 0 until a.length()) out += fromJson(a.getJSONObject(i))
+            }
+        } else if (prefs.contains("cBg")) {
+            // 예전 버전의 '커스텀' 테마 하나를 첫 번째 직접 만든 테마로 옮긴다.
+            out += custom(
+                prefs.getInt("cBg", all[0].bg), prefs.getInt("cText", Color.WHITE), prefs.getFloat("cStrength", 1f),
+                prefs.getFloat("cStroke", 1.5f), prefs.getBoolean("cColorText", false),
+            )
+        }
+        return out
+    }
+
+    /** 직접 만든 테마 목록을 고친 뒤에 부른다. */
+    fun saveUser() {
+        val a = org.json.JSONArray()
+        for (t in user) a.put(toJson(t))
+        prefs.edit().putString("userThemes", a.toString()).apply()
         revision++
     }
 
     var index: Int
-        get() = prefs.getInt("theme", 0).coerceIn(0, all.size)
-        set(i) = put { it.putInt("theme", i) }
+        get() = prefs.getInt("theme", 0).coerceIn(0, all.size + user.size - 1)
+        set(i) {
+            prefs.edit().putInt("theme", i).apply()
+            revision++
+        }
 
-    val isCustom: Boolean get() = index == all.size
-    val hasCustom: Boolean get() = prefs.contains("cBg")
+    val current: PadTheme
+        get() = index.let { if (it < all.size) all[it] else user[it - all.size] }
 
-    var customBg: Int
-        get() = prefs.getInt("cBg", all[0].bg)
-        set(v) = put { it.putInt("cBg", v or 0xFF000000.toInt()) }
-    var customText: Int
-        get() = prefs.getInt("cText", Color.WHITE)
-        set(v) = put { it.putInt("cText", v or 0xFF000000.toInt()) }
-    var customStrength: Float
-        get() = prefs.getFloat("cStrength", 1f)
-        set(v) = put { it.putFloat("cStrength", v) }
-    var customStroke: Float
-        get() = prefs.getFloat("cStroke", 1.5f)
-        set(v) = put { it.putFloat("cStroke", v) }
-    var customColorText: Boolean
-        get() = prefs.getBoolean("cColorText", false)
-        set(v) = put { it.putBoolean("cColorText", v) }
-
-    /** 커스텀을 처음 고를 때, 쓰고 있던 테마에서 시작하도록 값을 복사한다. */
-    fun copyToCustom(t: PadTheme) = put {
-        it.putInt("cBg", t.bg).putInt("cText", t.text).putFloat("cStrength", t.strength)
-            .putFloat("cStroke", t.stroke).putBoolean("cColorText", t.colorText)
-    }
-
-    fun custom(bg: Int, text: Int, strength: Float, stroke: Float, colorText: Boolean): PadTheme {
+    /** 배경 밝기에 맞춰 밝은/어두운 테마를 정한다. base 와 card 를 주지 않으면 배경에서 알아서 고른다. */
+    fun make(
+        name: String, bg: Int, text: Int, strength: Float, stroke: Float, colorText: Boolean,
+        base: Int? = null, card: Int? = null,
+    ): PadTheme {
         val light = luminance(bg) > 0.5f
         return PadTheme(
-            "커스텀", bg, if (light) Color.WHITE else Color.BLACK, strength, text, stroke, colorText,
-            light, mix(bg, text, 0.09f),
+            name, bg or 0xFF000000.toInt(), (base ?: if (light) Color.WHITE else Color.BLACK) or 0xFF000000.toInt(),
+            strength, text or 0xFF000000.toInt(), stroke, colorText, light, (card ?: mix(bg, text, 0.09f)) or 0xFF000000.toInt(),
         )
     }
 
-    val current: PadTheme
-        get() = if (isCustom) custom(customBg, customText, customStrength, customStroke, customColorText) else all[index]
+    fun custom(bg: Int, text: Int, strength: Float, stroke: Float, colorText: Boolean): PadTheme =
+        make("커스텀", bg, text, strength, stroke, colorText)
+
+    fun toJson(t: PadTheme): org.json.JSONObject = org.json.JSONObject()
+        .put("name", t.name).put("bg", t.bg).put("base", t.base).put("strength", t.strength.toDouble())
+        .put("text", t.text).put("stroke", t.stroke.toDouble()).put("colorText", t.colorText).put("card", t.card)
+
+    fun fromJson(o: org.json.JSONObject): PadTheme = make(
+        o.optString("name").ifEmpty { "내 테마" }, o.getInt("bg"), o.getInt("text"),
+        o.optDouble("strength", 1.0).toFloat().coerceIn(0.1f, 1.6f), o.optDouble("stroke", 1.5).toFloat().coerceIn(0.5f, 5f),
+        o.optBoolean("colorText"), if (o.has("base")) o.getInt("base") else null, if (o.has("card")) o.getInt("card") else null,
+    )
 
     // android.graphics.Color 의 함수는 단위 테스트에서 쓸 수 없어 비트 연산으로 직접 계산한다.
     private fun r(c: Int) = c shr 16 and 0xFF
@@ -418,9 +454,15 @@ fun pickColor(a: Activity, initial: Int, done: (Int) -> Unit) {
 }
 
 /** 설정 화면에서 지금 테마로 버튼이 어떻게 보이는지 보여 준다. */
-class ThemePreview(ctx: Context) : android.view.View(ctx) {
-    private val theme = Themes.current
-    private val painter = PadPainter(ctx, theme)
+class ThemePreview(ctx: Context, private var theme: PadTheme = Themes.current) : android.view.View(ctx) {
+    private var painter = PadPainter(ctx, theme)
+
+    /** 아직 저장하지 않은 테마도 미리 볼 수 있게 한다. */
+    fun show(t: PadTheme) {
+        theme = t
+        painter = PadPainter(context, t)
+        invalidate()
+    }
     private val rect = RectF()
     private val samples = listOf(
         PadButton(0f, 0f, 0f, 0f, "D", mutableListOf(0x07), color = PadButton.PALETTE[0]),
