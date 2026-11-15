@@ -642,4 +642,13 @@ class CoreTest {
         val back = PadButton.fromJson(JSONObject(made[SketchKind.KNOB].toJson().toString()))
         assertTrue(back.isKnob && back.shape == PadButton.SHAPE_FREE)
     }
+
+    @Test
+    fun alphaWideStageIsParsedAndPlansMatchThePanelSchedule() {
+        assertEquals(setOf("kps"), Labs.parseAlpha("""{"alpha":["kps","unknown"]}"""))
+        assertEquals(emptySet<String>(), Labs.parseAlpha("{}"))
+        assertTrue(Labs.plan("lab").contains("10분") && Labs.plan("lab").contains("20분"))
+        assertTrue(Labs.plan("build").contains("30분"))
+        assertTrue(Labs.plan("hide").contains("5분") && Labs.plan("restore").contains("5분"))
+    }
 }

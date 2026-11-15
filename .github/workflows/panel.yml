@@ -1,9 +1,13 @@
 name: Panel request
 
-# 평가단의 정식 추가 요청을 5분 뒤 release/ 에 반영한다. 요청은 두 길로 온다.
-#   relay  앱 → 중계 서버(relay/worker.js, 평가단 코드 확인) → 이 워크플로 실행. 취소하려면 5분 안에 이 실행을 취소한다.
-#   요청 종류: 빌드 정식 추가, 실험실 기능 정식 추가 · 숨김 · 복귀.
-#   issue  GitHub 이슈(중계 서버를 쓰지 않을 때). 평가단 계정의 이슈만 받는다. 취소하려면 5분 안에 이슈를 닫는다.
+# 평가단의 요청을 release/ 에 반영한다. 기다리는 시간은 scripts/panel.py 의 WAITS 에 있다.
+#   실험실 기능 정식 추가  10분 뒤 알파 사용자 모두에게 켜고, 그로부터 20분 뒤 정식 기능으로
+#   빌드 정식 추가        30분 뒤 정식 채널에 (요청한 순간의 알파 빌드)
+#   숨김 · 복귀           5분 뒤
+# 요청은 두 길로 온다.
+#   relay  앱 → 중계 서버(relay/worker.js, 평가단 코드 확인) → 이 워크플로 실행. 취소하려면 이 실행을 취소한다.
+#   issue  GitHub 이슈(중계 서버를 쓰지 않을 때). 평가단 계정의 이슈만 받는다. 취소하려면 이슈를 닫는다.
+# 요청마다 따로 실행된다. (concurrency 로 줄을 세우면 기다리는 요청이 하나만 남고 나머지가 취소되므로 쓰지 않는다.)
 on:
   workflow_dispatch:
     inputs:
@@ -19,8 +23,6 @@ on:
 permissions:
   contents: write
   issues: write
-
-# 요청마다 따로 실행된다. (concurrency 로 줄을 세우면 기다리는 요청이 하나만 남고 나머지가 취소되므로 쓰지 않는다.)
 
 jobs:
   relay:
@@ -46,37 +48,35 @@ jobs:
           echo "요청을 반영하지 않았습니다: $REASON" >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
-      - name: Remember the requested alpha build
-        if: steps.check.outputs.ok == 'true'
+      - name: Prepare
+        env:
+          PLAN: ${{ steps.check.outputs.summary }}
         run: |
+          echo "$PLAN" >> "$GITHUB_STEP_SUMMARY"
           # 기다리는 사이에 새 알파가 올라와도 요청한 그 빌드를 올릴 수 있게 지금 알파 빌드를 떠 둔다.
           mkdir -p "$RUNNER_TEMP/alpha"
           cp release/alpha/version.json release/alpha/ControlPad.apk "$RUNNER_TEMP/alpha/"
           echo "ALPHA_SNAPSHOT=$RUNNER_TEMP/alpha" >> "$GITHUB_ENV"
+          # 반영 중에 저장소를 최신으로 되돌리므로, 반영 스크립트는 따로 복사해 둔 것을 쓴다.
+          cp scripts/panel_apply.sh "$RUNNER_TEMP/"
 
-      - name: Wait five minutes
-        run: sleep 300
+      - name: Wait
+        run: sleep "${{ steps.check.outputs.wait1 }}"
+
+      - name: Apply to all alpha users
+        if: steps.check.outputs.staged == 'true'
+        run: |
+          result=$(bash "$RUNNER_TEMP/panel_apply.sh" alpha) || { echo "요청을 반영하지 않았습니다: $result" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          echo "$result" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for stable
+        if: steps.check.outputs.staged == 'true'
+        run: sleep "${{ steps.check.outputs.wait2 }}"
 
       - name: Apply
         run: |
-          # 여러 요청이 겹쳐도 서로 지우지 않게, 밀리면 최신 상태에서 다시 반영한다.
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for attempt in 1 2 3 4 5 6; do
-            git fetch -q origin "$GITHUB_REF_NAME"
-            git reset -q --hard "origin/$GITHUB_REF_NAME"
-            if ! result=$(python3 scripts/panel.py apply 2>&1); then
-              echo "요청을 반영하지 않았습니다: $result" >> "$GITHUB_STEP_SUMMARY"; exit 1
-            fi
-            git add release
-            git commit -q -m "Panel request: $result"
-            if git push -q origin "HEAD:$GITHUB_REF_NAME"; then
-              echo "$result" >> "$GITHUB_STEP_SUMMARY"; exit 0
-            fi
-            sleep $((attempt * 3 + RANDOM % 5))
-          done
-          echo "다른 변경과 계속 겹쳐서 반영하지 못했습니다" >> "$GITHUB_STEP_SUMMARY"
-          exit 1
+          result=$(bash "$RUNNER_TEMP/panel_apply.sh") || { echo "요청을 반영하지 않았습니다: $result" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+          echo "$result" >> "$GITHUB_STEP_SUMMARY"
 
   promote:
     if: >-
@@ -105,47 +105,49 @@ jobs:
         run: |
           gh issue close "$ISSUE_NUMBER" --reason "not planned" --comment "요청을 반영하지 않았습니다: $REASON"
 
-      - name: Announce
+      - name: Prepare
         if: steps.check.outputs.ok == 'true'
         env:
-          SUMMARY: ${{ steps.check.outputs.summary }}
+          PLAN: ${{ steps.check.outputs.summary }}
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "요청을 받았습니다. 5분 뒤에 $SUMMARY 올립니다. 취소하려면 그 전에 이 이슈를 닫으세요."
-
-      - name: Remember the requested alpha build
-        if: steps.check.outputs.ok == 'true'
-        run: |
-          # 기다리는 사이에 새 알파가 올라와도 요청한 그 빌드를 올릴 수 있게 지금 알파 빌드를 떠 둔다.
+          gh issue comment "$ISSUE_NUMBER" --body "요청을 받았습니다. $PLAN 취소하려면 그 전에 이 이슈를 닫으세요."
           mkdir -p "$RUNNER_TEMP/alpha"
           cp release/alpha/version.json release/alpha/ControlPad.apk "$RUNNER_TEMP/alpha/"
           echo "ALPHA_SNAPSHOT=$RUNNER_TEMP/alpha" >> "$GITHUB_ENV"
+          cp scripts/panel_apply.sh "$RUNNER_TEMP/"
 
-      - name: Wait five minutes
+      - name: Wait
         if: steps.check.outputs.ok == 'true'
-        run: sleep 300
+        run: sleep "${{ steps.check.outputs.wait1 }}"
+
+      - name: Apply to all alpha users
+        id: alpha
+        if: steps.check.outputs.ok == 'true' && steps.check.outputs.staged == 'true'
+        run: |
+          if [ "$(gh issue view "$ISSUE_NUMBER" --json state --jq .state)" != "OPEN" ]; then
+            echo "cancelled=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if result=$(bash "$RUNNER_TEMP/panel_apply.sh" alpha); then
+            gh issue comment "$ISSUE_NUMBER" --body "$result. 20분 뒤에 정식 기능으로 올립니다."
+          else
+            gh issue close "$ISSUE_NUMBER" --reason "not planned" --comment "요청을 반영하지 않았습니다: $result"
+            echo "cancelled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for stable
+        if: steps.check.outputs.ok == 'true' && steps.check.outputs.staged == 'true' && steps.alpha.outputs.cancelled != 'true'
+        run: sleep "${{ steps.check.outputs.wait2 }}"
 
       - name: Apply
-        if: steps.check.outputs.ok == 'true'
+        if: steps.check.outputs.ok == 'true' && steps.alpha.outputs.cancelled != 'true'
         run: |
           if [ "$(gh issue view "$ISSUE_NUMBER" --json state --jq .state)" != "OPEN" ]; then
             echo "이슈가 닫혀서 취소되었습니다"
             exit 0
           fi
-          # 여러 요청이 겹쳐도 서로 지우지 않게, 밀리면 최신 상태에서 다시 반영한다.
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for attempt in 1 2 3 4 5 6; do
-            git fetch -q origin "$GITHUB_REF_NAME"
-            git reset -q --hard "origin/$GITHUB_REF_NAME"
-            if ! result=$(python3 scripts/panel.py apply 2>&1); then
-              gh issue close "$ISSUE_NUMBER" --reason "not planned" --comment "요청을 반영하지 않았습니다: $result"; exit 0
-            fi
-            git add release
-            git commit -q -m "Panel request: $result"
-            if git push -q origin "HEAD:$GITHUB_REF_NAME"; then
-              gh issue close "$ISSUE_NUMBER" --comment "$result"; exit 0
-            fi
-            sleep $((attempt * 3 + RANDOM % 5))
-          done
-          gh issue comment "$ISSUE_NUMBER" --body "다른 변경과 계속 겹쳐서 반영하지 못했습니다. 다시 요청해 주세요."
-          exit 1
+          if result=$(bash "$RUNNER_TEMP/panel_apply.sh"); then
+            gh issue close "$ISSUE_NUMBER" --comment "$result"
+          else
+            gh issue close "$ISSUE_NUMBER" --reason "not planned" --comment "요청을 반영하지 않았습니다: $result"
+          fi

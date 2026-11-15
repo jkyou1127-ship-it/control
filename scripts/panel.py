@@ -2,7 +2,8 @@
 """평가단의 정식 추가 요청(저장소 이슈)을 확인하고 반영한다. .github/workflows/panel.yml 이 부른다.
 
     panel.py check   요청이 유효한지 보고 GITHUB_OUTPUT 형식(ok=, reason=, summary=)으로 적는다
-    panel.py apply   release/ 의 파일을 고친다
+    panel.py apply         release/ 의 파일을 고친다
+    panel.py apply alpha   실험실 기능 정식 추가의 1단계: 알파 사용자 모두에게 켠다(labs.json 의 alpha)
 
 요청은 두 길로 온다. 중계 서버(relay/worker.js)가 평가단 코드를 확인하고 보낸 요청은
 환경 변수 REQUEST_KIND / REQUEST_TARGET 으로, GitHub 이슈로 온 요청은 ISSUE_TITLE / ISSUE_AUTHOR 로 받는다.
@@ -62,6 +63,23 @@ def check_build(version, alpha, stable):
     return None
 
 
+# 요청을 받은 뒤 반영까지 기다리는 시간(초).
+#   실험실 기능 정식 추가: 10분 뒤 알파 사용자 모두에게 켜고(1단계), 그로부터 20분 뒤 정식 기능으로(2단계)
+#   빌드 정식 추가: 30분 뒤 정식 채널에 (빌드는 이미 알파에 있으므로 단계가 하나)
+#   숨김 · 복귀: 5분 뒤
+WAITS = {"lab": (600, 1200), "build": (1800, 0), "hide": (300, 0), "restore": (300, 0)}
+
+
+def plan(kind, target):
+    """요청을 받았을 때 알려 줄 진행 계획."""
+    return {
+        "build": "30분 뒤에 빌드 %s 을(를) 정식 채널에 올립니다.",
+        "lab": "10분 뒤에 실험실 기능 '%s' 을(를) 알파 사용자 모두에게 켜고, 그로부터 20분 뒤에 정식 기능으로 올립니다.",
+        "hide": "5분 뒤에 실험실 기능 '%s' 을(를) 숨깁니다.",
+        "restore": "5분 뒤에 기능 '%s' 을(를) 실험실로 되돌립니다.",
+    }[kind] % target
+
+
 def check_lab(feature, labs, kind="lab"):
     if feature not in labs.get("features", []):
         return "'%s' 은(는) 실험실에 없는 기능입니다" % feature
@@ -104,7 +122,8 @@ def evaluate(title, author, owner, release="release", alpha_dir=None):
     return kind, target, problem
 
 
-def apply(kind, target, release="release", alpha_dir=None):
+def apply(kind, target, release="release", alpha_dir=None, stage=None):
+    """요청을 반영한다. stage 가 'alpha' 이면 실험실 기능 정식 추가의 1단계(알파 사용자 모두에게 켜기)만 한다."""
     if kind == "build":
         source = alpha_dir or os.path.join(release, "alpha")
         for name in ("version.json", "ControlPad.apk"):
@@ -114,8 +133,12 @@ def apply(kind, target, release="release", alpha_dir=None):
         labs = load(path)
         graduated = set(labs.get("graduated", []))
         hidden = set(labs.get("hidden", []))
-        if kind == "lab":
+        alpha = set(labs.get("alpha", []))
+        if kind == "lab" and stage == "alpha":
+            alpha.add(target)
+        elif kind == "lab":
             graduated.add(target)
+            alpha.discard(target)
         elif kind == "hide":
             hidden.add(target)
         elif kind == "restore":
@@ -124,14 +147,18 @@ def apply(kind, target, release="release", alpha_dir=None):
                 hidden.discard(target)
             else:
                 graduated.discard(target)
+                alpha.discard(target)
         labs["graduated"] = sorted(graduated)
         labs["hidden"] = sorted(hidden)
+        labs["alpha"] = sorted(alpha)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(labs, f, indent=2)
             f.write("\n")
 
 
-def summary(kind, target):
+def summary(kind, target, stage=None):
+    if kind == "lab" and stage == "alpha":
+        return "실험실 기능 '%s' 을(를) 알파 사용자 모두에게" % target
     return {
         "build": "빌드 %s 을(를) 정식 채널에",
         "lab": "실험실 기능 '%s' 을(를) 정식 기능으로",
@@ -159,12 +186,17 @@ def main(argv):
     if argv[1:] == ["check"]:
         print("ok=%s" % ("false" if problem else "true"))
         print("reason=%s" % (problem or ""))
-        print("summary=%s" % (summary(kind, target) if not problem else ""))
-    elif argv[1:] == ["apply"]:
+        print("summary=%s" % (plan(kind, target) if not problem else ""))
+        first, second = WAITS.get(kind, (300, 0))
+        print("wait1=%d" % first)
+        print("wait2=%d" % second)
+        print("staged=%s" % ("true" if second else "false"))
+    elif argv[1:2] == ["apply"] and argv[2:] in ([], ["alpha"]):
+        stage = argv[2] if argv[2:] else None
         if problem:
             sys.exit(problem)
-        apply(kind, target, alpha_dir=snapshot)
-        print(summary(kind, target) + " 올렸습니다")
+        apply(kind, target, alpha_dir=snapshot, stage=stage)
+        print(summary(kind, target, stage) + (" 켰습니다" if stage else " 올렸습니다"))
     else:
         sys.exit(__doc__)
 

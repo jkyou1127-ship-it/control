@@ -75,7 +75,7 @@ class PanelTest(unittest.TestCase):
         self.write("labs.json", {"features": ["kps"], "graduated": [], "relay": "https://relay.example"})
         panel.apply("lab", "kps", self.dir)
         with open(os.path.join(self.dir, "labs.json")) as f:
-            self.assertEqual(json.load(f), {"features": ["kps"], "graduated": ["kps"], "hidden": [], "relay": "https://relay.example"})
+            self.assertEqual(json.load(f), {"features": ["kps"], "graduated": ["kps"], "hidden": [], "alpha": [], "relay": "https://relay.example"})
 
     def test_hide_and_restore(self):
         self.assertEqual(panel.parse_title("[숨김 요청] 실험실 kps"), ("hide", "kps"))
@@ -124,6 +124,28 @@ class PanelTest(unittest.TestCase):
         # 정식이 이미 더 새 빌드면 올리지 않는다
         self.write("version.json", {"versionCode": 48, "versionName": "1.22"})
         self.assertIn("이미 정식", panel.evaluate("[정식 요청] 빌드 1.21", "owner", "Owner", self.dir, snap)[2])
+
+    def test_lab_goes_to_all_alpha_users_first_then_stable(self):
+        self.assertEqual(panel.WAITS["lab"], (600, 1200))                   # 10분 뒤 알파, 그로부터 20분 뒤 정식
+        self.assertEqual(panel.WAITS["build"], (1800, 0))
+        self.assertIn("10분 뒤", panel.plan("lab", "kps"))
+        self.assertIn("30분 뒤", panel.plan("build", "1.21"))
+        panel.apply("lab", "kps", self.dir, stage="alpha")
+        labs = panel.load(os.path.join(self.dir, "labs.json"))
+        self.assertEqual((labs["alpha"], labs["graduated"]), (["kps"], []))
+        self.assertIsNone(self.evaluate("[정식 요청] 실험실 kps")[2])        # 2단계도 그대로 진행할 수 있다
+        panel.apply("lab", "kps", self.dir)
+        labs = panel.load(os.path.join(self.dir, "labs.json"))
+        self.assertEqual((labs["alpha"], labs["graduated"]), ([], ["kps"]))
+
+    def test_hiding_between_the_two_stages_stops_the_promotion(self):
+        panel.apply("lab", "kps", self.dir, stage="alpha")
+        panel.apply("hide", "kps", self.dir)
+        self.assertIn("숨긴 기능", self.evaluate("[정식 요청] 실험실 kps")[2])
+        panel.apply("restore", "kps", self.dir)                              # 숨김만 풀면 알파 단계로 돌아온다
+        self.assertEqual(panel.load(os.path.join(self.dir, "labs.json"))["alpha"], ["kps"])
+        panel.apply("restore", "kps", self.dir)                              # 한 번 더 복귀하면 실험실로
+        self.assertEqual(panel.load(os.path.join(self.dir, "labs.json"))["alpha"], [])
 
     def test_real_release_files_are_consistent(self):
         release = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "release")

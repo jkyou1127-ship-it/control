@@ -16,8 +16,8 @@ import java.net.URLEncoder
 
 /**
  * 실험실: 아직 다듬는 중인 기능들. 알파 빌드를 받는 사람만 켜 볼 수 있다.
- * 평가단이 정식 추가를 요청하면(저장소의 이슈) 5분 뒤 release/labs.json 의 graduated 에 올라가고,
- * 그때부터는 정식 사용자에게도 켜진다.
+ * 평가단이 정식 추가를 건의하면 10분 뒤 release/labs.json 의 alpha 에 올라가 알파 사용자 모두에게 켜지고,
+ * 그로부터 20분 뒤 graduated 에 올라가 정식 사용자에게도 켜진다.
  */
 object Labs {
     class Feature(val id: String, val title: String, val description: String)
@@ -60,8 +60,11 @@ object Labs {
     /** 평가단 요청으로 숨긴 실험실 기능들(마지막으로 받아 온 목록). 숨긴 기능은 누구에게도 켜지지 않는다. */
     val hidden: Set<String> get() = prefs.getStringSet("labsHidden", emptySet()) ?: emptySet()
 
-    fun isOn(id: String): Boolean =
-        id !in hidden && (id in graduated || (Updater.alpha && prefs.getBoolean("lab_$id", false)))
+    /** 정식 추가 1단계로 알파 사용자 모두에게 켜진 기능들(마지막으로 받아 온 목록). */
+    val alphaWide: Set<String> get() = prefs.getStringSet("labsAlpha", emptySet()) ?: emptySet()
+
+    fun isOn(id: String): Boolean = id !in hidden &&
+        (id in graduated || (Updater.alpha && (id in alphaWide || prefs.getBoolean("lab_$id", false))))
 
     fun set(id: String, on: Boolean) = prefs.edit().putBoolean("lab_$id", on).apply()
 
@@ -70,6 +73,17 @@ object Labs {
 
     /** release/labs.json 에서 숨긴 기능들을 꺼낸다. */
     fun parseHidden(json: String): Set<String> = parseList(json, "hidden")
+
+    /** release/labs.json 에서 알파 사용자 모두에게 켜진 기능들을 꺼낸다. */
+    fun parseAlpha(json: String): Set<String> = parseList(json, "alpha")
+
+    /** 건의를 보낸 뒤 알려 줄 진행 계획. scripts/panel.py 의 plan 과 같은 일정이다. */
+    fun plan(kind: String): String = when (kind) {
+        "build" -> "요청했습니다. 30분 뒤에 정식 채널에 올라갑니다."
+        "lab" -> "요청했습니다. 10분 뒤에 알파 사용자 모두에게 켜지고, 그로부터 20분 뒤에 정식 기능이 됩니다."
+        "hide" -> "요청했습니다. 5분 뒤에 숨겨집니다."
+        else -> "요청했습니다. 5분 뒤에 실험실로 돌아옵니다."
+    }
 
     private fun parseList(json: String, key: String): Set<String> {
         val a = JSONObject(json).optJSONArray(key) ?: return emptySet()
@@ -94,6 +108,7 @@ object Labs {
         runCatching {
             val json = get(Updater.BASE + "labs.json")
             prefs.edit().putStringSet("labsGraduated", parseGraduated(json)).putStringSet("labsHidden", parseHidden(json))
+                .putStringSet("labsAlpha", parseAlpha(json))
                 .putString("labsRelay", parseRelay(json)).apply()
         }
     }
@@ -188,7 +203,7 @@ class LabsActivity : BaseActivity() {
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     android.app.AlertDialog.Builder(this)
-                        .setMessage(problem ?: "요청했습니다. 5분 뒤에 정식에 올라갑니다.")
+                        .setMessage(problem ?: Labs.plan(kind))
                         .setPositiveButton("확인", null).show()
                 }
             }.start()
@@ -200,7 +215,7 @@ class LabsActivity : BaseActivity() {
 
         title("평가단")
         if (viaRelay) {
-            note("알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 5분 뒤에 정식 채널에 올라갑니다. 평가단 코드가 필요합니다.")
+            note("알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 30분 뒤에 정식 채널에 올라갑니다. 평가단 코드가 필요합니다.")
             root.addView(android.widget.EditText(this).apply {
                 hint = "평가단 코드"; setSingleLine(); setText(Labs.code)
                 inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -211,10 +226,10 @@ class LabsActivity : BaseActivity() {
                 })
             })
         } else note(
-            "알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 5분 뒤에 지금 알파 빌드가 정식 채널에 올라갑니다.\n" +
+            "알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 30분 뒤에 지금 알파 빌드가 정식 채널에 올라갑니다.\n" +
                 "· 요청은 저장소의 이슈로 접수되어 GitHub 로그인이 필요합니다.\n" +
                 "· 평가단으로 등록된 계정의 요청만 반영됩니다.\n" +
-                "· 5분 안에 그 이슈를 닫으면 취소됩니다."
+                "· 반영되기 전에 그 이슈를 닫으면 취소됩니다."
         )
         val versions = TextView(this).apply { textSize = 15f; setTextColor(text); setPadding(0, dp(8), 0, 0) }
         val mine = Updater.installedName(this)
@@ -230,17 +245,22 @@ class LabsActivity : BaseActivity() {
 
         title("실험실")
         note(
-            "아직 다듬는 중인 기능입니다. 켜서 써 보고 평가단으로 건의하세요. 건의는 5분 뒤 모두에게 반영됩니다.\n" +
-                "· 정식 추가: 정식 사용자에게도 켜집니다\n" +
-                "· 숨김: 실험실에서 빠지고 누구에게도 켜지지 않습니다\n" +
-                "· 복귀: 숨긴 기능이나 정식이 된 기능을 실험실로 되돌립니다"
+            "아직 다듬는 중인 기능입니다. 켜서 써 보고 평가단으로 건의하세요.\n" +
+                "· 정식 추가: 10분 뒤 알파 사용자 모두에게 켜지고, 그로부터 20분 뒤 정식 사용자에게도 켜집니다\n" +
+                "· 숨김: 5분 뒤 실험실에서 빠지고 누구에게도 켜지지 않습니다\n" +
+                "· 복귀: 5분 뒤 숨긴 기능이나 정식이 된 기능을 실험실로 되돌립니다"
         )
         val hidden = Labs.hidden
         for (f in Labs.features.filter { it.id !in hidden }) {
             val done = f.id in Labs.graduated
+            val rolling = !done && f.id in Labs.alphaWide
             root.addView(CheckBox(this).apply {
-                this.text = f.title + if (done) "  (정식 기능이 되었습니다)" else ""
-                textSize = 16f; isChecked = Labs.isOn(f.id); isEnabled = !done
+                this.text = f.title + when {
+                    done -> "  (정식 기능이 되었습니다)"
+                    rolling -> "  (알파 사용자 모두에게 켜짐 · 곧 정식)"
+                    else -> ""
+                }
+                textSize = 16f; isChecked = Labs.isOn(f.id); isEnabled = !done && !rolling
                 setPadding(0, dp(10), 0, 0)
                 setOnCheckedChangeListener { _, on -> Labs.set(f.id, on) }
             })
@@ -250,7 +270,7 @@ class LabsActivity : BaseActivity() {
                 row.addView(toolChip(this, label, action), LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6); topMargin = dp(6) })
             if (done) rowChip("실험실로 복귀 건의") {
                 request("restore", f.id, Labs.restoreTitle(f.id), "정식 기능 '${f.title}' 을(를) 다시 실험실로 돌려 주세요.\n\n이유:\n")
-            } else rowChip("정식 추가 건의") {
+            } else if (!rolling) rowChip("정식 추가 건의") {
                 request("lab", f.id, Labs.labTitle(f.id), "실험실 기능 '${f.title}' 을(를) 써 보았고, 정식 기능으로 올려 주세요.\n\n써 본 내용:\n")
             }
             rowChip("숨김 건의") {
@@ -262,7 +282,7 @@ class LabsActivity : BaseActivity() {
         val gone = Labs.features.filter { it.id in hidden }
         if (gone.isNotEmpty()) {
             title("숨긴 기능")
-            note("평가단 건의로 숨긴 기능입니다. 복귀를 건의하면 5분 뒤 다시 실험실에 나타납니다.")
+            note("평가단 건의로 숨긴 기능입니다. 복귀를 건의하면 5분 뒤 숨기기 전 상태로 돌아옵니다.")
             for (f in gone) {
                 root.addView(TextView(this).apply { this.text = f.title; textSize = 16f; setTextColor(text); setPadding(0, dp(10), 0, 0) })
                 chip("'${f.title}' 복귀 건의") {
