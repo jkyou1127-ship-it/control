@@ -25,6 +25,7 @@
     "snap-edges"
   ],
   "hidden": [
+    "grid-dots",
     "kps-peak",
     "status-large"
   ],
