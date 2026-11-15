@@ -3,13 +3,12 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"strings"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -206,37 +205,48 @@ func TestUIStateAndKeyNames(t *testing.T) {
 	if keyName(0x04) != "A" || keyName(0x1E) != "1" || keyName(0x27) != "0" || keyName(0x3A) != "F1" || keyName(0x90) != "한/영" {
 		t.Fatal("key names")
 	}
-	s := &uiState{}
+	s := newState()
 	r := &recorder{}
 	u := uiInjector{inner: r, state: s}
 	for i := 0; i < 15; i++ {
 		u.Key(0x04, true)
 		u.Key(0x04, false)
 	}
+	u.Key(0xE1, true)
 	u.Button(1, true)
-	if s.Presses != 16 || len(s.Recent) != 12 || s.Recent[11] != "우클릭" || len(r.events) != 31 {
-		t.Fatalf("state %+v events %d", s, len(r.events))
+	v := s.view(time.Now())
+	if v.Presses != 17 || len(v.Recent) != 12 || v.Recent[11] != "우클릭" || len(r.events) != 32 {
+		t.Fatalf("view %+v events %d", v, len(r.events))
 	}
-	var back map[string]any
-	if err := json.Unmarshal(s.snapshot(), &back); err != nil || back["presses"].(float64) != 16 {
-		t.Fatal("snapshot")
+	if v.KPS != 17 || v.Peak != 17 || len(v.Down) != 1 || v.Down[0] != "Shift" || v.LastInput != "마지막 입력 방금" {
+		t.Fatalf("view %+v", v)
+	}
+	// 1초가 지나면 초당 입력 수는 0, 최고 기록은 남는다
+	if v := s.view(time.Now().Add(2 * time.Second)); v.KPS != 0 || v.Peak != 17 || v.LastInput != "마지막 입력 2초 전" {
+		t.Fatalf("later %+v", v)
 	}
 }
 
-func TestStatusServer(t *testing.T) {
-	st := &uiState{Version: 4, Port: 34555}
-	url := startUI(st)
-	if url == "" {
-		t.Skip("port in use")
+func TestPauseDropsInputAndReleasesHeldKeys(t *testing.T) {
+	r := &recorder{}
+	st := newState()
+	inj := uiInjector{inner: r, state: st}
+	a := &app{state: st, keys: &Keys{inj: inj, down: map[int]bool{}}, mouse: &Mouse{inj: inj}}
+	feed(a.keys, keyPacket(1, 0x04))
+	a.SetPaused(true)
+	if !a.Paused() || r.events[len(r.events)-1] != "key 04 false" {
+		t.Fatalf("pause should release: %v", r.events)
 	}
-	resp, err := http.Get(url + "status")
-	if err != nil || resp.StatusCode != 200 {
-		t.Fatal(err)
+	a.SetPaused(false)
+	a.ReleaseAll()
+}
+
+func TestSettingsRoundTrip(t *testing.T) {
+	path := t.TempDir() + "/sub/receiver.json"
+	if loadSettings(path).OnTop {
+		t.Fatal("default")
 	}
-	page, _ := http.Get(url)
-	b := make([]byte, 200)
-	n, _ := page.Body.Read(b)
-	if !strings.Contains(string(b[:n]), "<!doctype html>") {
-		t.Fatal("page")
+	if err := saveSettings(path, settings{OnTop: true}); err != nil || !loadSettings(path).OnTop {
+		t.Fatal("round trip", err)
 	}
 }

@@ -6,12 +6,12 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"net"
 	"os"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -255,12 +255,79 @@ func localAddresses() []string {
 	return out
 }
 
-// fail 은 창이 바로 닫혀 버리지 않게, 이유를 보여 주고 Enter 를 기다린 뒤 끝낸다.
-func fail(msg string) {
-	fmt.Println(msg)
-	fmt.Println("Enter 를 누르면 닫힙니다.")
-	bufio.NewReader(os.Stdin).ReadString('\n')
-	os.Exit(1)
+// app 은 창의 버튼이 부르는 동작들이다. 입력을 넣는 쪽(네트워크)과 창이 서로 다른 스레드라 inputMu 로 막는다.
+type app struct {
+	state   *uiState
+	keys    *Keys
+	mouse   *Mouse
+	inputMu sync.Mutex
+}
+
+// SetPaused 는 입력 일시정지를 켜고 끈다. 켜는 순간 누르고 있던 것을 모두 뗀다.
+func (a *app) SetPaused(on bool) {
+	a.inputMu.Lock()
+	defer a.inputMu.Unlock()
+	a.state.mu.Lock()
+	a.state.Paused = on
+	a.state.mu.Unlock()
+	if on {
+		a.keys.ReleaseAll()
+		a.mouse.ReleaseAll()
+	}
+}
+
+func (a *app) Paused() bool {
+	a.state.mu.Lock()
+	defer a.state.mu.Unlock()
+	return a.state.Paused
+}
+
+// ReleaseAll 은 키가 눌린 채로 남았을 때 모두 뗀다.
+func (a *app) ReleaseAll() {
+	a.inputMu.Lock()
+	defer a.inputMu.Unlock()
+	a.keys.ReleaseAll()
+	a.mouse.ReleaseAll()
+}
+
+// serve 는 태블릿이 보내는 패킷을 받아 입력으로 바꾼다. 끝나지 않는다.
+func (a *app) serve(conn *net.UDPConn, hostname string) {
+	last := time.Now()
+	connected := ""
+	buf := make([]byte, 64)
+	for {
+		conn.SetReadDeadline(time.Now().Add(timeout))
+		n, from, err := conn.ReadFromUDP(buf)
+		a.inputMu.Lock()
+		paused := a.Paused()
+		if err == nil {
+			p := buf[:n]
+			if reply := discoveryReply(p, hostname); reply != nil {
+				conn.WriteToUDP(reply, from)
+			} else if m, ok := parseMouse(p); ok {
+				if !paused {
+					a.mouse.Feed(m)
+				}
+				last = time.Now()
+			} else if seq, report, ok := parseKeys(p); ok {
+				if !paused {
+					a.keys.Feed(seq, report, from.String())
+				}
+				last = time.Now()
+				conn.WriteToUDP([]byte{'C', 'A', p[3], p[4], p[5], p[6]}, from)
+				if ip := from.IP.String(); ip != connected {
+					connected = ip
+					a.state.connected(ip)
+					fmt.Println("  ● 태블릿 연결됨:", ip)
+				}
+			}
+		}
+		if (len(a.keys.down) > 0 || a.mouse.buttons != 0) && time.Since(last) > timeout {
+			a.keys.ReleaseAll()
+			a.mouse.ReleaseAll()
+		}
+		a.inputMu.Unlock()
+	}
 }
 
 func main() {
@@ -268,16 +335,14 @@ func main() {
 	dry := flag.Bool("dry-run", false, "입력을 넣지 않고 받은 내용만 출력")
 	noUpdate := flag.Bool("no-update", false, "시작할 때 새 버전을 확인하지 않음")
 	noAdmin := flag.Bool("no-admin", false, "관리자 권한을 요청하지 않음")
-	noUI := flag.Bool("no-ui", false, "상태 화면(브라우저)을 열지 않음")
 	flag.Parse()
 	setupConsole()
 	// 관리자 권한으로 실행된 게임에는 일반 프로그램이 입력을 넣을 수 없다(Windows 의 보안 규칙).
-	// 그래서 처음부터 관리자 권한으로 다시 실행한다. 사용자가 거절하면 그대로 계속한다.
+	// 그래서 처음부터 관리자 권한으로 다시 실행한다. 사용자가 거절하면 그대로 계속한다(창에 안내가 뜬다).
 	if !*dry && !*noAdmin && !isAdmin() {
 		if relaunchAsAdmin(os.Args[1:]) {
 			return
 		}
-		fmt.Println("관리자 권한 없이 실행합니다. 관리자 권한으로 실행된 게임에는 입력이 들어가지 않을 수 있습니다.")
 	}
 	if !*noUpdate && !*dry {
 		selfUpdate()
@@ -294,70 +359,20 @@ func main() {
 
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: *port})
 	if err != nil {
-		fail(fmt.Sprintf("포트 %d 을(를) 열 수 없습니다. 이미 실행 중인지 확인하세요.\n(%v)", *port, err))
+		fail(fmt.Sprintf("포트 %d 을(를) 열 수 없습니다. 수신 프로그램이 이미 켜져 있는지 확인하세요.\n(%v)", *port, err))
 	}
 	defer conn.Close()
 
 	hostname, _ := os.Hostname()
-	state := &uiState{
-		Version: version, Hostname: hostname, Addresses: localAddresses(), Port: *port,
-		Admin: isAdmin(), Started: time.Now().UnixMilli(),
-	}
+	state := newState()
+	state.Version, state.Hostname, state.Addresses, state.Port, state.Admin = version, hostname, localAddresses(), *port, isAdmin()
 	inj = uiInjector{inner: inj, state: state}
+	a := &app{state: state, keys: &Keys{inj: inj, down: map[int]bool{}}, mouse: &Mouse{inj: inj}}
 
-	fmt.Println("┌──────────────────────────────────────────────┐")
-	fmt.Printf("│  Control Pad 수신 프로그램  ·  버전 %-9d│\n", version)
-	fmt.Println("└──────────────────────────────────────────────┘")
-	if state.Admin {
-		fmt.Println("  ● 관리자 권한으로 실행 중 (모든 창에 입력 가능)")
-	} else {
-		fmt.Println("  ○ 관리자 권한 없음 (관리자 권한 게임에는 입력이 안 들어갈 수 있음)")
+	fmt.Printf("Control Pad 수신 프로그램 · 버전 %d · 포트 %d\n", version, *port)
+	for _, addr := range state.Addresses {
+		fmt.Println("  이 PC 주소:", addr)
 	}
-	fmt.Println()
-	fmt.Println("  태블릿 앱: 설정 → Wi-Fi / USB 테더링 → PC 자동으로 찾기")
-	fmt.Printf("  찾지 못하면 아래 주소를 직접 입력하세요 (포트 %d)\n", *port)
-	for _, a := range state.Addresses {
-		fmt.Println("     ", a)
-	}
-	if url := startUI(state); url != "" {
-		fmt.Println()
-		fmt.Println("  상태 화면:", url)
-		if !*noUI {
-			openBrowser(url)
-		}
-	}
-	fmt.Println()
-	fmt.Println("  끝내려면 이 창을 닫으세요.")
-
-	keys := &Keys{inj: inj, down: map[int]bool{}}
-	mouse := &Mouse{inj: inj}
-	last := time.Now()
-	connected := ""
-	buf := make([]byte, 64)
-	for {
-		conn.SetReadDeadline(time.Now().Add(timeout))
-		n, from, err := conn.ReadFromUDP(buf)
-		if err == nil {
-			p := buf[:n]
-			if reply := discoveryReply(p, hostname); reply != nil {
-				conn.WriteToUDP(reply, from)
-			} else if m, ok := parseMouse(p); ok {
-				mouse.Feed(m)
-				last = time.Now()
-			} else if seq, report, ok := parseKeys(p); ok {
-				keys.Feed(seq, report, from.String())
-				last = time.Now()
-				conn.WriteToUDP([]byte{'C', 'A', p[3], p[4], p[5], p[6]}, from)
-				if ip := from.IP.String(); ip != connected {
-					connected = ip
-					state.connected(ip)
-					fmt.Println("  ● 태블릿 연결됨:", ip)
-				}
-			}
-		}
-		if (len(keys.down) > 0 || mouse.buttons != 0) && time.Since(last) > timeout {
-			keys.ReleaseAll()
-			mouse.ReleaseAll()
-		}
-	}
+	go a.serve(conn, hostname)
+	runWindow(a) // 창을 닫으면 돌아온다(창이 없는 OS 에서는 끝나지 않는다)
 }

@@ -4,7 +4,6 @@ package main
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -40,11 +39,6 @@ func relaunchAsAdmin(args []string) bool {
 	r, _, _ := shell32.NewProc("ShellExecuteW").Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(file)),
 		uintptr(unsafe.Pointer(params)), 0, 1) // SW_SHOWNORMAL
 	return r > 32
-}
-
-// openBrowser 는 기본 브라우저로 주소를 연다.
-func openBrowser(url string) {
-	exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 }
 
 // 64비트 Windows 의 INPUT 구조체(40바이트)를 종류별로 풀어 쓴 것.
