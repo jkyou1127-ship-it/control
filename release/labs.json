@@ -57,6 +57,7 @@
     "touch-dots"
   ],
   "alpha": [
+    "big-handle",
     "kps"
   ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
