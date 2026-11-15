@@ -27,7 +27,8 @@
     "home-shortcut",
     "kps",
     "list-pin",
-    "list-search"
+    "list-search",
+    "select-all"
   ],
   "hidden": [
     "combo",
