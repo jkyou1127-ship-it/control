@@ -6,11 +6,10 @@
     "list-count"
   ],
   "graduated": [
-    "clock-seconds"
-  ],
-  "hidden": [],
-  "alpha": [
+    "clock-seconds",
     "session-summary"
   ],
+  "hidden": [],
+  "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
