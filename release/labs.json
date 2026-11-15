@@ -52,7 +52,8 @@
   "hidden": [
     "confirm-delete",
     "dup-in-place",
-    "edge-flash"
+    "edge-flash",
+    "touch-dots"
   ],
   "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
