@@ -22,6 +22,7 @@
   ],
   "graduated": [
     "selection-count",
+    "show-hidden-outline",
     "snap-edges"
   ],
   "hidden": [
