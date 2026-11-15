@@ -22,7 +22,7 @@ class PlayActivity : BaseActivity() {
     override fun onBackPressed() {
         // 연주 중에 뒤로 가기 동작이 잘못 들어가도 바로 나가지 않게 한다.
         val now = SystemClock.uptimeMillis()
-        if (Link.exitGuard && now - lastBack > 2000) {
+        if (Labs.isOn("exit-guard") && now - lastBack > 2000) {
             lastBack = now
             android.widget.Toast.makeText(this, "한 번 더 누르면 나갑니다", android.widget.Toast.LENGTH_SHORT).show()
             return

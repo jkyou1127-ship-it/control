@@ -613,8 +613,11 @@ object Arrange {
         "가로 간격 같게", "세로 간격 같게", "같은 너비", "같은 높이",
     )
 
-    fun apply(index: Int, all: List<PadButton>) {
-        val bs = all.filter { !it.locked }
+    /** 맞춤 종류(앞의 여섯 개)와 균등 배치·같은 크기(나머지)를 가르는 자리. */
+    const val ALIGN_COUNT = 6
+
+    fun apply(index: Int, all: List<PadButton>, respectLock: Boolean = true) {
+        val bs = all.filter { !respectLock || !it.locked }
         if (bs.size < 2) return
         when (index) {
             0 -> bs.minOf { it.x }.let { v -> bs.forEach { it.x = v } }
@@ -643,9 +646,10 @@ object Arrange {
 
 /** 목록 화면: 고정한 것을 위로, 검색어가 있으면 이름에 그 말이 들어간 것만. */
 object LayoutList {
-    fun arrange(all: List<PadLayout>, query: String): List<PadLayout> {
+    fun arrange(all: List<PadLayout>, query: String, pinFirst: Boolean = true): List<PadLayout> {
         val q = query.trim()
-        return all.filter { q.isEmpty() || it.name.contains(q, ignoreCase = true) }.sortedByDescending { it.pinned }
+        val found = all.filter { q.isEmpty() || it.name.contains(q, ignoreCase = true) }
+        return if (pinFirst) found.sortedByDescending { it.pinned } else found
     }
 }
 

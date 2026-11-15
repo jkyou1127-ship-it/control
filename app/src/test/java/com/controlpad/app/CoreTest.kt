@@ -552,6 +552,10 @@ class CoreTest {
         val locked = three().also { it[1].locked = true; Arrange.apply(0, it) }
         assertEquals(0.3f, locked[1].x, 1e-5f)                                                             // 잠긴 것은 그대로
         assertEquals(0.1f, locked[2].x, 1e-5f)
+        val unlocked = three().also { it[1].locked = true; Arrange.apply(0, it, respectLock = false) }
+        assertEquals(0.1f, unlocked[1].x, 1e-5f)                                                           // 잠금 기능이 꺼져 있으면 함께 맞춘다
+        assertEquals(6, Arrange.ALIGN_COUNT)
+        assertTrue(Arrange.names.take(Arrange.ALIGN_COUNT).all { it.endsWith("맞춤") })
         val one = listOf(PadButton(0.5f, 0.5f, 0.1f, 0.1f)).also { Arrange.apply(0, it) }
         assertEquals(0.5f, one[0].x, 1e-5f)                                                                // 하나뿐이면 아무것도 안 함
     }
@@ -578,6 +582,8 @@ class CoreTest {
         assertEquals(listOf("작업용 단축키", "리듬 4키", "리듬 7키"), LayoutList.arrange(all, "").map { it.name })
         assertEquals(listOf("리듬 4키", "리듬 7키"), LayoutList.arrange(all, " 리듬 ").map { it.name })
         assertEquals(emptyList<String>(), LayoutList.arrange(all, "없는 이름").map { it.name })
+        // 고정(실험실 기능)이 꺼져 있으면 원래 순서 그대로
+        assertEquals(listOf("리듬 4키", "작업용 단축키", "리듬 7키"), LayoutList.arrange(all, "", pinFirst = false).map { it.name })
     }
 
     @Test

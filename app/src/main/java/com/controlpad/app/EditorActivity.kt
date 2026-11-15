@@ -178,12 +178,17 @@ class EditorActivity : BaseActivity() {
         }
         tool("↶ 취소") { step(undo, redo, "되돌릴 것이 없습니다") }
         tool("↷ 다시") { step(redo, undo, "다시 실행할 것이 없습니다") }
-        tool("전체 선택") {
+        // 아래 도구들은 실험실 기능이라, 켜져 있을 때만 도구 모음에 놓인다.
+        val lockOn = Labs.isOn("lock")
+        view.lockOn = lockOn
+        val alignOn = Labs.isOn("align")
+        val distributeOn = Labs.isOn("distribute")
+        if (Labs.isOn("select-all")) tool("전체 선택") {
             multi.isChecked = true
             view.selection.clear(); view.selection += pad.buttons.filter { it !in view.hidden }
             view.invalidate()
         }
-        tool("잠금") {
+        if (lockOn) tool("잠금") {
             // 실수로 옮기거나 크기를 바꾸지 않게 한다. 선택한 것이 모두 잠겨 있으면 푼다.
             val sel = view.selection.toList()
             if (sel.isEmpty()) hint()
@@ -195,13 +200,15 @@ class EditorActivity : BaseActivity() {
                 view.invalidate()
             }
         }
-        tool("맞춤") {
+        if (alignOn || distributeOn) tool("맞춤") {
             val sel = view.selection.toList()
+            // 켜져 있는 종류만 보여 준다.
+            val choices = Arrange.names.indices.filter { if (it < Arrange.ALIGN_COUNT) alignOn else distributeOn }
             if (sel.size < 2) android.widget.Toast.makeText(this, "두 개 이상 선택하세요 ('다중 선택'을 켜고 고릅니다)", android.widget.Toast.LENGTH_SHORT).show()
             else AlertDialog.Builder(this).setTitle("맞춤 · 균등 배치")
-                .setItems(Arrange.names.toTypedArray()) { _, which ->
+                .setItems(choices.map { Arrange.names[it] }.toTypedArray()) { _, which ->
                     checkpoint()
-                    Arrange.apply(which, sel)
+                    Arrange.apply(choices[which], sel, respectLock = lockOn)
                     view.invalidate()
                 }.show()
         }
@@ -651,8 +658,9 @@ class EditorActivity : BaseActivity() {
             box.addView(shown); box.addView(bar)
             return bar
         }
-        val opacity = percent("불투명도", PadButton.MIN_OPACITY, 100, 10, b.opacity)
-        val textScale = percent("글자 크기", PadButton.MIN_TEXT_SCALE, PadButton.MAX_TEXT_SCALE, 10, b.textScale)
+        // 둘 다 실험실 기능이라, 켜져 있을 때만 조절 막대가 나온다.
+        val opacity = if (Labs.isOn("opacity")) percent("불투명도", PadButton.MIN_OPACITY, 100, 10, b.opacity) else null
+        val textScale = if (Labs.isOn("text-scale")) percent("글자 크기", PadButton.MIN_TEXT_SCALE, PadButton.MAX_TEXT_SCALE, 10, b.textScale) else null
 
         val group = groupSpinner(b.group)
         box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
@@ -670,8 +678,8 @@ class EditorActivity : BaseActivity() {
                 b.keys = keys; b.label = label.text.toString().trim(); b.mode = mode.selectedItemPosition
                 b.label2 = label2.text.toString().trim()
                 b.image = image
-                b.opacity = PadButton.MIN_OPACITY + opacity.progress * 10
-                b.textScale = PadButton.MIN_TEXT_SCALE + textScale.progress * 10
+                opacity?.let { b.opacity = PadButton.MIN_OPACITY + it.progress * 10 }
+                textScale?.let { b.textScale = PadButton.MIN_TEXT_SCALE + it.progress * 10 }
                 b.holdMs = PadButton.parseHold(hold.text.toString())
                 b.rate = (rate.text.toString().toIntOrNull() ?: 10).coerceIn(PadButton.MIN_RATE, PadButton.MAX_RATE)
                 b.macro = macro
@@ -1101,6 +1109,9 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         get() = selection.lastOrNull()
         set(v) { selection.clear(); if (v != null) selection += v }
 
+    /** 버튼 잠금(실험실 기능)이 켜져 있는지. 꺼져 있으면 잠긴 버튼도 평소처럼 움직인다. */
+    var lockOn = false
+
     // ----- 그리기: 손으로 그린 획들을 모아 그림 버튼으로 만든다 -----
     var sketching = false
     var penColor = PadButton.PALETTE[0]
@@ -1238,7 +1249,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
 
     private fun remember() {
         starts.clear()
-        for (b in selection) if (!b.locked) starts[b] = floatArrayOf(b.x, b.y, b.w, b.h)     // 잠긴 것은 움직이지 않는다
+        for (b in selection) if (!lockOn || !b.locked) starts[b] = floatArrayOf(b.x, b.y, b.w, b.h)     // 잠긴 것은 움직이지 않는다
         if (starts.isEmpty()) selectionBox(box)
         else box.set(
             starts.keys.minOf { it.x }, starts.keys.minOf { it.y },
@@ -1264,7 +1275,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         for (b in pad.buttons) {
             if (b in hidden) continue
             painter.draw(c, b, rectOf(b), false, b in selection, alt = 2)
-            val marks = listOfNotNull(if (b.group > 0) "그룹 ${b.group}" else null, if (b.locked) "잠금" else null)
+            val marks = listOfNotNull(if (b.group > 0) "그룹 ${b.group}" else null, if (lockOn && b.locked) "잠금" else null)
             if (marks.isNotEmpty()) painter.badge(c, rectOf(b), marks.joinToString(" · "))
         }
         if (hidden.isNotEmpty()) {

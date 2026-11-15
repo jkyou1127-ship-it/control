@@ -45,11 +45,6 @@ object Link {
     val mode: Int get() = prefs.getInt("mode", MODE_BT)
     val haptic: Boolean get() = prefs.getBoolean("haptic", true)
 
-    /** 실행 화면에서 뒤로 가기를 두 번 눌러야 나가게 할지. */
-    var exitGuard: Boolean
-        get() = prefs.getBoolean("exitGuard", false)
-        set(on) = prefs.edit().putBoolean("exitGuard", on).apply()
-
     /** 실행 화면 위쪽에 지금 눌리고 있는 키를 보여 줄지. */
     var showPressed: Boolean
         get() = prefs.getBoolean("showPressed", true)

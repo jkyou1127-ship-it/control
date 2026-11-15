@@ -13,6 +13,7 @@ object Changelog {
     class Entry(val version: String, val notes: List<String>)
 
     val entries = listOf(
+        Entry("1.24", listOf("1.23 에서 추가한 기능 10개(검색, 고정, 홈 바로가기, 전체 선택, 맞춤, 균등 배치, 잠금, 불투명도, 글자 크기, 나가기 방지)를 실험실로 옮김 (알파)")),
         Entry("1.23", listOf(
             "목록: 레이아웃 검색, 맨 위에 고정, 홈 화면에 바로가기 추가",
             "편집: 전체 선택, 맞춤, 균등 배치·같은 크기, 버튼 잠금",

@@ -82,6 +82,8 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; isFakeBoldText = true }
     private val sub = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
     private val keyNames = Link.showKeyNames
+    private val opacityOn = Labs.isOn("opacity")
+    private val textScaleOn = Labs.isOn("text-scale")
 
     /** angle 은 노브가 지금까지 돌아간 각도(표시용). */
     private val clip = android.graphics.Path()
@@ -195,7 +197,7 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
 
     /** alt: 0 = 기본 이름, 1 = 한글 상태 이름, 2 = 둘 다(편집 화면). */
     fun draw(c: Canvas, b: PadButton, r: RectF, pressed: Boolean, selected: Boolean, angle: Float = 0f, parts: Int = 0, alt: Int = 0) {
-        if (b.opacity >= 100) { drawBody(c, b, r, pressed, selected, angle, parts, alt); return }
+        if (!opacityOn || b.opacity >= 100) { drawBody(c, b, r, pressed, selected, angle, parts, alt); return }
         // 비치는 버튼: 버튼 전체를 따로 그린 뒤 한꺼번에 흐리게 올린다(테두리와 글자가 따로 겹쳐 보이지 않게).
         val m = density * 4
         val saved = c.saveLayerAlpha(r.left - m, r.top - m, r.right + m, r.bottom + m, b.opacity.coerceIn(PadButton.MIN_OPACITY, 100) * 255 / 100)
@@ -288,7 +290,7 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
         text.textSize = (r.height() * 0.3f)
             .coerceAtMost(r.width() * (if (b.isKnob) 0.9f else 1.5f) / label.length.coerceAtLeast(2))
             .coerceAtMost(if (b.isKnob) r.height() * 0.16f else Float.MAX_VALUE)
-            .coerceIn(9f * density, 56f * density) * (b.textScale / 100f)
+            .coerceIn(9f * density, 56f * density) * (if (textScaleOn) b.textScale / 100f else 1f)
         val cy = r.centerY() - (text.descent() + text.ascent()) / 2
         c.drawText(label, r.centerX(), cy, text)
 

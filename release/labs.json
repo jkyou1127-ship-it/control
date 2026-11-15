@@ -6,7 +6,17 @@
     "total",
     "timer",
     "battery",
-    "strong-haptic"
+    "strong-haptic",
+    "list-search",
+    "list-pin",
+    "home-shortcut",
+    "select-all",
+    "align",
+    "distribute",
+    "lock",
+    "opacity",
+    "text-scale",
+    "exit-guard"
   ],
   "graduated": [],
   "relay": ""

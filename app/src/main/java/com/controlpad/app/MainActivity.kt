@@ -75,6 +75,8 @@ class MainActivity : BaseActivity() {
                 override fun afterTextChanged(s: android.text.Editable?) = refresh()
             })
         }
+        // 검색·고정·바로가기는 실험실 기능이라, 켜져 있을 때만 보인다.
+        if (!Labs.isOn("list-search")) search.visibility = android.view.View.GONE
         root.addView(search)
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply { addView(list) }, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -113,7 +115,8 @@ class MainActivity : BaseActivity() {
     private fun refresh() {
         list.removeAllViews()
         val everything = LayoutStore.list(this)
-        val layouts = LayoutList.arrange(everything, search.text.toString())
+        val pinOn = Labs.isOn("list-pin")
+        val layouts = LayoutList.arrange(everything, if (Labs.isOn("list-search")) search.text.toString() else "", pinOn)
         if (layouts.isEmpty()) {
             list.addView(TextView(this).apply {
                 text = if (everything.isEmpty()) "레이아웃이 없습니다. '＋ 새 레이아웃'으로 만들어 보세요." else "검색 결과가 없습니다."
@@ -129,7 +132,7 @@ class MainActivity : BaseActivity() {
                 setOnClickListener { open(PlayActivity::class.java, l.id) }
             }
             val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            texts.addView(TextView(this).apply { text = (if (l.pinned) "★ " else "") + l.name; textSize = 18f; setTextColor(Themes.current.text) })
+            texts.addView(TextView(this).apply { text = (if (pinOn && l.pinned) "★ " else "") + l.name; textSize = 18f; setTextColor(Themes.current.text) })
             texts.addView(TextView(this).apply { text = "버튼 ${l.buttons.size}개 · 눌러서 실행"; textSize = 13f })
             row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
             row.addView(Button(this).apply { text = "편집"; setOnClickListener { open(EditorActivity::class.java, l.id) } })
@@ -138,7 +141,8 @@ class MainActivity : BaseActivity() {
                 setOnClickListener { v ->
                     PopupMenu(this@MainActivity, v).apply {
                         val pin = if (l.pinned) "고정 해제" else "맨 위에 고정"
-                        menu.add(pin); menu.add("홈 화면에 추가")
+                        if (pinOn) menu.add(pin)
+                        if (Labs.isOn("home-shortcut")) menu.add("홈 화면에 추가")
                         menu.add("그림 에디터"); menu.add("이름 변경"); menu.add("복제"); menu.add("파일로 저장"); menu.add("삭제")
                         setOnMenuItemClickListener { item ->
                             when (item.title) {
