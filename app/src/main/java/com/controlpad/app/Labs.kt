@@ -57,13 +57,22 @@ object Labs {
     /** 정식 기능이 된 실험실 기능들(마지막으로 받아 온 목록). */
     val graduated: Set<String> get() = prefs.getStringSet("labsGraduated", emptySet()) ?: emptySet()
 
-    fun isOn(id: String): Boolean = id in graduated || (Updater.alpha && prefs.getBoolean("lab_$id", false))
+    /** 평가단 요청으로 숨긴 실험실 기능들(마지막으로 받아 온 목록). 숨긴 기능은 누구에게도 켜지지 않는다. */
+    val hidden: Set<String> get() = prefs.getStringSet("labsHidden", emptySet()) ?: emptySet()
+
+    fun isOn(id: String): Boolean =
+        id !in hidden && (id in graduated || (Updater.alpha && prefs.getBoolean("lab_$id", false)))
 
     fun set(id: String, on: Boolean) = prefs.edit().putBoolean("lab_$id", on).apply()
 
     /** release/labs.json 에서 정식 기능이 된 것들을 꺼낸다. 이 앱이 모르는 이름은 버린다. */
-    fun parseGraduated(json: String): Set<String> {
-        val a = JSONObject(json).optJSONArray("graduated") ?: return emptySet()
+    fun parseGraduated(json: String): Set<String> = parseList(json, "graduated")
+
+    /** release/labs.json 에서 숨긴 기능들을 꺼낸다. */
+    fun parseHidden(json: String): Set<String> = parseList(json, "hidden")
+
+    private fun parseList(json: String, key: String): Set<String> {
+        val a = JSONObject(json).optJSONArray(key) ?: return emptySet()
         val known = features.map { it.id }.toSet()
         return (0 until a.length()).map { a.optString(it) }.filter { it in known }.toSet()
     }
@@ -84,7 +93,8 @@ object Labs {
     fun fetchNow() {
         runCatching {
             val json = get(Updater.BASE + "labs.json")
-            prefs.edit().putStringSet("labsGraduated", parseGraduated(json)).putString("labsRelay", parseRelay(json)).apply()
+            prefs.edit().putStringSet("labsGraduated", parseGraduated(json)).putStringSet("labsHidden", parseHidden(json))
+                .putString("labsRelay", parseRelay(json)).apply()
         }
     }
 
@@ -143,6 +153,8 @@ object Labs {
 
     fun buildTitle(version: String) = "$REQUEST_PREFIX 빌드 $version"
     fun labTitle(id: String) = "$REQUEST_PREFIX 실험실 $id"
+    fun hideTitle(id: String) = "[숨김 요청] 실험실 $id"
+    fun restoreTitle(id: String) = "[복귀 요청] 실험실 $id"
 
     /** 정식 추가 요청을 적는 페이지(저장소의 새 이슈) 주소. */
     fun requestUrl(title: String, body: String): String =
@@ -217,8 +229,14 @@ class LabsActivity : BaseActivity() {
         }
 
         title("실험실")
-        note("아직 다듬는 중인 기능입니다. 켜서 써 보고, 괜찮으면 정식 추가를 요청하세요. 반영되면 정식 사용자에게도 켜집니다.")
-        for (f in Labs.features) {
+        note(
+            "아직 다듬는 중인 기능입니다. 켜서 써 보고 평가단으로 건의하세요. 건의는 5분 뒤 모두에게 반영됩니다.\n" +
+                "· 정식 추가: 정식 사용자에게도 켜집니다\n" +
+                "· 숨김: 실험실에서 빠지고 누구에게도 켜지지 않습니다\n" +
+                "· 복귀: 숨긴 기능이나 정식이 된 기능을 실험실로 되돌립니다"
+        )
+        val hidden = Labs.hidden
+        for (f in Labs.features.filter { it.id !in hidden }) {
             val done = f.id in Labs.graduated
             root.addView(CheckBox(this).apply {
                 this.text = f.title + if (done) "  (정식 기능이 되었습니다)" else ""
@@ -227,8 +245,29 @@ class LabsActivity : BaseActivity() {
                 setOnCheckedChangeListener { _, on -> Labs.set(f.id, on) }
             })
             note(f.description)
-            if (!done) chip("'${f.title}' 정식 추가 요청") {
+            val row = LinearLayout(this)
+            fun rowChip(label: String, action: () -> Unit) =
+                row.addView(toolChip(this, label, action), LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(6); topMargin = dp(6) })
+            if (done) rowChip("실험실로 복귀 건의") {
+                request("restore", f.id, Labs.restoreTitle(f.id), "정식 기능 '${f.title}' 을(를) 다시 실험실로 돌려 주세요.\n\n이유:\n")
+            } else rowChip("정식 추가 건의") {
                 request("lab", f.id, Labs.labTitle(f.id), "실험실 기능 '${f.title}' 을(를) 써 보았고, 정식 기능으로 올려 주세요.\n\n써 본 내용:\n")
+            }
+            rowChip("숨김 건의") {
+                request("hide", f.id, Labs.hideTitle(f.id), "기능 '${f.title}' 을(를) 숨겨 주세요.\n\n이유:\n")
+            }
+            root.addView(row)
+        }
+        // 숨긴 기능: 목록에서 빠져 있고, 복귀를 건의할 수 있다.
+        val gone = Labs.features.filter { it.id in hidden }
+        if (gone.isNotEmpty()) {
+            title("숨긴 기능")
+            note("평가단 건의로 숨긴 기능입니다. 복귀를 건의하면 5분 뒤 다시 실험실에 나타납니다.")
+            for (f in gone) {
+                root.addView(TextView(this).apply { this.text = f.title; textSize = 16f; setTextColor(text); setPadding(0, dp(10), 0, 0) })
+                chip("'${f.title}' 복귀 건의") {
+                    request("restore", f.id, Labs.restoreTitle(f.id), "숨긴 기능 '${f.title}' 을(를) 다시 실험실로 돌려 주세요.\n\n이유:\n")
+                }
             }
         }
         setContentView(ScrollView(this).apply { addView(root) })

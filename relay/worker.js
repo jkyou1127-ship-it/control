@@ -16,7 +16,7 @@ const DEFAULT_BRANCH = "claude/vibrant-ramanujan-pdzsly";
 export function validRequest(kind, target) {
   if (typeof target !== "string") return false;
   if (kind === "build") return /^[0-9A-Za-z][0-9A-Za-z. ]{0,19}$/.test(target);
-  if (kind === "lab") return /^[a-z0-9][a-z0-9-]{0,39}$/.test(target);
+  if (kind === "lab" || kind === "hide" || kind === "restore") return /^[a-z0-9][a-z0-9-]{0,39}$/.test(target);
   return false;
 }
 

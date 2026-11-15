@@ -603,4 +603,13 @@ class CoreTest {
         assertEquals("가로 12.5% · 세로 30.0% · 너비 20.0% · 높이 15.0%", Geometry.describe(0.125f, 0.3f, 0.2f, 0.15f))
         assertEquals(Labs.features.size, Labs.features.map { it.id }.toSet().size)
     }
+
+    @Test
+    fun hiddenLabsFeaturesAreParsedAndRequestTitlesMatchThePanelScript() {
+        assertEquals(setOf("kps"), Labs.parseHidden("""{"hidden":["kps","unknown"]}"""))
+        assertEquals(emptySet<String>(), Labs.parseHidden("""{"graduated":["kps"]}"""))
+        assertTrue(JSONObject(java.io.File("../release/labs.json").readText()).has("hidden"))
+        assertEquals("[숨김 요청] 실험실 kps", Labs.hideTitle("kps"))
+        assertEquals("[복귀 요청] 실험실 kps", Labs.restoreTitle("kps"))
+    }
 }

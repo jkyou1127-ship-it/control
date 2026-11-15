@@ -75,12 +75,43 @@ class PanelTest(unittest.TestCase):
         self.write("labs.json", {"features": ["kps"], "graduated": [], "relay": "https://relay.example"})
         panel.apply("lab", "kps", self.dir)
         with open(os.path.join(self.dir, "labs.json")) as f:
-            self.assertEqual(json.load(f), {"features": ["kps"], "graduated": ["kps"], "relay": "https://relay.example"})
+            self.assertEqual(json.load(f), {"features": ["kps"], "graduated": ["kps"], "hidden": [], "relay": "https://relay.example"})
+
+    def test_hide_and_restore(self):
+        self.assertEqual(panel.parse_title("[숨김 요청] 실험실 kps"), ("hide", "kps"))
+        self.assertEqual(panel.parse_title("[복귀 요청] 실험실 kps"), ("restore", "kps"))
+        self.assertIsNone(panel.parse_title("[숨김 요청] 빌드 1.21"))
+        self.assertIn("이미 실험실", self.evaluate("[복귀 요청] 실험실 kps")[2])     # 숨기지도 올리지도 않은 것
+
+        self.assertIsNone(self.evaluate("[숨김 요청] 실험실 kps")[2])
+        panel.apply("hide", "kps", self.dir)
+        self.assertEqual(panel.load(os.path.join(self.dir, "labs.json"))["hidden"], ["kps"])
+        self.assertIn("이미 숨긴", self.evaluate("[숨김 요청] 실험실 kps")[2])
+        self.assertIn("숨긴 기능", self.evaluate("[정식 요청] 실험실 kps")[2])     # 숨긴 채로는 정식에 올리지 않는다
+
+        panel.apply("restore", "kps", self.dir)
+        labs = panel.load(os.path.join(self.dir, "labs.json"))
+        self.assertEqual((labs["hidden"], labs["graduated"]), ([], []))
+
+    def test_restore_takes_a_graduated_feature_back_to_labs_and_keeps_graduation_when_unhiding(self):
+        panel.apply("lab", "kps", self.dir)
+        panel.apply("hide", "kps", self.dir)
+        panel.apply("restore", "kps", self.dir)                                   # 숨김만 풀리고 정식은 그대로
+        labs = panel.load(os.path.join(self.dir, "labs.json"))
+        self.assertEqual((labs["hidden"], labs["graduated"]), ([], ["kps"]))
+        panel.apply("restore", "kps", self.dir)                                   # 이번엔 정식에서 실험실로
+        self.assertEqual(panel.load(os.path.join(self.dir, "labs.json"))["graduated"], [])
+
+    def test_relayed_hide_and_restore(self):
+        for kind, word in (("hide", "[숨김 요청]"), ("restore", "[복귀 요청]")):
+            title, _, _ = panel.request_from_env({"REQUEST_KIND": kind, "REQUEST_TARGET": "kps", "REPO_OWNER": "o"})
+            self.assertEqual(title, word + " 실험실 kps")
 
     def test_real_release_files_are_consistent(self):
         release = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "release")
         labs = panel.load(os.path.join(release, "labs.json"))
         self.assertTrue(set(labs["graduated"]) <= set(labs["features"]))
+        self.assertTrue(set(labs.get("hidden", [])) <= set(labs["features"]))
         self.assertTrue(os.path.exists(os.path.join(release, "panel.txt")))
 
 

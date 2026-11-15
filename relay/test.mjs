@@ -9,6 +9,9 @@ test("request shapes", () => {
   assert.ok(validRequest("build", "1.21"));
   assert.ok(validRequest("build", "BETA 1.9"));
   assert.ok(validRequest("lab", "press-pop"));
+  assert.ok(validRequest("hide", "kps"));
+  assert.ok(validRequest("restore", "kps"));
+  assert.equal(validRequest("hide", "1.21; rm"), false);
   for (const [k, t] of [["build", "1.21; rm"], ["build", ""], ["lab", "KPS"], ["lab", "../x"], ["other", "1.0"], ["build", 5]]) {
     assert.equal(validRequest(k, t), false, `${k} ${t}`);
   }

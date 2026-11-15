@@ -2,12 +2,13 @@ name: Panel request
 
 # 평가단의 정식 추가 요청을 5분 뒤 release/ 에 반영한다. 요청은 두 길로 온다.
 #   relay  앱 → 중계 서버(relay/worker.js, 평가단 코드 확인) → 이 워크플로 실행. 취소하려면 5분 안에 이 실행을 취소한다.
+#   요청 종류: 빌드 정식 추가, 실험실 기능 정식 추가 · 숨김 · 복귀.
 #   issue  GitHub 이슈(중계 서버를 쓰지 않을 때). 평가단 계정의 이슈만 받는다. 취소하려면 5분 안에 이슈를 닫는다.
 on:
   workflow_dispatch:
     inputs:
       kind:
-        description: "build 또는 lab"
+        description: "build, lab, hide, restore 중 하나"
         required: true
       target:
         description: "빌드 버전 또는 실험실 기능 이름"
@@ -64,7 +65,9 @@ jobs:
           echo "$result" >> "$GITHUB_STEP_SUMMARY"
 
   promote:
-    if: github.event_name == 'issues' && startsWith(github.event.issue.title, '[정식 요청]')
+    if: >-
+      github.event_name == 'issues' && (startsWith(github.event.issue.title, '[정식 요청]') ||
+      startsWith(github.event.issue.title, '[숨김 요청]') || startsWith(github.event.issue.title, '[복귀 요청]'))
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}

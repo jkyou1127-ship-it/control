@@ -10,6 +10,8 @@
 요청은 이슈 제목으로 한다:
     [정식 요청] 빌드 1.21        지금 알파 빌드를 정식 채널에 올린다
     [정식 요청] 실험실 kps       실험실 기능을 정식 기능으로 올린다
+    [숨김 요청] 실험실 kps       실험실 기능을 숨긴다(누구에게도 켜지지 않는다)
+    [복귀 요청] 실험실 kps       숨긴 기능, 또는 정식이 된 기능을 실험실로 되돌린다
 
 이슈 제목과 작성자는 누구나 정할 수 있는 값이라 환경 변수로만 받고, 정해진 모양이 아니면 버린다.
 """
@@ -21,18 +23,24 @@ import sys
 
 PREFIX = "[정식 요청]"
 BUILD = re.compile(r"^\[정식 요청\] 빌드 ([0-9A-Za-z][0-9A-Za-z. ]{0,19})$")
-LAB = re.compile(r"^\[정식 요청\] 실험실 ([a-z0-9][a-z0-9-]{0,39})$")
+FEATURE = r"([a-z0-9][a-z0-9-]{0,39})$"
+LAB = re.compile(r"^\[정식 요청\] 실험실 " + FEATURE)
+HIDE = re.compile(r"^\[숨김 요청\] 실험실 " + FEATURE)
+RESTORE = re.compile(r"^\[복귀 요청\] 실험실 " + FEATURE)
+# 워크플로가 받는 이슈 제목의 머리말들
+PREFIXES = ("[정식 요청]", "[숨김 요청]", "[복귀 요청]")
 
 
 def parse_title(title):
-    """('build', 버전) 또는 ('lab', 기능 이름). 모양이 다르면 None."""
+    """('build', 버전) / ('lab' | 'hide' | 'restore', 기능 이름). 모양이 다르면 None."""
     title = title.strip()
     m = BUILD.match(title)
     if m:
         return "build", m.group(1).strip()
-    m = LAB.match(title)
-    if m:
-        return "lab", m.group(1)
+    for kind, pattern in (("lab", LAB), ("hide", HIDE), ("restore", RESTORE)):
+        m = pattern.match(title)
+        if m:
+            return kind, m.group(1)
     return None
 
 
@@ -54,11 +62,22 @@ def check_build(version, alpha, stable):
     return None
 
 
-def check_lab(feature, labs):
+def check_lab(feature, labs, kind="lab"):
     if feature not in labs.get("features", []):
         return "'%s' 은(는) 실험실에 없는 기능입니다" % feature
-    if feature in labs.get("graduated", []):
-        return "'%s' 은(는) 이미 정식 기능입니다" % feature
+    hidden = feature in labs.get("hidden", [])
+    graduated = feature in labs.get("graduated", [])
+    if kind == "lab":
+        if hidden:
+            return "'%s' 은(는) 숨긴 기능입니다. 먼저 복귀를 건의하세요" % feature
+        if graduated:
+            return "'%s' 은(는) 이미 정식 기능입니다" % feature
+    elif kind == "hide":
+        if hidden:
+            return "'%s' 은(는) 이미 숨긴 기능입니다" % feature
+    elif kind == "restore":
+        if not hidden and not graduated:
+            return "'%s' 은(는) 이미 실험실에 있습니다" % feature
     return None
 
 
@@ -71,7 +90,8 @@ def evaluate(title, author, owner, release="release"):
     """(종류, 대상, 안 되는 이유 또는 None)."""
     parsed = parse_title(title)
     if parsed is None:
-        return None, None, "제목은 '%s 빌드 <버전>' 또는 '%s 실험실 <기능 이름>' 이어야 합니다" % (PREFIX, PREFIX)
+        return None, None, ("제목은 '[정식 요청] 빌드 <버전>', '[정식 요청] 실험실 <기능>', "
+                            "'[숨김 요청] 실험실 <기능>', '[복귀 요청] 실험실 <기능>' 중 하나여야 합니다")
     kind, target = parsed
     with open(os.path.join(release, "panel.txt"), encoding="utf-8") as f:
         if not is_member(author, owner, f.read()):
@@ -80,7 +100,7 @@ def evaluate(title, author, owner, release="release"):
         problem = check_build(target, load(os.path.join(release, "alpha", "version.json")),
                               load(os.path.join(release, "version.json")))
     else:
-        problem = check_lab(target, load(os.path.join(release, "labs.json")))
+        problem = check_lab(target, load(os.path.join(release, "labs.json")), kind)
     return kind, target, problem
 
 
@@ -91,14 +111,32 @@ def apply(kind, target, release="release"):
     else:
         path = os.path.join(release, "labs.json")
         labs = load(path)
-        labs["graduated"] = sorted(set(labs.get("graduated", [])) | {target})
+        graduated = set(labs.get("graduated", []))
+        hidden = set(labs.get("hidden", []))
+        if kind == "lab":
+            graduated.add(target)
+        elif kind == "hide":
+            hidden.add(target)
+        elif kind == "restore":
+            # 숨긴 기능이면 숨기기 전 상태로, 아니면 정식에서 실험실로 되돌린다.
+            if target in hidden:
+                hidden.discard(target)
+            else:
+                graduated.discard(target)
+        labs["graduated"] = sorted(graduated)
+        labs["hidden"] = sorted(hidden)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(labs, f, indent=2)
             f.write("\n")
 
 
 def summary(kind, target):
-    return ("빌드 %s 을(를) 정식 채널에" if kind == "build" else "실험실 기능 '%s' 을(를) 정식 기능으로") % target
+    return {
+        "build": "빌드 %s 을(를) 정식 채널에",
+        "lab": "실험실 기능 '%s' 을(를) 정식 기능으로",
+        "hide": "실험실 기능 '%s' 을(를) 숨김으로",
+        "restore": "기능 '%s' 을(를) 실험실로",
+    }[kind] % target
 
 
 def request_from_env(env):
@@ -106,8 +144,9 @@ def request_from_env(env):
     owner = env.get("REPO_OWNER", "")
     kind = env.get("REQUEST_KIND", "")
     if kind:
-        word = {"build": "빌드", "lab": "실험실"}.get(kind, "?")
-        return "%s %s %s" % (PREFIX, word, env.get("REQUEST_TARGET", "")), owner, owner
+        head = {"build": "[정식 요청] 빌드", "lab": "[정식 요청] 실험실",
+                "hide": "[숨김 요청] 실험실", "restore": "[복귀 요청] 실험실"}.get(kind, "?")
+        return "%s %s" % (head, env.get("REQUEST_TARGET", "")), owner, owner
     return env.get("ISSUE_TITLE", ""), env.get("ISSUE_AUTHOR", ""), owner
 
 
