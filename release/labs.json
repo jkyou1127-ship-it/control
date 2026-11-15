@@ -38,6 +38,7 @@
     "list-search",
     "lock",
     "opacity",
+    "option-buttons",
     "press-sound",
     "select-all",
     "text-scale"
@@ -50,8 +51,6 @@
     "timer",
     "total"
   ],
-  "alpha": [
-    "option-buttons"
-  ],
+  "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
