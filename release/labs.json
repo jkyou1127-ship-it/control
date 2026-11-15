@@ -32,6 +32,8 @@
   "hidden": [
     "hide-labels"
   ],
-  "alpha": [],
+  "alpha": [
+    "press-count"
+  ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
