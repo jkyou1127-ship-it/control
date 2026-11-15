@@ -27,6 +27,7 @@
   "graduated": [
     "align",
     "distribute",
+    "exit-guard",
     "home-shortcut",
     "kps",
     "list-pin",
