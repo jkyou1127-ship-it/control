@@ -24,7 +24,8 @@
     "editor-coords"
   ],
   "graduated": [
-    "kps"
+    "kps",
+    "list-search"
   ],
   "hidden": [
     "combo",
