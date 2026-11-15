@@ -13,6 +13,9 @@ object Changelog {
     class Entry(val version: String, val notes: List<String>)
 
     val entries = listOf(
+        Entry("2.0.1", listOf(
+            "편집 화면 가운데 안내선(중앙선) 삭제",
+        )),
         Entry("2.0", listOf(
             "UI 대개편: 둥근 카드와 납작한 버튼, 테마 색을 따르는 강조색",
             "목록 화면: 제목 줄과 가로로 밀 수 있는 도구 줄, 카드 모양 레이아웃 목록",

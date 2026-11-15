@@ -205,7 +205,6 @@ class EditorActivity : BaseActivity() {
         view.lockOn = lockOn
         view.coordsOn = Labs.isOn("editor-coords")
         view.divisions = GridSize.divisions[Link.gridSize]
-        view.guidesOn = Labs.isOn("center-guides")
         if (Labs.isOn("big-handle")) view.handleScale = 1.8f
         view.snapEdges = Labs.isOn("snap-edges")
         view.countOn = Labs.isOn("selection-count")
@@ -1272,7 +1271,6 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     }
 
     /** 화면 가운데 안내선(실험실 기능). */
-    var guidesOn = false
 
     /** 버튼을 길게 누르면 속성 열기(실험실 기능). */
     var longPressOn = false
@@ -1392,7 +1390,6 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     private val gridPaint = Paint().apply { color = theme.text and 0x00FFFFFF or 0x18000000; strokeWidth = 1f }
     private val drawPaint = Paint().apply { color = 0x664FC3F7; style = Paint.Style.FILL }
     private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.text }
-    private val guidePaint = Paint().apply { strokeWidth = ctx.dp(1).toFloat() }
     private val outlinePaint = Paint().apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(1).toFloat() }
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.text and 0x00FFFFFF or 0x99000000.toInt(); textAlign = Paint.Align.CENTER; textSize = ctx.dp(18).toFloat()
@@ -1477,11 +1474,6 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         }
         if (countOn && selection.isNotEmpty()) {
             c.drawText("선택 ${selection.size}개", width / 2f, hintPaint.textSize * (if (hidden.isNotEmpty()) 2.6f else 1.4f), hintPaint)
-        }
-        if (guidesOn) {
-            guidePaint.color = theme.text and 0x00FFFFFF or 0x66000000
-            c.drawLine(width / 2f, 0f, width / 2f, height.toFloat(), guidePaint)
-            c.drawLine(0f, height / 2f, width.toFloat(), height / 2f, guidePaint)
         }
         if (coordsOn && selection.isNotEmpty()) {
             val r = selectionBox(rect)

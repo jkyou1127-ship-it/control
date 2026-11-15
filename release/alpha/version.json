@@ -1,6 +1,6 @@
 {
-  "versionCode": 68,
-  "versionName": "2.0",
-  "notes": "2.0 UI 대개편: 둥근 카드와 납작한 버튼, 새 목록·설정·실험실 화면. 평가단이 OK 해야 정식에 올라갑니다.",
+  "versionCode": 69,
+  "versionName": "2.0.1",
+  "notes": "2.0.1: 편집 화면 가운데 안내선(중앙선) 삭제. 2.0 UI 대개편 포함, 평가단이 OK 해야 정식에 올라갑니다.",
   "needsPanel": true
 }
