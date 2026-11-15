@@ -21,6 +21,7 @@
     "list-kinds"
   ],
   "graduated": [
+    "list-kinds",
     "nudge",
     "open-last",
     "selection-count",
