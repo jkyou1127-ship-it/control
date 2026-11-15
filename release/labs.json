@@ -21,6 +21,7 @@
     "list-kinds"
   ],
   "graduated": [
+    "nudge",
     "selection-count",
     "show-hidden-outline",
     "snap-edges"
