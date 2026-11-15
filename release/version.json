@@ -1,5 +1,5 @@
 {
-  "versionCode": 46,
-  "versionName": "1.20",
-  "notes": "매크로 버튼, 연타 버튼, 레이아웃 전환 버튼이 추가되었습니다. 앱 이름이 Control Pad 로 바뀌었습니다."
+  "versionCode": 47,
+  "versionName": "1.21",
+  "notes": "편집 화면을 새로 꾸몄고 그리기를 편집 화면에 합쳤습니다. 실험실과 평가단이 추가되었습니다 (알파)."
 }
