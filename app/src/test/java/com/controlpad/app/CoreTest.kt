@@ -453,4 +453,16 @@ class CoreTest {
         assertEquals(PadButton.SHAPE_FREE, PadButton.fromJson(JSONObject(free.toJson().toString())).copy().shape)
         assertTrue(free.contains(0.001f, 0.001f))          // 누르는 범위는 그림을 감싸는 사각형
     }
+
+    @Test
+    fun changelogStartsWithThisBuildAndHasNoDuplicates() {
+        val gradle = java.io.File("build.gradle.kts").readText()
+        // 새 버전을 내면서 업데이트 내역을 빠뜨리지 않게 한다.
+        assertTrue(gradle.contains("versionName = \"${Changelog.entries.first().version}\""))
+        assertEquals(Changelog.entries.size, Changelog.entries.map { it.version }.toSet().size)
+        assertTrue(Changelog.entries.all { it.notes.isNotEmpty() })
+        assertEquals("BETA 1.0", Changelog.entries.last().version)
+        assertTrue(Changelog.text(latestOnly = true).startsWith(Changelog.entries.first().version + "\n  · "))
+        assertTrue(Changelog.text().contains("BETA 1.9"))
+    }
 }

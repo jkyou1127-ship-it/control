@@ -37,7 +37,7 @@ class MainActivity : BaseActivity() {
         status = TextView(this).apply { textSize = 14f; setPadding(pad, 0, pad, 0) }
         header.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
         header.addView(Button(this).apply {
-            text = "연결 설정"
+            text = "설정"
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         })
         header.addView(Button(this).apply {
@@ -53,6 +53,17 @@ class MainActivity : BaseActivity() {
             }
         })
         header.addView(Button(this).apply { text = "＋ 새 레이아웃"; setOnClickListener { newLayout() } })
+        header.addView(Button(this).apply {
+            text = "✎ 그림 레이아웃"
+            setOnClickListener {
+                // 빈 레이아웃을 만들고 바로 그림 에디터를 연다: 손으로 그린 그림이 그대로 버튼이 된다.
+                askName("그림 레이아웃 이름", "그림 레이아웃") { name ->
+                    val l = PadLayout(name = name)
+                    LayoutStore.save(this@MainActivity, l)
+                    open(SketchActivity::class.java, l.id)
+                }
+            }
+        })
         root.addView(header)
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -72,6 +83,13 @@ class MainActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         Updater.autoCheck(this)
+        // 업데이트한 뒤 처음 켰을 때 한 번, 무엇이 바뀌었는지 보여 준다(처음 설치했을 때는 보여 주지 않는다).
+        val seen = Link.prefs.getString("seenVersion", null)
+        val now = Updater.installedName(this)
+        if (seen != now) {
+            Link.prefs.edit().putString("seenVersion", now).apply()
+            if (seen != null) showChangelog(this, latestOnly = true)
+        }
         refresh()
         ui.post(tick)
     }

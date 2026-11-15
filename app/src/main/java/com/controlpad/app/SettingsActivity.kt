@@ -45,7 +45,7 @@ class SettingsActivity : BaseActivity() {
         fun title(t: String) = TextView(this).apply { text = t; textSize = 18f; setTextColor(Themes.current.text); setPadding(0, pad, 0, dp(4)) }
         fun note(t: String) = TextView(this).apply { text = t; textSize = 14f; setLineSpacing(0f, 1.2f) }
 
-        root.addView(TextView(this).apply { text = "연결 설정"; textSize = 24f; setTextColor(Themes.current.text) })
+        root.addView(TextView(this).apply { text = "설정"; textSize = 24f; setTextColor(Themes.current.text) })
         status = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
         root.addView(status)
 
@@ -186,6 +186,7 @@ class SettingsActivity : BaseActivity() {
             }
         })
         root.addView(Button(this).apply { text = "업데이트 확인"; setOnClickListener { Updater.check(this@SettingsActivity) } })
+        root.addView(Button(this).apply { text = "업데이트 내역"; setOnClickListener { showChangelog(this@SettingsActivity) } })
 
         scroll = ScrollView(this).apply { addView(root) }
         setContentView(scroll)
