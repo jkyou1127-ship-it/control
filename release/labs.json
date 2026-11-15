@@ -32,7 +32,8 @@
     "list-search",
     "lock",
     "opacity",
-    "select-all"
+    "select-all",
+    "text-scale"
   ],
   "hidden": [
     "combo",
