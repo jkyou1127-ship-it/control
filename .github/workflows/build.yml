@@ -17,6 +17,8 @@ jobs:
         run: python3 receiver/test_receiver.py
       - name: Panel script tests
         run: python3 scripts/test_panel.py
+      - name: Relay tests
+        run: node --test relay/test.mjs
       - name: Windows receiver
         run: scripts/build-receiver.sh
       - name: Unit tests and APK

@@ -11,8 +11,8 @@ android {
         applicationId = "com.controlpad.app"
         minSdk = 28
         targetSdk = 34
-        versionCode = 47
-        versionName = "1.21"
+        versionCode = 48
+        versionName = "1.22"
     }
 
     // 저장소에 포함된 고정 키. 비밀이 아니며, 어디서 빌드하든 같은 서명이 되어

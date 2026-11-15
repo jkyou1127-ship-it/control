@@ -61,6 +61,22 @@ class PanelTest(unittest.TestCase):
             self.assertEqual(json.load(f)["graduated"], ["kps"])
         self.assertIn("이미 정식", self.evaluate("[정식 요청] 실험실 kps")[2])
 
+    def test_relayed_requests_count_as_the_owner_but_are_still_validated(self):
+        title, author, owner = panel.request_from_env({"REQUEST_KIND": "lab", "REQUEST_TARGET": "kps", "REPO_OWNER": "Owner"})
+        self.assertEqual((title, author, owner), ("[정식 요청] 실험실 kps", "Owner", "Owner"))
+        self.assertIsNone(panel.evaluate(title, author, owner, self.dir)[2])
+        for kind, target in (("build", "1.21; echo x"), ("lab", "../x"), ("other", "1.21"), ("build", "")):
+            t, a, o = panel.request_from_env({"REQUEST_KIND": kind, "REQUEST_TARGET": target, "REPO_OWNER": "Owner"})
+            self.assertIsNotNone(panel.evaluate(t, a, o, self.dir)[2], (kind, target))
+        # 중계 서버를 거치지 않은 이슈 요청은 예전처럼 제목과 작성자로 판단한다
+        self.assertEqual(panel.request_from_env({"ISSUE_TITLE": "t", "ISSUE_AUTHOR": "a", "REPO_OWNER": "o"}), ("t", "a", "o"))
+
+    def test_relay_address_survives_graduation(self):
+        self.write("labs.json", {"features": ["kps"], "graduated": [], "relay": "https://relay.example"})
+        panel.apply("lab", "kps", self.dir)
+        with open(os.path.join(self.dir, "labs.json")) as f:
+            self.assertEqual(json.load(f), {"features": ["kps"], "graduated": ["kps"], "relay": "https://relay.example"})
+
     def test_real_release_files_are_consistent(self):
         release = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "release")
         labs = panel.load(os.path.join(release, "labs.json"))

@@ -515,4 +515,23 @@ class CoreTest {
         assertTrue(url.startsWith("https://github.com/jkyou1127-ship-it/control/issues/new?title=%5B"))
         assertFalse(url.contains(" ") || url.contains("\n") || url.substringAfter("body=").contains("&"))
     }
+
+    @Test
+    fun relayAddressAndAnswersAreHandledSafely() {
+        assertEquals("https://relay.example", Labs.parseRelay("""{"relay":" https://relay.example "}"""))
+        assertEquals("", Labs.parseRelay("""{"relay":"http://insecure.example"}"""))      // https 가 아니면 쓰지 않는다
+        assertEquals("", Labs.parseRelay("{}"))
+        assertEquals("", Labs.parseRelay(java.io.File("../release/labs.json").readText()).takeIf { !it.startsWith("https://") } ?: "")
+
+        val body = JSONObject(Labs.relayBody("코드\"1", "build", "1.22"))
+        assertEquals("코드\"1", body.getString("code"))
+        assertEquals("build", body.getString("kind"))
+        assertEquals("1.22", body.getString("target"))
+
+        assertEquals(null, Labs.relayProblem(200, """{"ok":true}"""))
+        assertEquals("평가단 코드가 맞지 않습니다", Labs.relayProblem(403, """{"ok":false,"error":"bad_code"}"""))
+        assertTrue(Labs.relayProblem(502, """{"ok":false,"error":"github_401"}""")!!.contains("401"))
+        assertTrue(Labs.relayProblem(200, "<html>not json</html>") != null)     // 엉뚱한 답을 성공으로 보지 않는다
+        assertTrue(Labs.relayProblem(500, "")!!.contains("500"))
+    }
 }

@@ -191,7 +191,17 @@ class SettingsActivity : BaseActivity() {
         // 실험실과 평가단은 알파 빌드를 받는 사람에게만 보인다.
         if (Updater.alpha) root.addView(Button(this).apply {
             text = "실험실 · 평가단"
-            setOnClickListener { startActivity(Intent(this@SettingsActivity, LabsActivity::class.java)) }
+            setOnClickListener {
+                // 중계 서버 주소가 바뀌었을 수 있으니 열기 전에 한 번 받아 온다(안 되면 전에 받은 값으로 연다).
+                isEnabled = false
+                Thread {
+                    Labs.fetchNow()
+                    runOnUiThread {
+                        isEnabled = true
+                        if (!isFinishing && !isDestroyed) startActivity(Intent(this@SettingsActivity, LabsActivity::class.java))
+                    }
+                }.start()
+            }
         })
 
         scroll = ScrollView(this).apply { addView(root) }

@@ -4,6 +4,9 @@
     panel.py check   요청이 유효한지 보고 GITHUB_OUTPUT 형식(ok=, reason=, summary=)으로 적는다
     panel.py apply   release/ 의 파일을 고친다
 
+요청은 두 길로 온다. 중계 서버(relay/worker.js)가 평가단 코드를 확인하고 보낸 요청은
+환경 변수 REQUEST_KIND / REQUEST_TARGET 으로, GitHub 이슈로 온 요청은 ISSUE_TITLE / ISSUE_AUTHOR 로 받는다.
+
 요청은 이슈 제목으로 한다:
     [정식 요청] 빌드 1.21        지금 알파 빌드를 정식 채널에 올린다
     [정식 요청] 실험실 kps       실험실 기능을 정식 기능으로 올린다
@@ -98,9 +101,18 @@ def summary(kind, target):
     return ("빌드 %s 을(를) 정식 채널에" if kind == "build" else "실험실 기능 '%s' 을(를) 정식 기능으로") % target
 
 
+def request_from_env(env):
+    """(제목, 작성자, 저장소 주인). 중계 서버가 보낸 요청은 평가단 코드를 이미 확인한 것이라 주인의 요청으로 다룬다."""
+    owner = env.get("REPO_OWNER", "")
+    kind = env.get("REQUEST_KIND", "")
+    if kind:
+        word = {"build": "빌드", "lab": "실험실"}.get(kind, "?")
+        return "%s %s %s" % (PREFIX, word, env.get("REQUEST_TARGET", "")), owner, owner
+    return env.get("ISSUE_TITLE", ""), env.get("ISSUE_AUTHOR", ""), owner
+
+
 def main(argv):
-    kind, target, problem = evaluate(os.environ.get("ISSUE_TITLE", ""), os.environ.get("ISSUE_AUTHOR", ""),
-                                     os.environ.get("REPO_OWNER", ""))
+    kind, target, problem = evaluate(*request_from_env(os.environ))
     if argv[1:] == ["check"]:
         print("ok=%s" % ("false" if problem else "true"))
         print("reason=%s" % (problem or ""))

@@ -1,8 +1,17 @@
 name: Panel request
 
-# 평가단의 정식 추가 요청: 앱의 '실험실 · 평가단' 화면이 여는 이슈.
-# 평가단의 요청이면 5분 기다렸다가 release/ 를 고쳐 정식에 반영한다. 그 사이에 이슈를 닫으면 취소된다.
+# 평가단의 정식 추가 요청을 5분 뒤 release/ 에 반영한다. 요청은 두 길로 온다.
+#   relay  앱 → 중계 서버(relay/worker.js, 평가단 코드 확인) → 이 워크플로 실행. 취소하려면 5분 안에 이 실행을 취소한다.
+#   issue  GitHub 이슈(중계 서버를 쓰지 않을 때). 평가단 계정의 이슈만 받는다. 취소하려면 5분 안에 이슈를 닫는다.
 on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "build 또는 lab"
+        required: true
+      target:
+        description: "빌드 버전 또는 실험실 기능 이름"
+        required: true
   issues:
     types: [opened]
 
@@ -16,8 +25,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  relay:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      # 입력값은 명령에 끼워 넣지 않고 환경 변수로만 넘기고, scripts/panel.py 가 모양을 다시 확인한다.
+      REQUEST_KIND: ${{ inputs.kind }}
+      REQUEST_TARGET: ${{ inputs.target }}
+      REPO_OWNER: ${{ github.repository_owner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the request
+        id: check
+        run: python3 scripts/panel.py check >> "$GITHUB_OUTPUT"
+
+      - name: Reject
+        if: steps.check.outputs.ok != 'true'
+        env:
+          REASON: ${{ steps.check.outputs.reason }}
+        run: |
+          echo "요청을 반영하지 않았습니다: $REASON" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: Wait five minutes
+        run: sleep 300
+
+      - name: Apply
+        run: |
+          # 기다리는 동안 새 빌드가 올라왔을 수 있으니 최신 상태에서 다시 확인한다.
+          git pull --ff-only
+          result=$(python3 scripts/panel.py apply)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release
+          git commit -m "Panel request: promote to stable"
+          git push
+          echo "$result" >> "$GITHUB_STEP_SUMMARY"
+
   promote:
-    if: startsWith(github.event.issue.title, '[정식 요청]')
+    if: github.event_name == 'issues' && startsWith(github.event.issue.title, '[정식 요청]')
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
