@@ -9,7 +9,10 @@ import (
 // settings 는 창에서 바꾸는 설정 중 이 프로그램이 직접 기억하는 것들이다.
 // (Windows 시작 시 자동 실행은 Windows 작업 스케줄러에 들어 있는지를 그때그때 확인한다.)
 type settings struct {
-	OnTop bool `json:"onTop"` // 창을 항상 위에 표시
+	OnTop bool  `json:"onTop"` // 창을 항상 위에 표시
+	X     int32 `json:"x"`     // 창을 닫을 때의 위치(다음에 같은 자리에 연다)
+	Y     int32 `json:"y"`
+	Saved bool  `json:"saved"` // 위치를 기억해 둔 적이 있는지
 }
 
 func settingsPath() string {

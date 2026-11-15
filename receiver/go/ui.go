@@ -24,6 +24,16 @@ type uiState struct {
 	Down       map[int]bool // 지금 누르고 있는 키(usage)
 	Peak       int          // 가장 높았던 초당 입력 수
 	pressTimes []time.Time  // 최근 1초 동안 누른 시각(초당 입력 수 계산용)
+	LastPacket time.Time    // 태블릿에서 마지막으로 패킷을 받은 시각(앱은 쉬는 동안에도 0.7초마다 보낸다)
+	perSecond  [60]int      // 최근 1분의 초별 누른 횟수(그래프용). 칸은 유닉스 초 % 60
+	secondOf   [60]int64    // 각 칸이 어느 초의 것인지
+}
+
+// heard 는 태블릿에서 패킷을 받았다고 적는다.
+func (s *uiState) heard(now time.Time) {
+	s.mu.Lock()
+	s.LastPacket = now
+	s.mu.Unlock()
 }
 
 func newState() *uiState { return &uiState{Started: time.Now(), Down: map[int]bool{}} }
@@ -44,6 +54,11 @@ func (s *uiState) pressed(name string, now time.Time) {
 		s.Recent = s.Recent[len(s.Recent)-12:]
 	}
 	s.pressTimes = append(s.pressTimes, now)
+	sec := now.Unix()
+	if s.secondOf[sec%60] != sec {
+		s.secondOf[sec%60], s.perSecond[sec%60] = sec, 0
+	}
+	s.perSecond[sec%60]++
 	if k := s.kpsLocked(now); k > s.Peak {
 		s.Peak = k
 	}
@@ -87,6 +102,8 @@ type view struct {
 	Presses, KPS, Peak int
 	Recent, Down       []string
 	LastInput, Uptime  string
+	Live               bool  // 3초 안에 태블릿에서 패킷이 왔는지
+	History            []int // 최근 60초의 초별 누른 횟수(오래된 것부터)
 }
 
 func (s *uiState) view(now time.Time) view {
@@ -108,6 +125,14 @@ func (s *uiState) view(now time.Time) view {
 		v.LastInput = "아직 입력이 없습니다"
 	} else {
 		v.LastInput = "마지막 입력 " + ago(now.Sub(s.LastInput))
+	}
+	v.Live = !s.LastPacket.IsZero() && now.Sub(s.LastPacket) < 3*time.Second
+	for sec := now.Unix() - 59; sec <= now.Unix(); sec++ {
+		n := 0
+		if s.secondOf[sec%60] == sec {
+			n = s.perSecond[sec%60]
+		}
+		v.History = append(v.History, n)
 	}
 	up := int(now.Sub(s.Started).Seconds())
 	v.Uptime = fmt.Sprintf("실행한 지 %d시간 %d분", up/3600, up/60%60)

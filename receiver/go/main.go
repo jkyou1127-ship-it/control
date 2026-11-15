@@ -305,6 +305,7 @@ func (a *app) serve(conn *net.UDPConn, hostname string) {
 			if reply := discoveryReply(p, hostname); reply != nil {
 				conn.WriteToUDP(reply, from)
 			} else if m, ok := parseMouse(p); ok {
+				a.state.heard(time.Now())
 				if !paused {
 					a.mouse.Feed(m)
 				}
@@ -314,7 +315,8 @@ func (a *app) serve(conn *net.UDPConn, hostname string) {
 					a.keys.Feed(seq, report, from.String())
 				}
 				last = time.Now()
-				conn.WriteToUDP([]byte{'C', 'A', p[3], p[4], p[5], p[6]}, from)
+				a.state.heard(last)
+				conn.WriteToUDP(ackPacket(p, paused), from)
 				if ip := from.IP.String(); ip != connected {
 					connected = ip
 					a.state.connected(ip)
@@ -328,6 +330,16 @@ func (a *app) serve(conn *net.UDPConn, hostname string) {
 		}
 		a.inputMu.Unlock()
 	}
+}
+
+// ackPacket 은 키 패킷에 대한 답이다: 'C' 'A' 순번(4바이트) 상태(1바이트, 비트 0 = 입력 일시정지 중).
+// 옛 앱은 앞의 6바이트만 읽으므로 상태 바이트가 붙어도 괜찮다.
+func ackPacket(p []byte, paused bool) []byte {
+	var flags byte
+	if paused {
+		flags |= 1
+	}
+	return []byte{'C', 'A', p[3], p[4], p[5], p[6], flags}
 }
 
 func main() {

@@ -241,6 +241,32 @@ func TestPauseDropsInputAndReleasesHeldKeys(t *testing.T) {
 	a.ReleaseAll()
 }
 
+func TestAckCarriesPauseFlagAndGraph(t *testing.T) {
+	p := keyPacket(0x01020304)
+	if a := ackPacket(p, false); string(a[:2]) != "CA" || a[2] != 1 || a[5] != 4 || a[6] != 0 {
+		t.Fatalf("ack %v", a)
+	}
+	if a := ackPacket(p, true); a[6]&1 == 0 {
+		t.Fatal("paused flag")
+	}
+	s := newState()
+	now := time.Unix(1_000_000, 0)
+	s.pressed("A", now.Add(-2*time.Second))
+	s.pressed("B", now)
+	s.pressed("C", now)
+	s.heard(now)
+	v := s.view(now)
+	if len(v.History) != 60 || v.History[59] != 2 || v.History[57] != 1 || !v.Live {
+		t.Fatalf("history %v live %v", v.History, v.Live)
+	}
+	if v := s.view(now.Add(5 * time.Second)); v.Live || v.History[59] != 0 || v.History[54] != 2 {
+		t.Fatalf("later %v live %v", v.History, v.Live)
+	}
+	if v := s.view(now.Add(2 * time.Minute)); v.History[59] != 0 || v.History[0] != 0 {
+		t.Fatal("old seconds must not come back")
+	}
+}
+
 func TestSettingsRoundTrip(t *testing.T) {
 	path := t.TempDir() + "/sub/receiver.json"
 	if loadSettings(path).OnTop {

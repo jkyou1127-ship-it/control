@@ -50,6 +50,8 @@ var (
 	pGetDpiForWindow   = user32.NewProc("GetDpiForWindow")
 	pSetDpiAwareness   = user32.NewProc("SetProcessDpiAwarenessContext")
 	pSetProcessDPIAwar = user32.NewProc("SetProcessDPIAware")
+	pRegisterHotKey    = user32.NewProc("RegisterHotKey")
+	pGetWindowRect     = user32.NewProc("GetWindowRect")
 	pGetModuleHandle   = kernel32.NewProc("GetModuleHandleW")
 	pGlobalAlloc       = kernel32.NewProc("GlobalAlloc")
 	pGlobalLock        = kernel32.NewProc("GlobalLock")
@@ -125,6 +127,8 @@ const (
 	wmMouseMove  = 0x0200
 	wmLButtonUp  = 0x0202
 	wmMouseLeave = 0x02A3
+	wmHotKey     = 0x0312
+	wmClose      = 0x0010
 
 	dtCenter     = 0x1
 	dtVCenter    = 0x4
@@ -334,8 +338,10 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 	switch {
 	case v.Paused:
 		dot, title = cWarn, "입력 일시정지됨"
-	case v.Device != "":
+	case v.Device != "" && v.Live:
 		dot, title = cOk, "연결됨  ·  "+v.Device
+	case v.Device != "":
+		dot, title = cWarn, "연결 끊김  ·  "+v.Device
 	}
 	w.card(dc, pad, y, inner, h, cLine)
 	circle(dc, pad+w.px(26), y+w.px(30), w.px(6), dot)
@@ -358,6 +364,41 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 			color = cAccent
 		}
 		text(dc, itoa(s.n), rect{x + w.px(14), y + w.px(30), x + cw - w.px(8), y + h - w.px(8)}, w.bold(22), color, dtSingleLine)
+	}
+	y += h + gap
+
+	// 최근 1분 입력 그래프(초마다 막대 하나)
+	h = w.px(96)
+	w.card(dc, pad, y, inner, h, cLine)
+	total := 0
+	for _, n := range v.History {
+		total += n
+	}
+	text(dc, "최근 1분 입력  ·  "+strconv.Itoa(total)+"번", rect{pad + w.px(16), y + w.px(10), pad + inner - w.px(16), y + w.px(30)}, w.normal(12), cSub, dtSingleLine)
+	gx, gy, gw, gh := pad+w.px(16), y+w.px(36), inner-w.px(32), w.px(46)
+	most := 1
+	for _, n := range v.History {
+		if n > most {
+			most = n
+		}
+	}
+	bar := gw / int32(len(v.History))
+	base := rect{gx, gy + gh - w.px(2), gx + gw, gy + gh}
+	roundRect(dc, base, w.px(1), cLine, cLine)
+	for i, n := range v.History {
+		if n == 0 {
+			continue
+		}
+		bh := int32(float64(gh-w.px(4)) * float64(n) / float64(most))
+		if bh < w.px(3) {
+			bh = w.px(3)
+		}
+		x := gx + int32(i)*bar
+		color := cAccent
+		if i < len(v.History)-1 {
+			color = rgb(0x2F7FA6)
+		}
+		roundRect(dc, rect{x + 1, gy + gh - bh, x + bar - 1, gy + gh}, w.px(2), color, color)
 	}
 	y += h + gap
 
@@ -438,7 +479,7 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 	y += h + w.px(10)
 
 	// 바닥글(알림이 있으면 알림)
-	foot, color := "창을 닫으면 수신 프로그램이 꺼집니다", cSub
+	foot, color := "Ctrl+Alt+P 로 어디서든 입력 일시정지  ·  창을 닫으면 꺼집니다", cSub
 	if time.Now().Before(w.toastTill) {
 		foot, color = w.toast, cAccent
 	}
@@ -559,6 +600,15 @@ func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		pEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
 		w.fit(cr.r, height)
 		return 0
+	case wmHotKey:
+		w.click(idPause) // Ctrl+Alt+P: 게임 중에도 바로 일시정지 / 다시 받기
+		return 0
+	case wmClose:
+		// 창 위치를 기억해 두고 닫는다
+		var r rect
+		pGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&r)))
+		w.set.X, w.set.Y, w.set.Saved = r.l, r.t, true
+		saveSettings(w.setPath, w.set)
 	case wmTimer:
 		pInvalidateRect.Call(hwnd, 0, 0)
 		return 0
@@ -641,7 +691,11 @@ func runWindow(a *app) {
 	w.fit(w.px(460), w.px(760))
 	w.height = 0
 	w.applyOnTop()
-	dark := int32(1) // 제목줄도 어둡게(Windows 10 2004 이상, 11)
+	if w.set.Saved {
+		pSetWindowPos.Call(hwnd, 0, uintptr(w.set.X), uintptr(w.set.Y), 0, 0, 0x0001|0x0004|0x0010) // NOSIZE | NOZORDER | NOACTIVATE
+	}
+	pRegisterHotKey.Call(hwnd, 1, 0x0001|0x0002|0x4000, 'P') // Ctrl+Alt+P (MOD_ALT | MOD_CONTROL | MOD_NOREPEAT)
+	dark := int32(1)                                         // 제목줄도 어둡게(Windows 10 2004 이상, 11)
 	syscall.NewLazyDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute").Call(hwnd, 20, uintptr(unsafe.Pointer(&dark)), 4)
 	pShowWindow.Call(hwnd, 5) // SW_SHOW
 	pSetTimer.Call(hwnd, 1, 200, 0)
