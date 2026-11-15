@@ -185,6 +185,25 @@ class SettingsActivity : BaseActivity() {
             })
         }
 
+        root.addView(title("화면"))
+        fun choice(label: String, names: List<String>, selected: Int, set: (Int) -> Unit) {
+            root.addView(TextView(this).apply { text = label; setPadding(0, dp(6), 0, 0) })
+            root.addView(android.widget.Spinner(this).apply {
+                adapter = android.widget.ArrayAdapter(this@SettingsActivity, android.R.layout.simple_spinner_dropdown_item, names)
+                setSelection(selected)
+                onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(p: android.widget.AdapterView<*>?, v: android.view.View?, pos: Int, id: Long) = set(pos)
+                    override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+                }
+            })
+        }
+        choice("편집·실행 화면 방향", ScreenOrientation.names, Link.orientation) { Link.orientation = it }
+        choice("편집 화면 격자 크기", GridSize.names, Link.gridSize) { Link.gridSize = it }
+        root.addView(CheckBox(this).apply {
+            text = "목록에 레이아웃 미리보기 표시"; isChecked = Link.thumbnails
+            setOnCheckedChangeListener { _, on -> Link.thumbnails = on }
+        })
+
         root.addView(title("기타"))
         root.addView(CheckBox(this).apply {
             text = "눌리고 있는 키 표시 — 실행 화면 위쪽에 지금 입력 중인 키를 보여 줍니다"; isChecked = Link.showPressed

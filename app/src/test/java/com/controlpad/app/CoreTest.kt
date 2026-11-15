@@ -658,8 +658,8 @@ class CoreTest {
         assertTrue(Options.labIds.all { it in ids })                       // 없는 실험실 기능을 가리키지 않는다
         val all = Options.all
         assertEquals(all.size, all.map { it.id }.toSet().size)
-        assertEquals(listOf("haptic", "show-pressed", "key-names"), all.take(3).map { it.id })
-        assertEquals(3 + Options.labIds.size, all.size)
+        assertEquals(listOf("haptic", "show-pressed", "key-names", Options.RELEASE_ALL), all.take(4).map { it.id })
+        assertEquals(4 + Options.labIds.size, all.size)
         assertEquals("초당 입력 수 표시", Options.title("kps"))
         assertEquals("옵션", Options.title("unknown"))
         val b = PadButton(0f, 0f, 0.1f, 0.1f, type = PadButton.TYPE_OPTION, link = "combo")
@@ -720,5 +720,19 @@ class CoreTest {
         assertFalse(Shapes.ids.contains(PadButton.SHAPE_FREE))
         assertTrue(Shapes.applies(PadButton(0f, 0f, 1f, 1f)))
         assertFalse(Shapes.applies(PadButton(0f, 0f, 1f, 1f, type = PadButton.TYPE_KNOB)))
+    }
+
+    @Test
+    fun listSortGridAndReleaseAll() {
+        val all = listOf(PadLayout(name = "하나"), PadLayout(name = "가나다"), PadLayout(name = "Beta"))
+        assertEquals(listOf("하나", "가나다", "Beta"), ListSort.apply(all, 0).map { it.name })
+        assertEquals(listOf("Beta", "가나다", "하나"), ListSort.apply(all, 2).map { it.name })
+        val byName = ListSort.apply(all, 1).map { it.name }
+        assertEquals(setOf("하나", "가나다", "Beta"), byName.toSet())
+        assertTrue(byName.indexOf("가나다") < byName.indexOf("하나"))      // 한글은 가나다순
+        assertEquals(GridSize.divisions.size, GridSize.names.size)
+        assertEquals(ScreenOrientation.values.size, ScreenOrientation.names.size)
+        assertEquals("모든 키 떼기", Options.title(Options.RELEASE_ALL))
+        assertEquals(Options.all.size, Options.all.map { it.id }.toSet().size)
     }
 }

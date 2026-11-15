@@ -53,6 +53,11 @@ class MainActivity : BaseActivity() {
                 }.onFailure { toast("파일을 고를 수 있는 앱이 없습니다") }
             }
         })
+        header.addView(Button(this).apply {
+            fun show() { text = "정렬: " + ListSort.names[Link.listSort] }
+            show()
+            setOnClickListener { Link.listSort = (Link.listSort + 1) % ListSort.names.size; show(); refresh() }
+        })
         header.addView(Button(this).apply { text = "＋ 새 레이아웃"; setOnClickListener { newLayout() } })
         header.addView(Button(this).apply {
             text = "✎ 그림 레이아웃"
@@ -116,7 +121,7 @@ class MainActivity : BaseActivity() {
         list.removeAllViews()
         val everything = LayoutStore.list(this)
         val pinOn = Labs.isOn("list-pin")
-        val layouts = LayoutList.arrange(everything, if (Labs.isOn("list-search")) search.text.toString() else "", pinOn)
+        val layouts = LayoutList.arrange(ListSort.apply(everything, Link.listSort), if (Labs.isOn("list-search")) search.text.toString() else "", pinOn)
         if (layouts.isEmpty()) {
             list.addView(TextView(this).apply {
                 text = if (everything.isEmpty()) "레이아웃이 없습니다. '＋ 새 레이아웃'으로 만들어 보세요." else "검색 결과가 없습니다."
@@ -131,6 +136,7 @@ class MainActivity : BaseActivity() {
                 isClickable = true
                 setOnClickListener { open(PlayActivity::class.java, l.id) }
             }
+            if (Link.thumbnails) row.addView(LayoutThumb(this, l), LinearLayout.LayoutParams(dp(112), dp(63)).apply { rightMargin = dp(12) })
             val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             texts.addView(TextView(this).apply { text = (if (pinOn && l.pinned) "★ " else "") + l.name; textSize = 18f; setTextColor(Themes.current.text) })
             texts.addView(TextView(this).apply { text = "버튼 ${l.buttons.size}개 · 눌러서 실행"; textSize = 13f })

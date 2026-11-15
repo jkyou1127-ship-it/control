@@ -776,3 +776,30 @@ object Shapes {
     fun applies(b: PadButton): Boolean =
         b.type == PadButton.TYPE_BUTTON || b.isShow || b.isSwitch || b.isOption || b.isPad
 }
+
+/** 목록 정렬. 기본은 저장된 순서(LayoutStore.list 가 돌려주는 순서). */
+object ListSort {
+    val names = listOf("저장 순", "이름순", "최근 수정순")
+
+    fun apply(all: List<PadLayout>, mode: Int): List<PadLayout> = when (mode) {
+        1 -> all.sortedWith(compareBy(java.text.Collator.getInstance(java.util.Locale.KOREAN)) { it.name })
+        2 -> all.reversed()       // 저장 순은 오래된 것부터라, 뒤집으면 최근에 고친 것부터
+        else -> all
+    }
+}
+
+/** 편집 화면 격자 크기: 화면 가로를 몇 칸으로 나눌지. */
+object GridSize {
+    val divisions = listOf(24, 48, 96)
+    val names = listOf("넓게", "보통", "촘촘")
+}
+
+/** 화면 방향 설정(편집·실행 화면). */
+object ScreenOrientation {
+    val names = listOf("가로 (자동 회전)", "세로 (자동 회전)", "자동")
+    val values = listOf(
+        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT,
+        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR,
+    )
+}

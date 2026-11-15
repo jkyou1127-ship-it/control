@@ -16,6 +16,7 @@ import android.view.WindowManager
 /** 전체 화면 컨트롤러. 뒤로 가기로 나간다. */
 class PlayActivity : BaseActivity() {
     override val avoidKeyboard = false
+    override val followsOrientation = true
     private var lastBack = 0L
 
     @Deprecated("Deprecated in Java")
@@ -69,6 +70,11 @@ class PlayActivity : BaseActivity() {
 
     /** 옵션 버튼: 설정을 바꾸고, 바뀐 설정으로 실행 화면을 다시 띄운다(눌려 있던 키는 모두 뗀다). */
     private fun toggleOption(id: String) {
+        if (id == Options.RELEASE_ALL) {
+            view?.releaseAll()
+            android.widget.Toast.makeText(this, "모든 키를 뗐습니다", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         val on = Options.toggle(id)
         android.widget.Toast.makeText(this, Options.title(id) + if (on) " 켬" else " 끔", android.widget.Toast.LENGTH_SHORT).show()
         view?.releaseAll()
@@ -76,11 +82,7 @@ class PlayActivity : BaseActivity() {
         applyWindowOptions()
     }
 
-    private fun applyWindowOptions() {
-        window.attributes = window.attributes.apply {
-            screenBrightness = if (Labs.isOn("max-brightness")) 1f else android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-        }
-    }
+    private fun applyWindowOptions() {}
 
     /** 레이아웃 전환 버튼: 지금 눌린 키를 모두 떼고 다른 레이아웃을 띄운다. */
     private fun switchTo(id: String) {
@@ -192,14 +194,9 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labKps = Labs.isOn("kps")
     /** 초당 입력 수를 세야 하는지: 실험실 표시가 켜져 있거나, 초당 입력 수 패널을 넣어 둔 경우. */
     private val countKps = labKps || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.KPS }
-    private val labPop = Labs.isOn("press-pop")
     private val pressTimes = ArrayDeque<Long>()         // 최근에 버튼을 누른 시각들(초당 입력 수 계산용)
-    private val labCombo = Labs.isOn("combo")
-    private val labTotal = Labs.isOn("total")
-    private val labTimer = Labs.isOn("timer")
     private val labBattery = Labs.isOn("battery")
-    private val hapticKind =
-        if (Labs.isOn("strong-haptic")) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP
+    private val hapticKind = HapticFeedbackConstants.KEYBOARD_TAP
     private var combo = 0
     private var lastPress = 0L
     private var total = 0
@@ -211,6 +208,54 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labHideStatus = Labs.isOn("hide-status")
     private val labSound = Labs.isOn("press-sound")
     private val labHistory = Labs.isOn("key-history")
+    private val labDots = Labs.isOn("touch-dots")
+    private val labHoldTime = Labs.isOn("hold-time")
+    private val labDim = Labs.isOn("auto-dim")
+    private val dots = HashMap<Int, android.graphics.PointF>()     // 포인터 id → 지금 손가락 위치
+    private val holdStart = LongArray(layout.buttons.size)           // 버튼을 누르기 시작한 시각
+    private var lastTouch = SystemClock.uptimeMillis()
+    private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(3).toFloat() }
+    private val holdPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER; textSize = ctx.dp(13).toFloat(); isFakeBoldText = true
+    }
+    private val dimPaint = Paint().apply { color = 0xB0000000.toInt() }
+
+    /** 실험실 표시들: 터치 위치, 누른 시간, 쉬는 동안 어둡게. */
+    private fun drawLabOverlays(c: Canvas) {
+        val now = SystemClock.uptimeMillis()
+        if (labHoldTime) {
+            var any = false
+            holdPaint.color = theme.text
+            for (i in buttons.indices) {
+                val b = buttons[i]
+                if (holds[i] == 0 || b.type != PadButton.TYPE_BUTTON || !groupVisible(b.group)) continue
+                any = true
+                c.drawText("%.1f초".format((now - holdStart[i]) / 1000f), (b.x + b.w / 2) * width, b.y * height - holdPaint.textSize * 0.4f + holdPaint.textSize, holdPaint)
+            }
+            if (any) postInvalidateDelayed(100)
+        }
+        if (labDots) {
+            dotPaint.color = theme.text and 0x00FFFFFF or 0xAA000000.toInt()
+            for (p in dots.values) c.drawCircle(p.x, p.y, context.dp(24).toFloat(), dotPaint)
+        }
+        if (labDim) {
+            val idle = now - lastTouch
+            if (idle >= DIM_AFTER_MS) c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
+            else postInvalidateDelayed(DIM_AFTER_MS - idle + 50)
+        }
+    }
+
+    private fun trackTouches(e: MotionEvent) {
+        if (labDim) lastTouch = SystemClock.uptimeMillis()
+        if (!labDots) return
+        when (e.actionMasked) {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dots.clear()
+            MotionEvent.ACTION_POINTER_UP -> dots.remove(e.getPointerId(e.actionIndex))
+            else -> for (idx in 0 until e.pointerCount) {
+                dots.getOrPut(e.getPointerId(idx)) { android.graphics.PointF() }.set(e.getX(idx), e.getY(idx))
+            }
+        }
+    }
     /** 최근 입력 기록을 남겨야 하는지: 실험실 표시가 켜져 있거나, 최근 입력 기록 패널을 넣어 둔 경우. */
     private val recordHistory = labHistory || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.HISTORY }
     private val history = ArrayDeque<String>()          // 최근에 누른 버튼의 키들
@@ -526,6 +571,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private fun down(i: Int) {
         if (i < 0) return
         val n = ++holds[i]
+        if (n == 1) holdStart[i] = SystemClock.uptimeMillis()
         val b = buttons[i]
         if (b.isPad) {
             if (n == 1) { padStart[i] = SystemClock.uptimeMillis(); padTravel[i] = 0f; padFingers[i] = 1 }
@@ -628,6 +674,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        trackTouches(e)
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 // 움직임을 화면 갱신 주기에 묶지 말고, 터치 패널이 읽는 대로 바로 받는다(노브·트랙패드 지연 감소).
@@ -776,7 +823,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
             if (!lit && parts == 0 && knobAngle[i] == 0f) continue    // 미리 그린 모습 그대로
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
-            if (labPop && lit && b.type == PadButton.TYPE_BUTTON) rect.inset(-rect.width() * 0.04f, -rect.height() * 0.04f)
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)
         }
         if (showPressed && !hasPanel && pressedText.isNotEmpty()) {
@@ -800,23 +846,17 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             parts += "${n}회/초"
             if (n > 0) postInvalidateDelayed(200)       // 손을 떼도 숫자가 0 으로 내려가게
         }
-        val now = SystemClock.uptimeMillis()
-        if (labCombo) {
-            if (now - lastPress > Combo.WINDOW_MS) combo = 0
-            if (combo >= 2) { parts += "${combo}콤보"; postInvalidateDelayed(250) }
-        }
-        if (labTotal) parts += "총 ${total}회"
-        if (labTimer) parts += Combo.format(now - startedAt)
-        if (labBattery) parts += battery()
-        if (labTimer || labBattery) postInvalidateDelayed(1000)
+        if (labBattery) { parts += battery(); postInvalidateDelayed(1000) }
         if (parts.isNotEmpty()) c.drawText(parts.joinToString(" · "), statusPaint.textSize, statusPaint.textSize * 1.6f, statusPaint)
         if (labHistory && history.isNotEmpty()) {
             c.drawText(history.joinToString("  ›  "), statusPaint.textSize, statusPaint.textSize * 3.1f, statusPaint)
         }
+        drawLabOverlays(c)
     }
 
     companion object {
         const val TAP_MS = 40L
+        const val DIM_AFTER_MS = 30000L      // 이만큼 아무것도 누르지 않으면 어둡게(실험실 기능)
         const val MACRO_GAP_MS = 40L         // 매크로: 한 조합을 뗀 뒤 다음 조합을 누르기까지
         const val PRESSED_LINGER_MS = 600L   // 키를 뗀 뒤 표시를 남겨 두는 시간
         const val PAD_GAIN = 0.35f       // 트랙패드: 감도 1 일 때 1dp 당 마우스 이동량

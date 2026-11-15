@@ -5,6 +5,9 @@ package com.controlpad.app
  * 설정 화면의 체크박스와 실험실 스위치를 그대로 쓰므로, 버튼으로 바꾸면 그쪽에도 똑같이 반영된다.
  */
 object Options {
+    /** 누르면 눌려 있는 키와 켜 둔 버튼을 모두 푸는 버튼(설정을 바꾸지는 않는다). */
+    const val RELEASE_ALL = "release-all"
+
     class Option(val id: String, val title: String)
 
     /** 설정 화면에 있는 실행 관련 옵션. 실험실 기능은 그 아래에 이어 붙는다. */
@@ -12,12 +15,13 @@ object Options {
         Option("haptic", "진동"),
         Option("show-pressed", "눌리고 있는 키 표시"),
         Option("key-names", "버튼에 키 이름 표시"),
+        Option(RELEASE_ALL, "모든 키 떼기"),
     )
 
     /** 실행 중에 바꿔서 의미가 있는 실험실 기능들. */
     val labIds = listOf(
-        "kps", "press-pop", "combo", "total", "timer", "battery", "strong-haptic",
-        "exit-guard", "max-brightness", "hide-status", "press-sound", "key-history",
+        "kps", "battery", "exit-guard", "hide-status", "press-sound", "key-history",
+        "touch-dots", "hold-time", "auto-dim",
     )
 
     val all: List<Option>
@@ -29,6 +33,7 @@ object Options {
         "haptic" -> Link.haptic
         "show-pressed" -> Link.showPressed
         "key-names" -> Link.showKeyNames
+        RELEASE_ALL -> false
         in labIds -> Labs.isOn(id)
         else -> false
     }

@@ -28,6 +28,7 @@ import kotlin.math.roundToInt
 /** 빈 곳을 드래그해 버튼을 그리고, 옮기고, 크기를 바꾸고, 키를 지정하는 화면. */
 class EditorActivity : BaseActivity() {
     override val avoidKeyboard = false
+    override val followsOrientation = true
     private lateinit var pad: PadLayout
     private lateinit var view: EditorView
 
@@ -171,6 +172,12 @@ class EditorActivity : BaseActivity() {
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
+        add("모든 키 떼기 버튼") {
+            // 키가 눌린 채로 남았을 때 한 번에 푸는 버튼(옵션 버튼의 한 종류).
+            val t = PadButton(0.43f, 0.03f, 0.14f, 0.12f, type = PadButton.TYPE_OPTION, link = Options.RELEASE_ALL, color = PadButton.PALETTE[3])
+            pad.buttons += t; view.selected = t; view.invalidate()
+            editButton(t, isNew = true)
+        }
         add("레이아웃 전환 버튼") {
             if (LayoutStore.list(this).none { it.id != pad.id }) {
                 android.widget.Toast.makeText(this, "넘어갈 다른 레이아웃이 없습니다. 먼저 레이아웃을 하나 더 만드세요", android.widget.Toast.LENGTH_LONG).show()
@@ -197,6 +204,9 @@ class EditorActivity : BaseActivity() {
         val lockOn = Labs.isOn("lock")
         view.lockOn = lockOn
         view.coordsOn = Labs.isOn("editor-coords")
+        view.divisions = GridSize.divisions[Link.gridSize]
+        view.guidesOn = Labs.isOn("center-guides")
+        view.longPressOn = Labs.isOn("long-press-edit")
         val alignOn = Labs.isOn("align")
         val distributeOn = Labs.isOn("distribute")
         if (Labs.isOn("select-all")) tool("전체 선택") {
@@ -1222,6 +1232,23 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     /** 선택한 것의 위치·크기를 화면 아래쪽에 보여 줄지(실험실 기능). */
     var coordsOn = false
 
+    /** 화면 가운데 안내선(실험실 기능). */
+    var guidesOn = false
+
+    /** 버튼을 길게 누르면 속성 열기(실험실 기능). */
+    var longPressOn = false
+    private var longFired = false
+    private val longPress = Runnable {
+        val b = hitButton
+        if (drag == Drag.MOVE && !moved && b != null) {
+            longFired = true
+            drag = Drag.NONE
+            selected = b
+            invalidate()
+            onEdit(b)
+        }
+    }
+
     /** 버튼 잠금(실험실 기능)이 켜져 있는지. 꺼져 있으면 잠긴 버튼도 평소처럼 움직인다. */
     var lockOn = false
 
@@ -1326,6 +1353,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     private val gridPaint = Paint().apply { color = theme.text and 0x00FFFFFF or 0x18000000; strokeWidth = 1f }
     private val drawPaint = Paint().apply { color = 0x664FC3F7; style = Paint.Style.FILL }
     private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.text }
+    private val guidePaint = Paint().apply { strokeWidth = ctx.dp(1).toFloat() }
     private val outlinePaint = Paint().apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(1).toFloat() }
     private val hintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.text and 0x00FFFFFF or 0x99000000.toInt(); textAlign = Paint.Align.CENTER; textSize = ctx.dp(18).toFloat()
@@ -1370,7 +1398,9 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         )
     }
 
-    private val cell: Float get() = width / 48f
+    /** 격자 한 칸 크기. 설정의 격자 크기를 따른다. */
+    var divisions = 48
+    private val cell: Float get() = width / divisions.toFloat()
     private fun snapPx(v: Float) = if (snap) (v / cell).roundToInt() * cell else v
 
     private fun rectOf(b: PadButton) = rect.apply { set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height) }
@@ -1390,6 +1420,11 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             painter.draw(c, b, rectOf(b), false, b in selection, alt = 2)
             val marks = listOfNotNull(if (b.group > 0) "그룹 ${b.group}" else null, if (lockOn && b.locked) "잠금" else null)
             if (marks.isNotEmpty()) painter.badge(c, rectOf(b), marks.joinToString(" · "))
+        }
+        if (guidesOn) {
+            guidePaint.color = theme.text and 0x00FFFFFF or 0x66000000
+            c.drawLine(width / 2f, 0f, width / 2f, height.toFloat(), guidePaint)
+            c.drawLine(0f, height / 2f, width.toFloat(), height / 2f, guidePaint)
         }
         if (coordsOn && selection.isNotEmpty()) {
             val r = selectionBox(rect)
@@ -1436,6 +1471,8 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                 } else {
                     val hit = hitAt(x, y)
                     hitButton = hit
+                    longFired = false
+                    if (longPressOn && hit != null && !multi) postDelayed(longPress, android.view.ViewConfiguration.getLongPressTimeout().toLong())
                     if (multi && (hit == null || hit !in selection)) {
                         // 다중 선택: 선택되지 않은 곳에서 시작하면 손가락이 지나가는 버튼을 차례로 선택한다.
                         wasSelected = false
@@ -1455,7 +1492,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                 }
             }
             MotionEvent.ACTION_MOVE -> {
-                if (abs(x - downX) > slop || abs(y - downY) > slop) moved = true
+                if (abs(x - downX) > slop || abs(y - downY) > slop) { moved = true; removeCallbacks(longPress) }
                 when (drag) {
                     Drag.DRAW -> { curX = snapPx(x); curY = snapPx(y) }
                     Drag.SLIDE -> hitAt(x, y)?.let { selection += it }
@@ -1480,6 +1517,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                removeCallbacks(longPress)
                 val was = drag
                 drag = Drag.NONE
                 if (e.actionMasked == MotionEvent.ACTION_UP) when (was) {

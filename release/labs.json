@@ -1,12 +1,7 @@
 {
   "features": [
     "kps",
-    "press-pop",
-    "combo",
-    "total",
-    "timer",
     "battery",
-    "strong-haptic",
     "list-search",
     "list-pin",
     "home-shortcut",
@@ -17,11 +12,15 @@
     "opacity",
     "text-scale",
     "exit-guard",
-    "max-brightness",
     "hide-status",
     "press-sound",
     "key-history",
     "editor-coords",
+    "center-guides",
+    "long-press-edit",
+    "touch-dots",
+    "hold-time",
+    "auto-dim",
     "option-buttons"
   ],
   "graduated": [
@@ -42,14 +41,7 @@
     "select-all",
     "text-scale"
   ],
-  "hidden": [
-    "combo",
-    "max-brightness",
-    "press-pop",
-    "strong-haptic",
-    "timer",
-    "total"
-  ],
+  "hidden": [],
   "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }

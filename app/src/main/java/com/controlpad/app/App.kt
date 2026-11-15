@@ -57,6 +57,14 @@ open class BaseActivity : Activity() {
         }
     }
 
+    /** 편집·실행 화면은 설정의 화면 방향을 따른다. */
+    protected open val followsOrientation = false
+
+    override fun onResume() {
+        super.onResume()
+        if (followsOrientation) requestedOrientation = ScreenOrientation.values[Link.orientation]
+    }
+
     override fun onStart() {
         super.onStart()
         Link.onVisible(true)
@@ -622,5 +630,28 @@ fun styleChip(chip: android.widget.TextView, on: Boolean) {
         cornerRadius = ctx.dp(8).toFloat()
         setColor(if (on) t.text else t.card)
         setStroke(ctx.dp(1), t.text and 0x00FFFFFF or 0x33000000)
+    }
+}
+
+/** 목록에 보여 줄 레이아웃 미리보기: 버튼 자리와 색만 작게 그린다. */
+class LayoutThumb(ctx: Context, private val layout: PadLayout) : android.view.View(ctx) {
+    private val theme = Themes.current
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1f }
+    private val r = RectF()
+
+    override fun onDraw(c: Canvas) {
+        val rad = height * 0.06f
+        fill.color = theme.bg
+        r.set(0f, 0f, width.toFloat(), height.toFloat())
+        c.drawRoundRect(r, rad, rad, fill)
+        edge.color = theme.text and 0x00FFFFFF or 0x33000000
+        c.drawRoundRect(r, rad, rad, edge)
+        for (b in layout.buttons) {
+            r.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
+            fill.color = if (b.isImage) theme.text and 0x00FFFFFF or 0x33000000 else b.color and 0x00FFFFFF or 0xB0000000.toInt()
+            if (b.isKnob || b.isStick || b.shape == PadButton.SHAPE_OVAL) c.drawOval(r, fill)
+            else c.drawRoundRect(r, rad * 0.5f, rad * 0.5f, fill)
+        }
     }
 }

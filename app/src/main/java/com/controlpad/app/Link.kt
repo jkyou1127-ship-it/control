@@ -45,6 +45,26 @@ object Link {
     val mode: Int get() = prefs.getInt("mode", MODE_BT)
     val haptic: Boolean get() = prefs.getBoolean("haptic", true)
 
+    /** 목록 정렬 방식(ListSort). */
+    var listSort: Int
+        get() = prefs.getInt("listSort", 0).coerceIn(0, ListSort.names.size - 1)
+        set(v) = prefs.edit().putInt("listSort", v).apply()
+
+    /** 편집 화면 격자 크기(GridSize 의 번호). */
+    var gridSize: Int
+        get() = prefs.getInt("gridSize", 1).coerceIn(0, GridSize.divisions.size - 1)
+        set(v) = prefs.edit().putInt("gridSize", v).apply()
+
+    /** 편집·실행 화면 방향(ScreenOrientation 의 번호). */
+    var orientation: Int
+        get() = prefs.getInt("orientation", 0).coerceIn(0, ScreenOrientation.values.size - 1)
+        set(v) = prefs.edit().putInt("orientation", v).apply()
+
+    /** 목록에 레이아웃 미리보기를 보여 줄지. */
+    var thumbnails: Boolean
+        get() = prefs.getBoolean("thumbnails", true)
+        set(on) = prefs.edit().putBoolean("thumbnails", on).apply()
+
     /** 실행 화면 위쪽에 지금 눌리고 있는 키를 보여 줄지. */
     var showPressed: Boolean
         get() = prefs.getBoolean("showPressed", true)
