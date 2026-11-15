@@ -38,6 +38,7 @@
     "status-large"
   ],
   "alpha": [
+    "clock-seconds",
     "press-count",
     "release-sound"
   ],
