@@ -11,7 +11,7 @@ android {
         applicationId = "com.controlpad.app"
         minSdk = 28
         targetSdk = 34
-        versionCode = 72
+        versionCode = 73
         versionName = "NCP#1.00.a"
     }
 

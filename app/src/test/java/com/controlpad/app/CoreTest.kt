@@ -507,7 +507,7 @@ class CoreTest {
         assertEquals(Labs.features.map { it.id }, names)
         assertTrue(Labs.features.all { Regex("^[a-z0-9][a-z0-9-]{0,39}$").matches(it.id) })
 
-        assertEquals(setOf("kps"), Labs.parseGraduated("""{"graduated":["kps","unknown-feature"]}"""))
+        assertEquals(setOf("nudge"), Labs.parseGraduated("""{"graduated":["nudge","unknown-feature"]}"""))
         assertEquals(emptySet<String>(), Labs.parseGraduated("{}"))
         assertEquals("[정식 요청] 빌드 1.21", Labs.buildTitle("1.21"))
         assertEquals("[정식 요청] 실험실 kps", Labs.labTitle("kps"))
@@ -606,8 +606,8 @@ class CoreTest {
 
     @Test
     fun hiddenLabsFeaturesAreParsedAndRequestTitlesMatchThePanelScript() {
-        assertEquals(setOf("kps"), Labs.parseHidden("""{"hidden":["kps","unknown"]}"""))
-        assertEquals(emptySet<String>(), Labs.parseHidden("""{"graduated":["kps"]}"""))
+        assertEquals(setOf("nudge"), Labs.parseHidden("""{"hidden":["nudge","unknown"]}"""))
+        assertEquals(emptySet<String>(), Labs.parseHidden("""{"graduated":["nudge"]}"""))
         assertTrue(JSONObject(java.io.File("../release/labs.json").readText()).has("hidden"))
         assertEquals("[숨김 요청] 실험실 kps", Labs.hideTitle("kps"))
         assertEquals("[복귀 요청] 실험실 kps", Labs.restoreTitle("kps"))
@@ -652,7 +652,7 @@ class CoreTest {
 
     @Test
     fun alphaWideStageIsParsedAndPlansMatchThePanelSchedule() {
-        assertEquals(setOf("kps"), Labs.parseAlpha("""{"alpha":["kps","unknown"]}"""))
+        assertEquals(setOf("nudge"), Labs.parseAlpha("""{"alpha":["nudge","unknown"]}"""))
         assertEquals(emptySet<String>(), Labs.parseAlpha("{}"))
         assertTrue(Labs.plan("lab").contains("1~2분 안에"))                  // 정식 추가 건의는 바로 반영
         assertTrue(Labs.plan("build").contains("1~2분 안에"))
