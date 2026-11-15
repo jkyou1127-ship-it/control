@@ -5,10 +5,11 @@
     "session-summary",
     "list-count"
   ],
-  "graduated": [],
+  "graduated": [
+    "clock-seconds"
+  ],
   "hidden": [],
   "alpha": [
-    "clock-seconds",
     "session-summary"
   ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
