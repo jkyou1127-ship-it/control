@@ -28,8 +28,6 @@ object Labs {
     /** 지금 실험실에 있는 기능들. */
     val features = listOf(
         Feature("release-haptic", "뗄 때도 진동", "버튼을 뗄 때도 짧게 진동합니다('버튼을 누를 때 진동'이 켜져 있어야 합니다)."),
-        Feature("clock-seconds", "시각에 초 표시", "배터리 · 시각 표시와 패널의 시각에 초까지 보여 줍니다."),
-        Feature("session-summary", "나갈 때 기록 요약", "실행 화면을 나갈 때 누른 횟수와 시간을 알려 줍니다."),
         Feature("list-count", "레이아웃 개수 표시", "목록 화면 위쪽에 레이아웃이 모두 몇 개인지 보여 줍니다."),
     )
 
@@ -38,6 +36,8 @@ object Labs {
      * 이제 늘 있는 기능이다: 버튼형은 그 버튼이 그냥 있고, 설정형은 설정 화면 '기능'에서 켜고 끈다(처음엔 켜짐).
      */
     val permanent = listOf(
+        Feature("clock-seconds", "시각에 초 표시", "배터리 · 시각 표시와 패널의 시각에 초까지 보여 줍니다."),
+        Feature("session-summary", "나갈 때 기록 요약", "실행 화면을 나갈 때 누른 횟수와 시간을 알려 줍니다."),
         Feature("press-count", "버튼별 누른 횟수", "실행 화면의 각 버튼 오른쪽 위에 그 버튼을 누른 횟수를 작게 보여 줍니다."),
         Feature("release-sound", "뗄 때도 소리", "버튼을 뗄 때도 클릭 소리를 냅니다."),
         Feature("dim-buttons", "눌리지 않은 버튼 흐리게", "실행 화면에서 누르지 않은 버튼을 흐리게 그려, 누른 버튼이 더 눈에 띕니다."),

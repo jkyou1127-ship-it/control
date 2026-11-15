@@ -101,6 +101,15 @@ object Link {
         (app.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
             android.content.res.Configuration.UI_MODE_NIGHT_YES
 
+    /** Wi-Fi 연결의 왕복 지연(ms). 모르면 -1. */
+    val rttMs: Int get() = if (mode == MODE_UDP) udp?.takeIf { it.alive }?.rttMs ?: -1 else -1
+
+    /** Wi-Fi 신호 세기(dBm). 모르면 0. */
+    @Suppress("DEPRECATION")
+    fun wifiRssi(): Int = runCatching {
+        (app.applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager).connectionInfo.rssi
+    }.getOrDefault(0).let { if (it <= -127) 0 else it }
+
     /** Wi-Fi 연결에서 PC 수신 프로그램이 입력을 일시정지했는지. */
     val pcPaused: Boolean get() = mode == MODE_UDP && udp?.let { it.alive && it.pcPaused } == true
 

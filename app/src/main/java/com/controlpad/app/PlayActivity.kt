@@ -38,6 +38,22 @@ class PlayActivity : BaseActivity() {
     private var batteryWarned = false
     private val startedAt = SystemClock.elapsedRealtime()
     private var banner: android.widget.TextView? = null
+    private var lagWarned = false
+    private var wifiWarned = false
+    private var buzzed = false
+    private var lastShake = 0L
+    // 흔들어서 모든 키 떼기(모바일 기능)
+    private val shakeListener = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(e: android.hardware.SensorEvent) {
+            if (!Mobile.isShake(e.values[0], e.values[1], e.values[2])) return
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastShake < 1500) return
+            lastShake = now
+            view?.releaseAll()
+            android.widget.Toast.makeText(this@PlayActivity, "흔들어서 모든 키를 뗐습니다", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        override fun onAccuracyChanged(s: android.hardware.Sensor?, a: Int) {}
+    }
     private val tick = object : Runnable {
         override fun run() {
             val connected = Link.connected
@@ -47,6 +63,25 @@ class PlayActivity : BaseActivity() {
                 android.widget.Toast.makeText(this@PlayActivity, "PC에 다시 연결되었습니다", android.widget.Toast.LENGTH_SHORT).show()
             }
             if (connected) everConnected = true
+            // 연결이 끊기는 순간 눌린 것을 모두 뗀다(모바일 기능).
+            if (wasConnected && !connected && Mobile.releaseOnDrop) view?.releaseAll()
+            // 처음 연결을 확인하면 짧게 진동(모바일 기능).
+            if (connected && !buzzed && Mobile.connectBuzz) {
+                buzzed = true
+                view?.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS, android.view.HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
+            }
+            // 지연이 크거나 Wi-Fi 가 약하면 한 번 알려 준다(모바일 기능).
+            if (!lagWarned && Mobile.lagWarn && Link.rttMs > 50) {
+                lagWarned = true
+                android.widget.Toast.makeText(this@PlayActivity, "왕복 지연이 ${Link.rttMs}ms 입니다. 공유기 가까이 가거나 USB 테더링을 써 보세요", android.widget.Toast.LENGTH_LONG).show()
+            }
+            if (!wifiWarned && Mobile.weakWifi && Link.mode == Link.MODE_UDP) {
+                val rssi = Link.wifiRssi()
+                if (rssi in -126..-71) {
+                    wifiWarned = true
+                    android.widget.Toast.makeText(this@PlayActivity, "Wi-Fi 신호가 약합니다 (${rssi}dBm)", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
             // 배터리가 15% 이하로 내려가면 한 번 알려 준다(모바일 기능).
             if (!batteryWarned && Mobile.lowBattery) {
                 val bm = getSystemService(android.os.BatteryManager::class.java)
@@ -64,7 +99,8 @@ class PlayActivity : BaseActivity() {
                 android.widget.Toast.makeText(this@PlayActivity, "PC 연결이 끊겼습니다", android.widget.Toast.LENGTH_SHORT).show()
             }
             wasConnected = connected
-            val timer = if (Mobile.timer) " · ⏱ " + Mobile.elapsed(SystemClock.elapsedRealtime() - startedAt) else ""
+            val timer = (if (Mobile.timer) " · ⏱ " + Mobile.elapsed(SystemClock.elapsedRealtime() - startedAt) else "") +
+                (if (Mobile.clock) " · " + java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA).format(java.util.Date()) else "")
             view?.setStatus(connected, Link.status() + timer)
             ui.postDelayed(this, 500)
         }
@@ -76,6 +112,9 @@ class PlayActivity : BaseActivity() {
         if (!Mobile.screenOff) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (Mobile.secure) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (Mobile.maxBright) window.attributes = window.attributes.apply { screenBrightness = 1f }
+        if (Mobile.lockRotation) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
+        if (Mobile.powerSave && getSystemService(android.os.PowerManager::class.java)?.isPowerSaveMode == true)
+            android.widget.Toast.makeText(this, "절전 모드가 켜져 있어 입력이 늦을 수 있습니다", android.widget.Toast.LENGTH_LONG).show()
         // 화면 주사율이 높을수록 터치도 더 자주 읽는 기기가 많으므로, 지원하는 가장 높은 주사율을 쓴다.
         runCatching {
             @Suppress("DEPRECATION")
@@ -167,6 +206,9 @@ class PlayActivity : BaseActivity() {
         applyWindowOptions()
         Link.setActive(true)
         ui.post(tick)
+        if (Mobile.shake) getSystemService(android.hardware.SensorManager::class.java)?.let { sm ->
+            sm.getDefaultSensor(android.hardware.Sensor.TYPE_ACCELEROMETER)?.let { sm.registerListener(shakeListener, it, android.hardware.SensorManager.SENSOR_DELAY_UI) }
+        }
     }
 
     override fun onPause() {
@@ -175,6 +217,7 @@ class PlayActivity : BaseActivity() {
             android.widget.Toast.makeText(this, "이번 기록: ${n}번 누름 · ${Combo.format(ms)}", android.widget.Toast.LENGTH_LONG).show()
         }
         ui.removeCallbacks(tick)
+        getSystemService(android.hardware.SensorManager::class.java)?.unregisterListener(shakeListener)
         view?.releaseAll()   // 화면을 떠날 때 PC 에 키가 눌린 채로 남지 않게 한다.
         Link.setActive(false)
     }

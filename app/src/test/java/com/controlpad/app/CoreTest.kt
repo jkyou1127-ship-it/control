@@ -156,8 +156,10 @@ class CoreTest {
         assertEquals(14, Templates.names.size)
         for (i in 9..13) assertTrue(Templates.create(i, "t").buttons.size >= 5)
         // 모바일 기능: 토글 9개 + 카드 크기 = 10개
-        assertEquals(9, Mobile.toggles.size)
-        assertEquals(9, Mobile.toggles.map { it.key }.toSet().size)
+        assertEquals(17, Mobile.toggles.size)                                 // hd12 9개 + hd13 8개 (+ 카드 크기)
+        assertEquals(17, Mobile.toggles.map { it.key }.toSet().size)
+        assertTrue(Mobile.isShake(0f, 30f, 0f))
+        assertFalse(Mobile.isShake(0f, 9.81f, 0f))                         // 가만히 있으면 중력만
         assertEquals("1:05", Mobile.elapsed(65_000))
         assertEquals("1:00:01", Mobile.elapsed(3_601_000))
         // 버전 표기: 화면에는 빌드 번호, 확인에는 코드명
@@ -165,7 +167,7 @@ class CoreTest {
         assertEquals("hd12", info.name)
         assertEquals("NWE 01 (hd12)", info.label)
         assertEquals("1.41", Updater.parse("""{"versionCode":71,"versionName":"1.41"}""").label)
-        assertEquals("NWE 01", Changelog.entries.first().build)
+        assertTrue(Changelog.entries.first().build.startsWith("NWE "))
         assertEquals(Updater.BUILD, Changelog.entries.first().build)
         assertEquals(Themes.all.size, Themes.all.map { it.name }.toSet().size)
         for (t in Themes.all) {
@@ -788,7 +790,7 @@ class CoreTest {
             assertEquals(null, Labs.feature(gone))                            // 평가단이 숨긴 기능은 다음 업데이트에서 지움
         assertTrue(listOf("dim-buttons", "list-kinds", "nudge", "open-last", "selection-count", "show-hidden-outline", "snap-edges")
             .all { it in permanentIds })                                     // 정식으로 간 기능은 늘 있는 기능으로
-        assertEquals(4, listOf("press-count", "release-haptic", "release-sound", "dim-buttons", "pressed-outline",
+        assertEquals(2, listOf("press-count", "release-haptic", "release-sound", "dim-buttons", "pressed-outline",
             "kps-peak", "clock-seconds", "session-summary", "status-large", "snap-edges", "selection-count", "grid-dots",
             "show-hidden-outline", "nudge", "random-color", "list-count", "list-compact", "open-last", "list-kinds").count { it in labIds })
         assertEquals(null, Labs.feature("confirm-delete"))                     // 숨겼던 기능은 지움

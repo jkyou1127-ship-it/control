@@ -1,14 +1,9 @@
 {
   "features": [
     "release-haptic",
-    "clock-seconds",
-    "session-summary",
     "list-count"
   ],
-  "graduated": [
-    "clock-seconds",
-    "session-summary"
-  ],
+  "graduated": [],
   "hidden": [],
   "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
