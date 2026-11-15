@@ -26,13 +26,12 @@
   ],
   "graduated": [
     "big-handle",
-    "kps"
+    "kps",
+    "status-bottom"
   ],
   "hidden": [
     "hide-labels"
   ],
-  "alpha": [
-    "status-bottom"
-  ],
+  "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
