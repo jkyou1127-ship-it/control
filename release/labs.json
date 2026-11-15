@@ -30,6 +30,7 @@
     "kps",
     "list-pin",
     "list-search",
+    "lock",
     "select-all"
   ],
   "hidden": [
