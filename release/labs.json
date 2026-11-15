@@ -21,6 +21,7 @@
     "list-kinds"
   ],
   "graduated": [
+    "selection-count",
     "snap-edges"
   ],
   "hidden": [
