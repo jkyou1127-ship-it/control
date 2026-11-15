@@ -55,6 +55,9 @@ var (
 	pMonitorFromWindow = user32.NewProc("MonitorFromWindow")
 	pGetMonitorInfo    = user32.NewProc("GetMonitorInfoW")
 	pMessageBeep       = user32.NewProc("MessageBeep")
+	pSetLayeredAttr    = user32.NewProc("SetLayeredWindowAttributes")
+	pPostMessage       = user32.NewProc("PostMessageW")
+	pGetWindowLongPtr  = user32.NewProc("GetWindowLongPtrW")
 	pGetWindowRect     = user32.NewProc("GetWindowRect")
 	pGetModuleHandle   = kernel32.NewProc("GetModuleHandleW")
 	pGlobalAlloc       = kernel32.NewProc("GlobalAlloc")
@@ -154,9 +157,17 @@ const (
 	idBeep
 	idMousePrev
 	idMouseNext
+	idMini
+	idUpdate
+	idOpacityPrev
+	idOpacityNext
+	idLock
 )
 
-const wmKeyDown = 0x0100
+const (
+	wmKeyDown      = 0x0100
+	wmUpdateResult = 0x8001 // WM_APP+1: 업데이트 확인 결과(wParam: 0 최신, 1 새 버전, 2 실패 / lParam: 새 버전 번호)
+)
 
 // 색(0x00BBGGRR)
 func rgb(c uint32) uintptr { return uintptr((c>>16)&0xFF | (c & 0xFF00) | (c&0xFF)<<16) }
@@ -271,8 +282,13 @@ func textHeight(dc uintptr, s string, width int32, font uintptr) int32 {
 
 // chips 는 키 이름들을 둥근 칸으로 줄줄이 놓는다. draw 가 거짓이면 높이만 잰다.
 func (w *window) chips(dc uintptr, items []string, x, y, width int32, highlight int, draw bool) int32 {
-	font := w.bold(13)
-	h, gap, padX := w.px(28), w.px(6), w.px(10)
+	return w.chipsSized(dc, items, x, y, width, highlight, draw, 13, 28)
+}
+
+// chipsSized 는 글자 크기와 칸 높이를 정해 chips 를 그린다(미니 모드에서는 크게).
+func (w *window) chipsSized(dc uintptr, items []string, x, y, width int32, highlight int, draw bool, size, height int) int32 {
+	font := w.bold(size)
+	h, gap, padX := w.px(height), w.px(6), w.px(size*3/4+1)
 	cx, cy := x, y
 	for i, s := range items {
 		cw := textWidth(dc, s, font) + padX*2
@@ -339,6 +355,9 @@ func (w *window) card(dc uintptr, x, y, width, height int32, border uintptr) {
 func (w *window) paint(dc uintptr, width int32) int32 {
 	v := w.a.state.view(time.Now())
 	w.hits = w.hits[:0]
+	if w.set.Mini {
+		return w.paintMini(dc, width, v)
+	}
 	pad, gap := w.px(20), w.px(12)
 	inner := width - pad*2
 	y := pad
@@ -496,8 +515,11 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 	w.button(dc, rect{pad, y, pad + bw, y + bh}, "통계 초기화", idReset, false)
 	w.button(dc, rect{pad + bw + gap, y, pad + inner, y + bh}, fullLabel, idFull, false)
 	y += bh + gap
+	w.button(dc, rect{pad, y, pad + bw, y + bh}, "▣  미니 모드", idMini, false)
+	w.button(dc, rect{pad + bw + gap, y, pad + inner, y + bh}, "업데이트 확인", idUpdate, false)
+	y += bh + gap
 
-	h = w.px(8) + w.px(52)*5 + w.px(8)
+	h = w.px(8) + w.px(52)*7 + w.px(8)
 	w.card(dc, pad, y, inner, h, cLine)
 	ty := y + w.px(8)
 	w.toggle(dc, rect{pad + w.px(4), ty, pad + inner - w.px(4), ty + w.px(52)}, "항상 위에 표시", "게임 위에 이 창을 띄워 둡니다", w.set.OnTop, idTop)
@@ -505,6 +527,12 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 	w.toggle(dc, rect{pad + w.px(4), ty, pad + inner - w.px(4), ty + w.px(52)}, "Windows 시작 시 자동 실행", "로그인하면 관리자 권한으로 바로 켜집니다", w.autostart, idAuto)
 	ty += w.px(52)
 	w.toggle(dc, rect{pad + w.px(4), ty, pad + inner - w.px(4), ty + w.px(52)}, "연결 알림음", "태블릿이 연결되거나 끊기면 소리로 알려 줍니다", w.set.Beep, idBeep)
+	ty += w.px(52)
+	lockNote := "켜면 지금 연결된 태블릿에서 온 입력만 받습니다"
+	if w.set.LockIP != "" {
+		lockNote = w.set.LockIP + " 에서 온 입력만 받는 중"
+	}
+	w.toggle(dc, rect{pad + w.px(4), ty, pad + inner - w.px(4), ty + w.px(52)}, "이 태블릿만 받기", lockNote, w.set.LockIP != "", idLock)
 	ty += w.px(52)
 	// ◀ 값 ▶ 로 고르는 줄
 	stepper := func(label, value string, prev, next int) {
@@ -515,6 +543,8 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 		w.button(dc, rect{bx, ty + w.px(8), bx + sw, ty + w.px(44)}, "◀", prev, false)
 		w.button(dc, rect{bx + sw + w.px(6), ty + w.px(8), bx + sw*2 + w.px(6), ty + w.px(44)}, "▶", next, false)
 	}
+	stepper("창 투명도", "불투명 "+strconv.Itoa(opacityAt(w.set.Opacity))+"%", idOpacityPrev, idOpacityNext)
+	ty += w.px(52)
 	stepper("마우스 감도", "트랙패드 · 가상 마우스 이동 "+strconv.FormatFloat(mouseScale(w.set.Mouse), 'g', -1, 64)+"배", idMousePrev, idMouseNext)
 	ty += w.px(52)
 	th := themeAt(w.set.Theme)
@@ -580,6 +610,47 @@ func (w *window) click(id int) {
 		w.set.OnTop = !w.set.OnTop
 		w.applyOnTop()
 		saveSettings(w.setPath, w.set)
+	case idMini:
+		w.set.Mini = !w.set.Mini
+		saveSettings(w.setPath, w.set)
+		w.height = 0
+		if !w.set.Mini {
+			w.say("전체 보기로 돌아왔습니다")
+		}
+	case idUpdate:
+		w.say("업데이트를 확인하는 중…")
+		hwnd := w.hwnd
+		go func() {
+			latest, err := latestVersion(updateBase)
+			switch {
+			case err != nil:
+				pPostMessage.Call(hwnd, wmUpdateResult, 2, 0)
+			case latest > version:
+				pPostMessage.Call(hwnd, wmUpdateResult, 1, uintptr(latest))
+			default:
+				pPostMessage.Call(hwnd, wmUpdateResult, 0, 0)
+			}
+		}()
+	case idOpacityPrev, idOpacityNext:
+		if id == idOpacityNext && w.set.Opacity < len(opacities)-1 {
+			w.set.Opacity++
+		} else if id == idOpacityPrev && w.set.Opacity > 0 {
+			w.set.Opacity--
+		}
+		w.applyOpacity()
+		saveSettings(w.setPath, w.set)
+	case idLock:
+		if w.set.LockIP != "" {
+			w.set.LockIP = ""
+			w.say("모든 태블릿의 입력을 받습니다")
+		} else if dev := w.a.state.view(time.Now()).Device; dev != "" {
+			w.set.LockIP = dev
+			w.say(dev + " 에서 온 입력만 받습니다")
+		} else {
+			w.say("먼저 태블릿을 연결한 뒤 켜세요")
+		}
+		w.a.SetLock(w.set.LockIP)
+		saveSettings(w.setPath, w.set)
 	case idReset:
 		w.a.state.resetStats()
 		w.say("이번 실행의 통계를 지웠습니다 (누적은 남김)")
@@ -642,6 +713,58 @@ func (w *window) workArea() rect {
 	}{size: 40}
 	pGetMonitorInfo.Call(mon, uintptr(unsafe.Pointer(&info)))
 	return info.wk
+}
+
+// applyOpacity 는 창 투명도를 적용한다(불투명 100% 면 겹친 창 기능을 끈다).
+func (w *window) applyOpacity() {
+	const gwlExStyle = ^uintptr(19) // -20
+	ex, _, _ := pGetWindowLongPtr.Call(w.hwnd, gwlExStyle)
+	alpha := opacityAt(w.set.Opacity)
+	if alpha >= 100 {
+		pSetWindowLongPtr.Call(w.hwnd, gwlExStyle, ex&^0x00080000)
+		return
+	}
+	pSetWindowLongPtr.Call(w.hwnd, gwlExStyle, ex|0x00080000)           // WS_EX_LAYERED
+	pSetLayeredAttr.Call(w.hwnd, 0, uintptr(alpha*255/100), 0x00000002) // LWA_ALPHA
+}
+
+// paintMini 는 미니 모드 화면이다: 연결 상태 한 줄, 지금 누르는 키를 크게, 아래에 초당 입력.
+// 방송 화면에 띄워 두거나 게임 옆에 작게 두기 좋다.
+func (w *window) paintMini(dc uintptr, width int32, v view) int32 {
+	pad := w.px(14)
+	inner := width - pad*2
+	y := pad
+	pSetBkMode.Call(dc, 1)
+	dot, title := cSub, "태블릿을 기다리는 중"
+	switch {
+	case v.Paused:
+		dot, title = cWarn, "입력 일시정지됨"
+	case v.Device != "" && v.Live:
+		dot, title = cOk, "연결됨  ·  "+v.Device
+	case v.Device != "":
+		dot, title = cWarn, "연결 끊김"
+	}
+	circle(dc, pad+w.px(7), y+w.px(14), w.px(6), dot)
+	text(dc, title, rect{pad + w.px(22), y, pad + inner - w.px(100), y + w.px(28)}, w.bold(14), cText, dtSingleLine|dtVCenter|dtEllipsis)
+	w.button(dc, rect{pad + inner - w.px(92), y, pad + inner, y + w.px(28)}, "전체 보기", idMini, false)
+	y += w.px(40)
+
+	down := v.Down
+	if len(down) == 0 {
+		down = []string{"—"}
+	}
+	h := w.chipsSized(dc, down, 0, 0, inner-w.px(24), 0, false, 24, 52) + w.px(24)
+	if min := w.px(76); h < min {
+		h = min
+	}
+	w.card(dc, pad, y, inner, h, cLine)
+	w.chipsSized(dc, down, pad+w.px(12), y+w.px(12), inner-w.px(24), 0, true, 24, 52)
+	y += h + w.px(10)
+
+	text(dc, "초당 "+strconv.Itoa(v.KPS)+"  ·  최고 "+strconv.Itoa(v.Peak)+"  ·  누른 횟수 "+itoa(v.Presses),
+		rect{pad, y, pad + inner, y + w.px(22)}, w.bold(13), cAccent, dtSingleLine|dtCenter)
+	y += w.px(22) + pad
+	return y
 }
 
 // clearFonts 는 배율이 바뀌었을 때 글꼴을 다시 만들게 한다.
@@ -816,6 +939,22 @@ func wndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 		w.set.X, w.set.Y, w.set.Saved = r.l, r.t, true
 		w.set.Total = w.a.state.view(time.Now()).Total
 		saveSettings(w.setPath, w.set)
+	case wmUpdateResult:
+		switch wParam {
+		case 0:
+			w.say("최신 버전입니다 (버전 " + strconv.Itoa(version) + ")")
+		case 2:
+			w.say("업데이트를 확인하지 못했습니다. 인터넷 연결을 확인하세요")
+		case 1:
+			// 새 버전: 지금 상태를 저장하고 스스로 업데이트한 뒤 새 프로그램으로 다시 켠다.
+			w.say("새 버전 " + strconv.Itoa(int(lParam)) + " 으로 업데이트합니다…")
+			w.set.Total = w.a.state.view(time.Now()).Total
+			saveSettings(w.setPath, w.set)
+			w.a.ReleaseAll()
+			selfUpdate()
+			w.say("업데이트하지 못했습니다. 다음에 켤 때 다시 시도합니다")
+		}
+		return 0
 	case wmKeyDown:
 		switch wParam {
 		case 0x7A: // F11
@@ -896,6 +1035,7 @@ func runWindow(a *app) {
 	}
 	w := &window{a: a, scale: 1, fonts: map[string]uintptr{}, setPath: settingsPath()}
 	w.set = loadSettings(w.setPath)
+	a.SetLock(w.set.LockIP)
 	a.state.mu.Lock()
 	a.state.TotalBase = w.set.Total
 	a.state.mu.Unlock()
@@ -925,6 +1065,7 @@ func runWindow(a *app) {
 	w.fit(w.px(460), w.px(760))
 	w.height = 0
 	w.applyOnTop()
+	w.applyOpacity()
 	if w.set.Saved {
 		pSetWindowPos.Call(hwnd, 0, uintptr(w.set.X), uintptr(w.set.Y), 0, 0, 0x0001|0x0004|0x0010) // NOSIZE | NOZORDER | NOACTIVATE
 	}

@@ -17,6 +17,20 @@ type settings struct {
 	Total int   `json:"total"` // 지금까지 누른 횟수(누적)
 	Beep  bool  `json:"beep"`  // 태블릿이 연결되거나 끊기면 알림음
 	Mouse int   `json:"mouse"` // 마우스 감도 단계(mouseScales 의 번호, 기본 3 = 1배)
+
+	Mini    bool   `json:"mini"`    // 미니 모드(지금 누르는 키만 크게)
+	Opacity int    `json:"opacity"` // 창 투명도 단계(opacities 의 번호, 0 = 불투명)
+	LockIP  string `json:"lockIP"`  // '이 태블릿만 받기'로 고정한 기기 주소(비어 있으면 모두 받음)
+}
+
+// opacities 는 고를 수 있는 창 불투명도(%)다.
+var opacities = []int{100, 90, 80, 70, 60}
+
+func opacityAt(i int) int {
+	if i < 0 || i >= len(opacities) {
+		return 100
+	}
+	return opacities[i]
 }
 
 // mouseScales 는 고를 수 있는 마우스 감도 배율이다.

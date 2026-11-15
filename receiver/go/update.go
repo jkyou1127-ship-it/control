@@ -14,7 +14,7 @@ import (
 )
 
 // 이 프로그램의 버전. 올릴 때는 scripts/build-receiver.sh 를 다시 실행해 release/receiver.json 도 맞춘다.
-const version = 8
+const version = 9
 
 const updateBase = "https://raw.githubusercontent.com/jkyou1127-ship-it/control/claude/vibrant-ramanujan-pdzsly/release/"
 
@@ -35,6 +35,19 @@ func get(url string, limit int64) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, limit))
+}
+
+// latestVersion 은 올라가 있는 최신 수신 프로그램 버전을 알려 준다.
+func latestVersion(base string) (int, error) {
+	var info updateInfo
+	meta, err := get(base+"receiver.json", 1<<16)
+	if err != nil {
+		return 0, err
+	}
+	if err := json.Unmarshal(meta, &info); err != nil {
+		return 0, err
+	}
+	return info.Version, nil
 }
 
 // fetchUpdate 는 current 보다 새 버전이 있으면 그 실행 파일을 내려받아 돌려준다. 없으면 nil.

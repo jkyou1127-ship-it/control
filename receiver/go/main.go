@@ -280,8 +280,21 @@ type app struct {
 	mouse   *Mouse
 	inputMu sync.Mutex
 
-	startFull bool // -fullscreen: 전체 화면으로 시작
+	startFull bool   // -fullscreen: 전체 화면으로 시작
+	lockIP    string // '이 태블릿만 받기': 비어 있지 않으면 이 주소에서 온 패킷만 받는다(inputMu 로 막음)
 }
+
+var errLocked = fmt.Errorf("이 태블릿만 받기")
+
+// SetLock 은 '이 태블릿만 받기'를 켜고(ip) 끈다(빈 문자열).
+func (a *app) SetLock(ip string) {
+	a.inputMu.Lock()
+	a.lockIP = ip
+	a.inputMu.Unlock()
+}
+
+// accepts 는 이 주소에서 온 패킷을 받을지 알려 준다. inputMu 를 잡은 채로 부른다.
+func (a *app) accepts(ip string) bool { return a.lockIP == "" || a.lockIP == ip }
 
 // SetPaused 는 입력 일시정지를 켜고 끈다. 켜는 순간 누르고 있던 것을 모두 뗀다.
 func (a *app) SetPaused(on bool) {
@@ -327,6 +340,9 @@ func (a *app) serve(conn *net.UDPConn, hostname string) {
 		n, from, err := conn.ReadFromUDP(buf)
 		a.inputMu.Lock()
 		paused := a.Paused()
+		if err == nil && !a.accepts(from.IP.String()) {
+			err = errLocked // 다른 기기에서 온 것은 찾기 요청까지 모두 무시한다
+		}
 		if err == nil {
 			p := buf[:n]
 			if reply := discoveryReply(p, hostname); reply != nil {

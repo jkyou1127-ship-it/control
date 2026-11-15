@@ -323,6 +323,24 @@ func TestResetStatsKeepsTotal(t *testing.T) {
 	}
 }
 
+func TestLockOnlyAcceptsOneTablet(t *testing.T) {
+	a := &app{state: newState()}
+	if !a.accepts("10.0.0.2") {
+		t.Fatal("unlocked accepts all")
+	}
+	a.SetLock("10.0.0.2")
+	if !a.accepts("10.0.0.2") || a.accepts("10.0.0.3") {
+		t.Fatal("locked")
+	}
+	a.SetLock("")
+	if !a.accepts("10.0.0.3") {
+		t.Fatal("unlock")
+	}
+	if opacityAt(0) != 100 || opacityAt(9) != 100 || opacityAt(4) != 60 {
+		t.Fatal("opacity")
+	}
+}
+
 func TestSettingsRoundTrip(t *testing.T) {
 	path := t.TempDir() + "/sub/receiver.json"
 	if d := loadSettings(path); d.OnTop || d.Mouse != 3 {
