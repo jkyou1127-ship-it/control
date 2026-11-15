@@ -49,6 +49,10 @@ class SettingsActivity : BaseActivity() {
         status = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
         root.addView(status)
         // 실험실과 평가단은 알파 빌드를 받는 사람에게만 보인다. 자주 쓰므로 맨 위에 둔다.
+        if (Updater.alpha) root.addView(CheckBox(this).apply {
+            text = "실험실 사용 — 끄면 실험실에서 켜 둔 기능이 모두 꺼짐"; isChecked = Labs.enabled
+            setOnCheckedChangeListener { _, on -> Labs.enabled = on }
+        })
         if (Updater.alpha) root.addView(Button(this).apply {
             text = "실험실 · 평가단"
             setOnClickListener {
@@ -169,6 +173,17 @@ class SettingsActivity : BaseActivity() {
             text = "테마 에디터 — 나만의 테마 만들기"
             setOnClickListener { startActivity(Intent(this@SettingsActivity, ThemeEditorActivity::class.java)) }
         })
+
+        // 실험실에서 알파·정식으로 올라온 기능 중 켜고 끄는 것들
+        val promoted = Labs.settingFeatures()
+        if (promoted.isNotEmpty()) {
+            root.addView(title("기능"))
+            root.addView(note("평가단 건의로 실험실에서 올라온 기능입니다. 처음에는 켜져 있습니다."))
+            for (f in promoted) root.addView(CheckBox(this).apply {
+                text = f.title + if (f.id in Labs.graduated) "" else "  (알파)"; isChecked = Labs.isOn(f.id)
+                setOnCheckedChangeListener { _, on -> Labs.set(f.id, on) }
+            })
+        }
 
         root.addView(title("기타"))
         root.addView(CheckBox(this).apply {

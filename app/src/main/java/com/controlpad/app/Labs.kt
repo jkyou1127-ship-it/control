@@ -20,7 +20,11 @@ import java.net.URLEncoder
  * 그로부터 20분 뒤 graduated 에 올라가 정식 사용자에게도 켜진다.
  */
 object Labs {
-    class Feature(val id: String, val title: String, val description: String)
+    /**
+     * button 이 참이면 버튼·도구로 나타나는 기능(편집 도구, 메뉴, 속성 조절 등). 알파·정식으로 올라가면 그 버튼이 그냥 생긴다.
+     * 거짓이면 동작을 바꾸는 기능. 알파·정식으로 올라가면 설정 화면의 켜기/끄기 항목이 된다.
+     */
+    class Feature(val id: String, val title: String, val description: String, val button: Boolean = false)
 
     val features = listOf(
         Feature("kps", "초당 입력 수 표시", "실행 화면 왼쪽 위에 최근 1초 동안 버튼을 누른 횟수를 보여 줍니다."),
@@ -30,22 +34,22 @@ object Labs {
         Feature("timer", "실행 시간 표시", "실행 화면을 연 뒤로 지난 시간을 보여 줍니다."),
         Feature("battery", "배터리 · 시각 표시", "실행 화면에 태블릿의 배터리 잔량과 현재 시각을 보여 줍니다."),
         Feature("strong-haptic", "강한 진동", "버튼을 누를 때 더 길고 뚜렷한 진동을 씁니다 ('버튼을 누를 때 진동'이 켜져 있어야 합니다)."),
-        Feature("list-search", "레이아웃 검색", "목록 화면 위쪽에 검색창이 생겨, 이름으로 레이아웃을 찾습니다."),
-        Feature("list-pin", "맨 위에 고정", "목록의 ⋮ 메뉴에서 자주 쓰는 레이아웃을 맨 위에 고정합니다(★ 표시)."),
-        Feature("home-shortcut", "홈 화면 바로가기", "목록의 ⋮ 메뉴에서 레이아웃을 바로 실행하는 아이콘을 홈 화면에 추가합니다."),
-        Feature("select-all", "전체 선택", "편집 화면에서 버튼을 한 번에 모두 선택하는 도구가 생깁니다."),
-        Feature("align", "맞춤", "편집 화면에서 여러 버튼을 왼쪽·오른쪽·위·아래·가운데로 줄 맞춥니다."),
-        Feature("distribute", "균등 배치 · 같은 크기", "편집 화면에서 여러 버튼의 간격을 같게 놓거나 너비·높이를 맞춥니다."),
-        Feature("lock", "버튼 잠금", "편집 화면에서 선택한 버튼을 옮기거나 크기를 바꿀 수 없게 잠급니다."),
-        Feature("opacity", "버튼 불투명도", "버튼 속성에서 버튼을 비치게 만들 수 있습니다(10~100%)."),
-        Feature("text-scale", "버튼 글자 크기", "버튼 속성에서 글자 크기를 바꿀 수 있습니다(50~200%)."),
+        Feature("list-search", "레이아웃 검색", "목록 화면 위쪽에 검색창이 생겨, 이름으로 레이아웃을 찾습니다.", button = true),
+        Feature("list-pin", "맨 위에 고정", "목록의 ⋮ 메뉴에서 자주 쓰는 레이아웃을 맨 위에 고정합니다(★ 표시).", button = true),
+        Feature("home-shortcut", "홈 화면 바로가기", "목록의 ⋮ 메뉴에서 레이아웃을 바로 실행하는 아이콘을 홈 화면에 추가합니다.", button = true),
+        Feature("select-all", "전체 선택", "편집 화면에서 버튼을 한 번에 모두 선택하는 도구가 생깁니다.", button = true),
+        Feature("align", "맞춤", "편집 화면에서 여러 버튼을 왼쪽·오른쪽·위·아래·가운데로 줄 맞춥니다.", button = true),
+        Feature("distribute", "균등 배치 · 같은 크기", "편집 화면에서 여러 버튼의 간격을 같게 놓거나 너비·높이를 맞춥니다.", button = true),
+        Feature("lock", "버튼 잠금", "편집 화면에서 선택한 버튼을 옮기거나 크기를 바꿀 수 없게 잠급니다.", button = true),
+        Feature("opacity", "버튼 불투명도", "버튼 속성에서 버튼을 비치게 만들 수 있습니다(10~100%).", button = true),
+        Feature("text-scale", "버튼 글자 크기", "버튼 속성에서 글자 크기를 바꿀 수 있습니다(50~200%).", button = true),
         Feature("exit-guard", "실수로 나가기 방지", "실행 화면에서 뒤로 가기를 두 번 눌러야 나갑니다."),
         Feature("max-brightness", "최대 밝기", "실행 화면이 떠 있는 동안 화면을 가장 밝게 합니다."),
         Feature("hide-status", "연결 상태 숨기기", "실행 화면 왼쪽 위의 연결 상태 글자를 감춰 화면을 깔끔하게 합니다."),
         Feature("press-sound", "누를 때 소리", "버튼을 누를 때마다 짧은 클릭 소리를 냅니다."),
         Feature("key-history", "최근 입력 기록", "실행 화면에 방금 누른 버튼의 키를 최근 5개까지 차례로 보여 줍니다."),
         Feature("editor-coords", "위치 · 크기 표시", "편집 화면에서 선택한 것의 위치와 크기를 화면 대비 %로 보여 줍니다."),
-        Feature("option-buttons", "옵션 버튼", "편집 화면 ＋추가에 '옵션 버튼'이 생깁니다. 실행 중에 누르면 진동, 키 표시, 실험실 기능 같은 설정을 바로 켜고 끕니다."),
+        Feature("option-buttons", "옵션 버튼", "편집 화면 ＋추가에 '옵션 버튼'이 생깁니다. 실행 중에 누르면 진동, 키 표시, 실험실 기능 같은 설정을 바로 켜고 끕니다.", button = true),
     )
 
     const val REQUEST_PREFIX = "[정식 요청]"
@@ -64,10 +68,31 @@ object Labs {
     /** 정식 추가 1단계로 알파 사용자 모두에게 켜진 기능들(마지막으로 받아 온 목록). */
     val alphaWide: Set<String> get() = prefs.getStringSet("labsAlpha", emptySet()) ?: emptySet()
 
-    fun isOn(id: String): Boolean = id !in hidden &&
-        (id in graduated || (Updater.alpha && (id in alphaWide || prefs.getBoolean("lab_$id", false))))
+    /** 실험실 전체 켜기/끄기. 끄면 실험실에서만 켜 둔 기능들이 한꺼번에 꺼진다(각각의 선택은 그대로 남는다). */
+    var enabled: Boolean
+        get() = prefs.getBoolean("labsEnabled", true)
+        set(on) = prefs.edit().putBoolean("labsEnabled", on).apply()
 
-    fun set(id: String, on: Boolean) = prefs.edit().putBoolean("lab_$id", on).apply()
+    fun feature(id: String): Feature? = features.firstOrNull { it.id == id }
+
+    /** 이 사람에게 알파·정식으로 올라와 있는지(실험실을 벗어난 기능). */
+    fun promoted(id: String): Boolean = id !in hidden && (id in graduated || (Updater.alpha && id in alphaWide))
+
+    /** 올라온 기능 중 설정 화면에서 켜고 끄는 것들. */
+    fun settingFeatures(): List<Feature> = features.filter { !it.button && promoted(it.id) }
+
+    fun isOn(id: String): Boolean = when {
+        id in hidden -> false
+        // 올라온 기능: 버튼형은 늘 있고, 설정형은 설정 화면의 켜기/끄기를 따른다(처음엔 켜짐).
+        promoted(id) -> feature(id)?.button != false || prefs.getBoolean("set_$id", true)
+        else -> Updater.alpha && enabled && prefs.getBoolean("lab_$id", false)
+    }
+
+    /** 켜기/끄기: 올라온 설정형 기능은 설정 값을, 아직 실험실에 있는 기능은 실험실 선택을 바꾼다. */
+    fun set(id: String, on: Boolean) {
+        val key = if (promoted(id) && feature(id)?.button == false) "set_$id" else "lab_$id"
+        prefs.edit().putBoolean(key, on).apply()
+    }
 
     /** release/labs.json 에서 정식 기능이 된 것들을 꺼낸다. 이 앱이 모르는 이름은 버린다. */
     fun parseGraduated(json: String): Set<String> = parseList(json, "graduated")
@@ -251,19 +276,31 @@ class LabsActivity : BaseActivity() {
                 "· 숨김: 5분 뒤 실험실에서 빠지고 누구에게도 켜지지 않습니다\n" +
                 "· 복귀: 5분 뒤 숨긴 기능이나 정식이 된 기능을 실험실로 되돌립니다"
         )
+        // 실험실 전체 켜기/끄기
+        val boxes = ArrayList<CheckBox>()
+        root.addView(CheckBox(this).apply {
+            this.text = "실험실 사용"; textSize = 17f; isChecked = Labs.enabled; setPadding(0, dp(8), 0, 0)
+            setOnCheckedChangeListener { _, on ->
+                Labs.enabled = on
+                for (b in boxes) b.isEnabled = on
+            }
+        })
+        note("끄면 실험실에서 켜 둔 기능이 모두 꺼집니다. 다시 켜면 전에 골라 둔 대로 돌아옵니다. 알파·정식으로 올라간 기능은 영향을 받지 않습니다.")
         val hidden = Labs.hidden
         for (f in Labs.features.filter { it.id !in hidden }) {
             val done = f.id in Labs.graduated
             val rolling = !done && f.id in Labs.alphaWide
+            val moved = done || rolling
             root.addView(CheckBox(this).apply {
                 this.text = f.title + when {
-                    done -> "  (정식 기능이 되었습니다)"
-                    rolling -> "  (알파 사용자 모두에게 켜짐 · 곧 정식)"
+                    moved && f.button -> if (done) "  (정식 · 버튼으로 추가됨)" else "  (알파 · 버튼으로 추가됨 · 곧 정식)"
+                    moved -> if (done) "  (정식 · 설정으로 옮겨짐)" else "  (알파 · 설정으로 옮겨짐 · 곧 정식)"
                     else -> ""
                 }
-                textSize = 16f; isChecked = Labs.isOn(f.id); isEnabled = !done && !rolling
+                textSize = 16f; isChecked = Labs.isOn(f.id)
                 setPadding(0, dp(10), 0, 0)
-                setOnCheckedChangeListener { _, on -> Labs.set(f.id, on) }
+                if (moved) isEnabled = false         // 올라간 기능은 설정 화면(또는 버튼)에서 다룬다
+                else { isEnabled = Labs.enabled; boxes += this; setOnCheckedChangeListener { _, on -> Labs.set(f.id, on) } }
             })
             note(f.description)
             val row = LinearLayout(this)

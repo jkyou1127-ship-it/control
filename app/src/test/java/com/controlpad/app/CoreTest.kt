@@ -666,4 +666,17 @@ class CoreTest {
         val back = PadButton.fromJson(JSONObject(b.toJson().toString()))
         assertTrue(back.isOption && back.link == "combo")
     }
+
+    @Test
+    fun labsFeaturesSplitIntoButtonsAndSettings() {
+        val buttons = Labs.features.filter { it.button }.map { it.id }.toSet()
+        assertEquals(
+            setOf("list-search", "list-pin", "home-shortcut", "select-all", "align", "distribute", "lock", "opacity", "text-scale", "option-buttons"),
+            buttons,
+        )
+        // 옵션 버튼으로 켜고 끄는 것은 모두 설정형이어야 한다(버튼형은 끌 수 없다).
+        assertTrue(Options.labIds.none { it in buttons })
+        assertEquals(null, Labs.feature("unknown"))
+        assertEquals("초당 입력 수 표시", Labs.feature("kps")?.title)
+    }
 }
