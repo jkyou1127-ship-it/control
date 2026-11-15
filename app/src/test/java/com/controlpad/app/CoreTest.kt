@@ -594,4 +594,13 @@ class CoreTest {
         assertEquals("0:05", Combo.format(5999))
         assertEquals("12:34", Combo.format(754000))
     }
+
+    @Test
+    fun historyKeepsTheLastFiveAndGeometryIsReadable() {
+        val h = ArrayDeque<String>()
+        for (k in listOf("A", "", "S", "D", "F", "J", "K")) Combo.remember(h, k)
+        assertEquals(listOf("S", "D", "F", "J", "K"), h.toList())          // 빈 것은 넣지 않고, 오래된 것부터 버린다
+        assertEquals("가로 12.5% · 세로 30.0% · 너비 20.0% · 높이 15.0%", Geometry.describe(0.125f, 0.3f, 0.2f, 0.15f))
+        assertEquals(Labs.features.size, Labs.features.map { it.id }.toSet().size)
+    }
 }

@@ -40,6 +40,11 @@ object Labs {
         Feature("opacity", "버튼 불투명도", "버튼 속성에서 버튼을 비치게 만들 수 있습니다(10~100%)."),
         Feature("text-scale", "버튼 글자 크기", "버튼 속성에서 글자 크기를 바꿀 수 있습니다(50~200%)."),
         Feature("exit-guard", "실수로 나가기 방지", "실행 화면에서 뒤로 가기를 두 번 눌러야 나갑니다."),
+        Feature("max-brightness", "최대 밝기", "실행 화면이 떠 있는 동안 화면을 가장 밝게 합니다."),
+        Feature("hide-status", "연결 상태 숨기기", "실행 화면 왼쪽 위의 연결 상태 글자를 감춰 화면을 깔끔하게 합니다."),
+        Feature("press-sound", "누를 때 소리", "버튼을 누를 때마다 짧은 클릭 소리를 냅니다."),
+        Feature("key-history", "최근 입력 기록", "실행 화면에 방금 누른 버튼의 키를 최근 5개까지 차례로 보여 줍니다."),
+        Feature("editor-coords", "위치 · 크기 표시", "편집 화면에서 선택한 것의 위치와 크기를 화면 대비 %로 보여 줍니다."),
     )
 
     const val REQUEST_PREFIX = "[정식 요청]"

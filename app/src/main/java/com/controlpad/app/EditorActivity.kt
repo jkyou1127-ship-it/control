@@ -181,6 +181,7 @@ class EditorActivity : BaseActivity() {
         // 아래 도구들은 실험실 기능이라, 켜져 있을 때만 도구 모음에 놓인다.
         val lockOn = Labs.isOn("lock")
         view.lockOn = lockOn
+        view.coordsOn = Labs.isOn("editor-coords")
         val alignOn = Labs.isOn("align")
         val distributeOn = Labs.isOn("distribute")
         if (Labs.isOn("select-all")) tool("전체 선택") {
@@ -1109,6 +1110,9 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         get() = selection.lastOrNull()
         set(v) { selection.clear(); if (v != null) selection += v }
 
+    /** 선택한 것의 위치·크기를 화면 아래쪽에 보여 줄지(실험실 기능). */
+    var coordsOn = false
+
     /** 버튼 잠금(실험실 기능)이 켜져 있는지. 꺼져 있으면 잠긴 버튼도 평소처럼 움직인다. */
     var lockOn = false
 
@@ -1277,6 +1281,10 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             painter.draw(c, b, rectOf(b), false, b in selection, alt = 2)
             val marks = listOfNotNull(if (b.group > 0) "그룹 ${b.group}" else null, if (lockOn && b.locked) "잠금" else null)
             if (marks.isNotEmpty()) painter.badge(c, rectOf(b), marks.joinToString(" · "))
+        }
+        if (coordsOn && selection.isNotEmpty()) {
+            val r = selectionBox(rect)
+            c.drawText(Geometry.describe(r.left, r.top, r.width(), r.height()), width / 2f, height - hintPaint.textSize * 0.8f, hintPaint)
         }
         if (hidden.isNotEmpty()) {
             c.drawText("숨긴 버튼 ${hidden.size}개 — '숨김'을 누르면 다시 표시", width / 2f, hintPaint.textSize * 1.4f, hintPaint)

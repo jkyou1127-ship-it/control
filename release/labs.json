@@ -16,7 +16,12 @@
     "lock",
     "opacity",
     "text-scale",
-    "exit-guard"
+    "exit-guard",
+    "max-brightness",
+    "hide-status",
+    "press-sound",
+    "key-history",
+    "editor-coords"
   ],
   "graduated": [],
   "relay": ""

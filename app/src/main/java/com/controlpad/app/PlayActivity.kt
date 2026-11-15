@@ -87,6 +87,7 @@ class PlayActivity : BaseActivity() {
                 View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         }
+        if (Labs.isOn("max-brightness")) window.attributes = window.attributes.apply { screenBrightness = 1f }
         Link.setActive(true)
         ui.post(tick)
     }
@@ -186,12 +187,22 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private var batteryAt = 0L
 
     /** 버튼을 한 번 눌렀다고 기록한다(초당 입력 수, 콤보, 총 입력 수). */
-    private fun notePress() {
+    private val labHideStatus = Labs.isOn("hide-status")
+    private val labSound = Labs.isOn("press-sound")
+    private val labHistory = Labs.isOn("key-history")
+    private val history = ArrayDeque<String>()          // 최근에 누른 버튼의 키들
+    private val audio = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+
+    private fun notePress(b: PadButton) {
         val now = SystemClock.uptimeMillis()
         if (labKps) pressTimes.addLast(now)
         combo = Combo.next(combo, lastPress, now)
         lastPress = now
         total++
+        if (labSound) audio?.playSoundEffect(android.media.AudioManager.FX_KEY_CLICK, 0.6f)
+        if (labHistory) {
+            Combo.remember(history, if (b.mode == PadButton.MODE_MACRO) "매크로" else Keys.combo(b.keys))
+        }
     }
 
     /** 배터리 잔량과 시각. 자주 물어볼 필요가 없어 30초에 한 번만 새로 읽는다. */
@@ -513,7 +524,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             onSwitch(b.link)
             return
         }
-        notePress()
+        notePress(b)
         // 한/영을 누르면 글자 키의 표시도 함께 바꾼다(키를 R Alt 로 바꿔 둔 한/영 버튼 포함).
         if (Keys.HANGUL in b.keys || b.label == "한/영") hangul = !hangul
         when (b.mode) {
@@ -728,22 +739,27 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
         }
         statusPaint.color = if (connected) 0x9981C784.toInt() else 0xFFFFB74D.toInt()
-        var line = (if (connected) "● " else "○ ") + status
+        // 왼쪽 위 한 줄: 연결 상태와, 켜 둔 실험실 표시들
+        val parts = ArrayList<String>()
+        if (!labHideStatus) parts += (if (connected) "● " else "○ ") + status
         if (labKps) {
             val n = kps()
-            line += " · ${n}회/초"
+            parts += "${n}회/초"
             if (n > 0) postInvalidateDelayed(200)       // 손을 떼도 숫자가 0 으로 내려가게
         }
         val now = SystemClock.uptimeMillis()
         if (labCombo) {
             if (now - lastPress > Combo.WINDOW_MS) combo = 0
-            if (combo >= 2) { line += " · ${combo}콤보"; postInvalidateDelayed(250) }
+            if (combo >= 2) { parts += "${combo}콤보"; postInvalidateDelayed(250) }
         }
-        if (labTotal) line += " · 총 ${total}회"
-        if (labTimer) line += " · " + Combo.format(now - startedAt)
-        if (labBattery) line += " · " + battery()
+        if (labTotal) parts += "총 ${total}회"
+        if (labTimer) parts += Combo.format(now - startedAt)
+        if (labBattery) parts += battery()
         if (labTimer || labBattery) postInvalidateDelayed(1000)
-        c.drawText(line, statusPaint.textSize, statusPaint.textSize * 1.6f, statusPaint)
+        if (parts.isNotEmpty()) c.drawText(parts.joinToString(" · "), statusPaint.textSize, statusPaint.textSize * 1.6f, statusPaint)
+        if (labHistory && history.isNotEmpty()) {
+            c.drawText(history.joinToString("  ›  "), statusPaint.textSize, statusPaint.textSize * 3.1f, statusPaint)
+        }
     }
 
     companion object {

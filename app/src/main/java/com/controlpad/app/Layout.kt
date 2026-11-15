@@ -575,6 +575,10 @@ object Geometry {
      * starts: 버튼들의 원래 x, y, w, h (화면 대비 비율). box: 옮긴 뒤 전체 영역의 x, y, w, h.
      * 화면 밖으로 나가지 않게 맞춘 뒤, 각 버튼의 새 x, y, w, h 를 돌려준다.
      */
+    /** 편집 화면에 보여 줄 위치·크기 글자(화면 대비 %). */
+    fun describe(x: Float, y: Float, w: Float, h: Float): String =
+        "가로 %.1f%% · 세로 %.1f%% · 너비 %.1f%% · 높이 %.1f%%".format(x * 100, y * 100, w * 100, h * 100)
+
     fun fit(starts: List<FloatArray>, box: FloatArray): List<FloatArray> {
         val ox = starts.minOf { it[0] }
         val oy = starts.minOf { it[1] }
@@ -658,4 +662,11 @@ object Combo {
     const val WINDOW_MS = 1000L
     fun next(current: Int, lastPress: Long, now: Long): Int = if (lastPress != 0L && now - lastPress <= WINDOW_MS) current + 1 else 1
     fun format(ms: Long): String = "%d:%02d".format(ms / 60000, ms / 1000 % 60)
+
+    /** 최근 입력 기록에 하나를 더하고, limit 개를 넘으면 오래된 것부터 버린다. */
+    fun remember(history: ArrayDeque<String>, entry: String, limit: Int = 5) {
+        if (entry.isEmpty()) return
+        history.addLast(entry)
+        while (history.size > limit) history.removeFirst()
+    }
 }
