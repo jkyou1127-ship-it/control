@@ -25,6 +25,7 @@
     "list-kinds",
     "nudge",
     "open-last",
+    "press-count",
     "selection-count",
     "show-hidden-outline",
     "snap-edges"
@@ -39,7 +40,6 @@
   ],
   "alpha": [
     "clock-seconds",
-    "press-count",
     "release-sound",
     "session-summary"
   ],
