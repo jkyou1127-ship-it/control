@@ -52,7 +52,8 @@
     "touch-dots"
   ],
   "hidden": [
-    "confirm-delete"
+    "confirm-delete",
+    "dup-in-place"
   ],
   "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
