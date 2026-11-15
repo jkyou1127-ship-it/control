@@ -22,6 +22,7 @@
   ],
   "graduated": [
     "nudge",
+    "open-last",
     "selection-count",
     "show-hidden-outline",
     "snap-edges"
