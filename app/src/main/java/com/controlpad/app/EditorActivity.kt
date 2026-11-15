@@ -35,29 +35,36 @@ class EditorActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         pad = LayoutStore.load(this, intent.getStringExtra("id") ?: "") ?: run { finish(); return }
 
+        // 화면 구성: 위쪽 막대(이름, 되돌리기, 저장·실행·완료) / 왼쪽 도구 모음(묶음별) / 나머지는 편집 영역.
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val bar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
-        bar.addView(TextView(this).apply {
-            text = pad.name; textSize = 16f; setTextColor(Themes.current.text); setSingleLine()
-            minWidth = dp(120)
+        val top = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), dp(6), dp(10), dp(6)) }
+        top.addView(TextView(this).apply {
+            text = pad.name; textSize = 17f; setTextColor(Themes.current.text); setSingleLine()
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, -2, 1f))
+        val rail = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), dp(8)) }
+        fun section(name: String) = rail.addView(TextView(this).apply {
+            text = name; textSize = 12f; setPadding(dp(2), dp(10), 0, dp(4))
+            setTextColor(Themes.current.text and 0x00FFFFFF or 0x99000000.toInt())
+        })
+        fun railItem(v: View) = rail.addView(v, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(5) })
+        // 도구가 놓일 자리: 이름으로 정한다. 여기에 없는 도구는 위쪽 막대에 놓인다.
+        val pending = LinkedHashMap<String, View>()
 
         view = EditorView(this, pad)
-        bar.addView(CheckBox(this).apply {
+        val snapBox = CheckBox(this).apply {
             text = "격자 맞춤"; isChecked = true
             setOnCheckedChangeListener { _, on -> view.snap = on; view.invalidate() }
-        })
+        }
         val multi = CheckBox(this).apply {
             text = "다중 선택"
             setOnCheckedChangeListener { _, on -> view.multi = on; view.invalidate() }
         }
-        bar.addView(multi)
-        bar.addView(CheckBox(this).apply {
+        val slideBox = CheckBox(this).apply {
             text = "슬라이드 입력"; isChecked = pad.slide
             setOnCheckedChangeListener { _, on -> pad.slide = on }
-        })
-        fun tool(label: String, action: () -> Unit) =
-            bar.addView(Button(this).apply { text = label; setOnClickListener { action() } })
+        }
+        fun tool(label: String, action: () -> Unit) { pending[label] = toolChip(this, label, action) }
         // 추가할 수 있는 것들은 한 메뉴에 모은다(도구 줄이 길어져 화면 밖으로 밀려나지 않게).
         val adds = LinkedHashMap<String, () -> Unit>()
         fun add(label: String, action: () -> Unit) { adds[label] = action }
@@ -235,12 +242,82 @@ class EditorActivity : BaseActivity() {
         }
         tool("완료") { finish() }
 
-        root.addView(android.widget.HorizontalScrollView(this).apply {
-            isFillViewport = true
-            addView(bar)
+        // 그리기: 손으로 그린 그림을 그대로 버튼으로 만든다. 켜면 위쪽에 펜 도구 줄이 나타난다.
+        val penBar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(10), 0, dp(10), dp(6)) }
+        val penScroll = android.widget.HorizontalScrollView(this).apply { addView(penBar); visibility = View.GONE }
+        val swatches = LinearLayout(this)
+        fun paintSwatches() {
+            for (i in PadButton.PALETTE.indices) swatches.getChildAt(i).background = GradientDrawable().apply {
+                setColor(PadButton.PALETTE[i]); cornerRadius = dp(5).toFloat()
+                if (PadButton.PALETTE[i] == view.penColor) setStroke(dp(3), Themes.current.text)
+            }
+        }
+        for (c in PadButton.PALETTE) swatches.addView(
+            View(this).apply { setOnClickListener { view.penColor = c; paintSwatches(); view.invalidate() } },
+            LinearLayout.LayoutParams(dp(30), dp(30)).apply { rightMargin = dp(4) },
+        )
+        paintSwatches()
+        penBar.addView(swatches)
+        fun pen(label: String, action: () -> Unit) =
+            penBar.addView(toolChip(this, label, action), LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+        pen("＋색") { pickColor(this, view.penColor) { view.penColor = it; paintSwatches(); view.invalidate() } }
+        pen("가늘게") { view.penWidth = (view.penWidth - dp(2)).coerceAtLeast(dp(2).toFloat()); view.invalidate() }
+        pen("굵게") { view.penWidth = (view.penWidth + dp(2)).coerceAtMost(dp(40).toFloat()); view.invalidate() }
+        penBar.addView(CheckBox(this).apply {
+            text = "안쪽 채우기"; isChecked = view.penFill
+            setOnCheckedChangeListener { _, on -> view.penFill = on; view.invalidate() }
         })
-        root.addView(view, LinearLayout.LayoutParams(-1, 0, 1f))
+        pen("↶ 한 획 취소") { view.undoStroke() }
+        pen("모두 지우기") { view.clearStrokes() }
+        pen("✔ 버튼으로 만들기") {
+            val made = view.renderStrokes()
+            if (made == null) {
+                android.widget.Toast.makeText(this, "먼저 화면에 버튼 모양을 그리세요", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                checkpoint()
+                val (bmp, box) = made
+                val b = PadButton(
+                    box.left / view.width, box.top / view.height, box.width() / view.width, box.height() / view.height,
+                    shape = PadButton.SHAPE_FREE, image = ImageStore.save(this, bmp), color = view.penColor,
+                )
+                pad.buttons += b
+                view.clearStrokes()
+                view.selected = b
+                editButton(b, isNew = true)      // 키·이름·동작 방식 등은 다른 버튼과 똑같이 정한다
+            }
+        }
+        lateinit var drawChip: TextView
+        fun setSketching(on: Boolean) {
+            view.sketching = on
+            penScroll.visibility = if (on) View.VISIBLE else View.GONE
+            styleChip(drawChip, on)
+            view.invalidate()
+        }
+        drawChip = toolChip(this, "✎ 그리기") { setSketching(!view.sketching) }
+        pending["✎ 그리기"] = drawChip
+
+        // 왼쪽 도구 모음을 묶음별로 채운다.
+        section("추가")
+        for (name in listOf("＋추가", "✎ 그리기")) pending.remove(name)?.let { railItem(it) }
+        section("선택한 것")
+        railItem(multi)
+        for (name in listOf("속성", "복제", "삭제")) pending.remove(name)?.let { railItem(it) }
+        section("배치")
+        for (name in listOf("크기·위치", "순서", "숨김")) pending.remove(name)?.let { railItem(it) }
+        section("옵션")
+        railItem(snapBox); railItem(slideBox)
+        // 나머지(되돌리기, 저장, 실행, 완료)는 위쪽 막대에.
+        for (chip in pending.values) top.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) })
+
+        root.addView(top)
+        root.addView(penScroll)
+        val body = LinearLayout(this)
+        body.addView(ScrollView(this).apply { addView(rail) }, LinearLayout.LayoutParams(dp(132), -1))
+        body.addView(view, LinearLayout.LayoutParams(0, -1, 1f))
+        root.addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+        // '그림 레이아웃'으로 들어왔으면 그리기를 켠 채로 시작한다.
+        if (intent.getBooleanExtra("sketch", false)) setSketching(true)
 
         view.onBeforeChange = { checkpoint() }
         view.onCreated = { editButton(it, isNew = true) }
@@ -978,6 +1055,81 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         get() = selection.lastOrNull()
         set(v) { selection.clear(); if (v != null) selection += v }
 
+    // ----- 그리기: 손으로 그린 획들을 모아 그림 버튼으로 만든다 -----
+    var sketching = false
+    var penColor = PadButton.PALETTE[0]
+    var penWidth = ctx.dp(8).toFloat()
+    var penFill = true
+    private val strokes = ArrayList<FloatArray>()       // 다 그린 획들: x0, y0, x1, y1, …
+    private val stroke = ArrayList<Float>()             // 그리고 있는 획
+    private val penLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    }
+    private val penInside = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val penPath = android.graphics.Path()
+
+    fun undoStroke() {
+        if (strokes.isNotEmpty()) strokes.removeAt(strokes.size - 1)
+        invalidate()
+    }
+
+    fun clearStrokes() {
+        strokes.clear(); stroke.clear()
+        invalidate()
+    }
+
+    /** 획들을 (dx, dy) 만큼 옮겨 그린다. 채우기가 켜져 있으면 획마다 닫힌 안쪽을 옅게 칠한다. */
+    private fun drawStrokes(c: Canvas, all: List<FloatArray>, dx: Float, dy: Float) {
+        penLine.color = penColor; penLine.strokeWidth = penWidth
+        penInside.color = penColor and 0x00FFFFFF or 0x66000000
+        for (s in all) {
+            if (s.size < 2) continue
+            penPath.reset()
+            penPath.moveTo(s[0] + dx, s[1] + dy)
+            for (i in 1 until s.size / 2) penPath.lineTo(s[i * 2] + dx, s[i * 2 + 1] + dy)
+            if (s.size == 2) penPath.lineTo(s[0] + dx + 0.1f, s[1] + dy)      // 점 하나도 보이게
+            if (penFill && s.size >= 6) c.drawPath(penPath, penInside)
+            c.drawPath(penPath, penLine)
+        }
+    }
+
+    /**
+     * 그린 것을 투명한 배경의 그림으로 만든다. 그림과, 화면에서 그 그림이 차지하는 영역을 돌려준다.
+     * 아무것도 그리지 않았거나 너무 작으면 null.
+     */
+    fun renderStrokes(): Pair<android.graphics.Bitmap, RectF>? {
+        val box = Sketch.bounds(strokes, penWidth / 2 + 2, width.toFloat(), height.toFloat()) ?: return null
+        val w = (box[2] - box[0]).toInt()
+        val h = (box[3] - box[1]).toInt()
+        if (w < context.dp(24) || h < context.dp(24)) return null
+        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        drawStrokes(Canvas(bmp), strokes, -box[0], -box[1])
+        return bmp to RectF(box[0], box[1], box[0] + w, box[1] + h)
+    }
+
+    private fun sketchTouch(e: MotionEvent): Boolean {
+        val x = e.x.coerceIn(0f, width.toFloat())
+        val y = e.y.coerceIn(0f, height.toFloat())
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { stroke.clear(); stroke += x; stroke += y }
+            MotionEvent.ACTION_MOVE -> {
+                // 화면 갱신 사이에 들어온 점들도 빠뜨리지 않아야 선이 매끄럽다.
+                for (i in 0 until e.historySize) {
+                    stroke += e.getHistoricalX(i).coerceIn(0f, width.toFloat())
+                    stroke += e.getHistoricalY(i).coerceIn(0f, height.toFloat())
+                }
+                stroke += x; stroke += y
+            }
+            MotionEvent.ACTION_UP -> {
+                if (stroke.size >= 2) strokes += stroke.toFloatArray()
+                stroke.clear()
+            }
+            MotionEvent.ACTION_CANCEL -> stroke.clear()
+        }
+        invalidate()
+        return true
+    }
+
     /** 편집 화면에서만 잠깐 숨긴 버튼들. 그리지도 않고 잡히지도 않지만 레이아웃에는 그대로 있다. */
     val hidden = HashSet<PadButton>()
 
@@ -1076,6 +1228,13 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
             }
             c.drawCircle(r.right * width, r.bottom * height, handle * 0.5f, handlePaint)
         }
+        if (sketching) {
+            if (strokes.isEmpty() && stroke.isEmpty()) {
+                c.drawText("손가락으로 버튼 모양을 그린 뒤 '✔ 버튼으로 만들기'를 누르세요", width / 2f, hintPaint.textSize * 3f, hintPaint)
+            }
+            drawStrokes(c, strokes, 0f, 0f)
+            if (stroke.size >= 2) drawStrokes(c, listOf(stroke.toFloatArray()), 0f, 0f)
+        }
         if (drag == Drag.DRAW) {
             c.drawRect(min(downX, curX), min(downY, curY), max(downX, curX), max(downY, curY), drawPaint)
         }
@@ -1083,6 +1242,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (width == 0 || height == 0) return false
+        if (sketching) return sketchTouch(e)
         val x = e.x.coerceIn(0f, width.toFloat())
         val y = e.y.coerceIn(0f, height.toFloat())
         when (e.actionMasked) {

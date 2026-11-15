@@ -181,12 +181,18 @@ class SettingsActivity : BaseActivity() {
             isChecked = Updater.alpha
             setOnCheckedChangeListener { _, on ->
                 Updater.alpha = on
+                reload()        // 실험실 · 평가단 버튼을 보이거나 감춘다
                 // 채널을 바꾸면 그 채널의 새 버전을 바로 확인한다.
                 Updater.check(this@SettingsActivity)
             }
         })
         root.addView(Button(this).apply { text = "업데이트 확인"; setOnClickListener { Updater.check(this@SettingsActivity) } })
         root.addView(Button(this).apply { text = "업데이트 내역"; setOnClickListener { showChangelog(this@SettingsActivity) } })
+        // 실험실과 평가단은 알파 빌드를 받는 사람에게만 보인다.
+        if (Updater.alpha) root.addView(Button(this).apply {
+            text = "실험실 · 평가단"
+            setOnClickListener { startActivity(Intent(this@SettingsActivity, LabsActivity::class.java)) }
+        })
 
         scroll = ScrollView(this).apply { addView(root) }
         setContentView(scroll)

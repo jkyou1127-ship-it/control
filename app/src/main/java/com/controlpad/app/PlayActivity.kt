@@ -154,6 +154,18 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     /** PC 가 한글 입력 상태라고 보고 있는지. 화면을 열 때는 영문으로 시작한다. */
     private var hangul = false
 
+    // 실험실 기능
+    private val labKps = Labs.isOn("kps")
+    private val labPop = Labs.isOn("press-pop")
+    private val pressTimes = ArrayDeque<Long>()         // 최근에 버튼을 누른 시각들(초당 입력 수 계산용)
+
+    /** 최근 1초 동안 누른 횟수. */
+    private fun kps(): Int {
+        val now = SystemClock.uptimeMillis()
+        while (pressTimes.isNotEmpty() && now - pressTimes.first() > 1000) pressTimes.removeFirst()
+        return pressTimes.size
+    }
+
     /** 레이아웃 전환 버튼을 눌렀을 때 불린다(넘어갈 레이아웃의 id). */
     var onSwitch: (String) -> Unit = {}
 
@@ -451,6 +463,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             onSwitch(b.link)
             return
         }
+        if (labKps) pressTimes.addLast(SystemClock.uptimeMillis())
         // 한/영을 누르면 글자 키의 표시도 함께 바꾼다(키를 R Alt 로 바꿔 둔 한/영 버튼 포함).
         if (Keys.HANGUL in b.keys || b.label == "한/영") hangul = !hangul
         when (b.mode) {
@@ -649,6 +662,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
             if (!lit && parts == 0 && knobAngle[i] == 0f) continue    // 미리 그린 모습 그대로
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
+            if (labPop && lit && b.type == PadButton.TYPE_BUTTON) rect.inset(-rect.width() * 0.04f, -rect.height() * 0.04f)
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)
         }
         if (showPressed && !hasPanel && pressedText.isNotEmpty()) {
@@ -664,7 +678,13 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
         }
         statusPaint.color = if (connected) 0x9981C784.toInt() else 0xFFFFB74D.toInt()
-        c.drawText((if (connected) "● " else "○ ") + status, statusPaint.textSize, statusPaint.textSize * 1.6f, statusPaint)
+        var line = (if (connected) "● " else "○ ") + status
+        if (labKps) {
+            val n = kps()
+            line += " · ${n}회/초"
+            if (n > 0) postInvalidateDelayed(200)       // 손을 떼도 숫자가 0 으로 내려가게
+        }
+        c.drawText(line, statusPaint.textSize, statusPaint.textSize * 1.6f, statusPaint)
     }
 
     companion object {

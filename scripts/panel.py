@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""평가단의 정식 추가 요청(저장소 이슈)을 확인하고 반영한다. .github/workflows/panel.yml 이 부른다.
+
+    panel.py check   요청이 유효한지 보고 GITHUB_OUTPUT 형식(ok=, reason=, summary=)으로 적는다
+    panel.py apply   release/ 의 파일을 고친다
+
+요청은 이슈 제목으로 한다:
+    [정식 요청] 빌드 1.21        지금 알파 빌드를 정식 채널에 올린다
+    [정식 요청] 실험실 kps       실험실 기능을 정식 기능으로 올린다
+
+이슈 제목과 작성자는 누구나 정할 수 있는 값이라 환경 변수로만 받고, 정해진 모양이 아니면 버린다.
+"""
+import json
+import os
+import re
+import shutil
+import sys
+
+PREFIX = "[정식 요청]"
+BUILD = re.compile(r"^\[정식 요청\] 빌드 ([0-9A-Za-z][0-9A-Za-z. ]{0,19})$")
+LAB = re.compile(r"^\[정식 요청\] 실험실 ([a-z0-9][a-z0-9-]{0,39})$")
+
+
+def parse_title(title):
+    """('build', 버전) 또는 ('lab', 기능 이름). 모양이 다르면 None."""
+    title = title.strip()
+    m = BUILD.match(title)
+    if m:
+        return "build", m.group(1).strip()
+    m = LAB.match(title)
+    if m:
+        return "lab", m.group(1)
+    return None
+
+
+def is_member(author, owner, panel_text):
+    """저장소 주인이거나 release/panel.txt 에 적힌 계정인지."""
+    names = [line.strip() for line in panel_text.splitlines()]
+    names = [n for n in names if n and not n.startswith("#")]
+    if author.lower() == owner.lower() or "*" in names:
+        return True
+    return author.lower() in (n.lower() for n in names)
+
+
+def check_build(version, alpha, stable):
+    """알파 빌드를 정식에 올려도 되는지. 안 되면 이유를, 되면 None 을 돌려준다."""
+    if version != alpha["versionName"]:
+        return "요청한 빌드(%s)가 지금 알파 빌드(%s)가 아닙니다" % (version, alpha["versionName"])
+    if alpha["versionCode"] <= stable["versionCode"]:
+        return "빌드 %s 은(는) 이미 정식 채널에 있습니다" % version
+    return None
+
+
+def check_lab(feature, labs):
+    if feature not in labs.get("features", []):
+        return "'%s' 은(는) 실험실에 없는 기능입니다" % feature
+    if feature in labs.get("graduated", []):
+        return "'%s' 은(는) 이미 정식 기능입니다" % feature
+    return None
+
+
+def load(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def evaluate(title, author, owner, release="release"):
+    """(종류, 대상, 안 되는 이유 또는 None)."""
+    parsed = parse_title(title)
+    if parsed is None:
+        return None, None, "제목은 '%s 빌드 <버전>' 또는 '%s 실험실 <기능 이름>' 이어야 합니다" % (PREFIX, PREFIX)
+    kind, target = parsed
+    with open(os.path.join(release, "panel.txt"), encoding="utf-8") as f:
+        if not is_member(author, owner, f.read()):
+            return kind, target, "평가단으로 등록된 계정만 요청할 수 있습니다"
+    if kind == "build":
+        problem = check_build(target, load(os.path.join(release, "alpha", "version.json")),
+                              load(os.path.join(release, "version.json")))
+    else:
+        problem = check_lab(target, load(os.path.join(release, "labs.json")))
+    return kind, target, problem
+
+
+def apply(kind, target, release="release"):
+    if kind == "build":
+        for name in ("version.json", "ControlPad.apk"):
+            shutil.copyfile(os.path.join(release, "alpha", name), os.path.join(release, name))
+    else:
+        path = os.path.join(release, "labs.json")
+        labs = load(path)
+        labs["graduated"] = sorted(set(labs.get("graduated", [])) | {target})
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(labs, f, indent=2)
+            f.write("\n")
+
+
+def summary(kind, target):
+    return ("빌드 %s 을(를) 정식 채널에" if kind == "build" else "실험실 기능 '%s' 을(를) 정식 기능으로") % target
+
+
+def main(argv):
+    kind, target, problem = evaluate(os.environ.get("ISSUE_TITLE", ""), os.environ.get("ISSUE_AUTHOR", ""),
+                                     os.environ.get("REPO_OWNER", ""))
+    if argv[1:] == ["check"]:
+        print("ok=%s" % ("false" if problem else "true"))
+        print("reason=%s" % (problem or ""))
+        print("summary=%s" % (summary(kind, target) if not problem else ""))
+    elif argv[1:] == ["apply"]:
+        if problem:
+            sys.exit(problem)
+        apply(kind, target)
+        print(summary(kind, target) + " 올렸습니다")
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv)

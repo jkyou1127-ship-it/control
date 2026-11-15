@@ -36,6 +36,7 @@ json.dump({"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "notes":
 PY
 
 python3 receiver/test_receiver.py
+python3 scripts/test_panel.py
 ./gradlew testReleaseUnitTest assembleRelease -q
 cp app/build/outputs/apk/release/app-release.apk release/alpha/ControlPad.apk
 if [ "$fix" = 1 ]; then

@@ -35,6 +35,7 @@ class ThemeEditorActivity : BaseActivity() {
     private lateinit var preview: ThemePreview
     private lateinit var form: LinearLayout
     private lateinit var picker: Spinner
+    private lateinit var deleteChip: TextView
 
     private fun draft() = Themes.make(name.ifBlank { "내 테마" }, bg, text, strength, stroke, colorText, base, card)
 
@@ -48,15 +49,25 @@ class ThemeEditorActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         val pad = dp(16)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-        root.addView(TextView(this).apply { this.text = "테마 에디터"; textSize = 24f; setTextColor(Themes.current.text) })
+        // 위쪽 막대(제목, 저장·삭제·닫기)와 미리보기는 고정하고, 아래 설정만 스크롤된다.
+        val top = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        top.addView(TextView(this).apply {
+            this.text = "테마 에디터"; textSize = 20f; setTextColor(Themes.current.text)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        fun chip(label: String, action: () -> Unit) =
+            toolChip(this, label, action).also { top.addView(it, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(6) }) }
+        chip("저장하고 적용") { save() }
+        deleteChip = chip("삭제") { delete() }
+        chip("닫기") { finish() }
+        root.addView(top)
 
         picker = Spinner(this)
         root.addView(picker)
         preview = ThemePreview(this)
         root.addView(preview, LinearLayout.LayoutParams(-1, dp(130)).apply { topMargin = dp(8) })
         form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(form)
-        setContentView(ScrollView(this).apply { addView(root) })
+        root.addView(ScrollView(this).apply { addView(form) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(root)
 
         // 지금 쓰는 테마가 직접 만든 것이면 그것을 고치고, 아니면 지금 테마를 복사한 새 테마로 시작한다.
         val at = Themes.index - Themes.all.size
@@ -143,11 +154,7 @@ class ThemeEditorActivity : BaseActivity() {
             setOnCheckedChangeListener { _, on -> colorText = on; preview.show(draft()) }
         })
 
-        val buttons = LinearLayout(this).apply { setPadding(0, dp(12), 0, 0) }
-        buttons.addView(Button(this).apply { this.text = "저장하고 적용"; setOnClickListener { save() } })
-        if (editing >= 0) buttons.addView(Button(this).apply { this.text = "삭제"; setOnClickListener { delete() } })
-        buttons.addView(Button(this).apply { this.text = "닫기"; setOnClickListener { finish() } })
-        form.addView(buttons)
+        deleteChip.visibility = if (editing >= 0) View.VISIBLE else View.GONE     // 저장한 적 없는 새 테마는 지울 것이 없다
         form.addView(TextView(this).apply {
             this.text = "저장한 테마는 설정의 테마 목록 맨 아래에 나옵니다. 배경이 밝으면 목록과 설정 화면도 밝은 모양으로 바뀝니다."
             setPadding(0, dp(8), 0, 0)

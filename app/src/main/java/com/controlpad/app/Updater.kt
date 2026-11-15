@@ -24,7 +24,7 @@ import java.net.URL
  * 각 폴더의 version.json 과 ControlPad.apk 를 내려받는다.
  */
 object Updater {
-    private const val BASE =
+    const val BASE =
         "https://raw.githubusercontent.com/jkyou1127-ship-it/control/claude/vibrant-ramanujan-pdzsly/release/"
     const val RECEIVER_URL = BASE + "ControlPadReceiver.exe"
     private const val ACTION = "com.controlpad.app.INSTALL_STATUS"

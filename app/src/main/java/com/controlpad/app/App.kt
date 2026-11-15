@@ -534,3 +534,24 @@ fun android.app.AlertDialog.wide(): android.app.AlertDialog {
     window?.setLayout((context.resources.displayMetrics.widthPixels * 0.92f).toInt(), android.view.WindowManager.LayoutParams.WRAP_CONTENT)
     return this
 }
+
+/** 편집 화면들의 도구 버튼. 테마 색을 따르는 납작한 모양이고, on 이면 켜진 상태로 강조한다. */
+fun toolChip(ctx: Context, label: String, action: () -> Unit): android.widget.TextView =
+    android.widget.TextView(ctx).apply {
+        text = label; textSize = 14f; gravity = android.view.Gravity.CENTER; setSingleLine()
+        setPadding(ctx.dp(12), ctx.dp(9), ctx.dp(12), ctx.dp(9))
+        isClickable = true
+        setOnClickListener { action() }
+        styleChip(this, false)
+    }
+
+fun styleChip(chip: android.widget.TextView, on: Boolean) {
+    val t = Themes.current
+    val ctx = chip.context
+    chip.setTextColor(if (on) t.bg else t.text)
+    chip.background = android.graphics.drawable.GradientDrawable().apply {
+        cornerRadius = ctx.dp(8).toFloat()
+        setColor(if (on) t.text else t.card)
+        setStroke(ctx.dp(1), t.text and 0x00FFFFFF or 0x33000000)
+    }
+}

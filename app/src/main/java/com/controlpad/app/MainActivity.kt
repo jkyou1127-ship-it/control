@@ -56,11 +56,11 @@ class MainActivity : BaseActivity() {
         header.addView(Button(this).apply {
             text = "✎ 그림 레이아웃"
             setOnClickListener {
-                // 빈 레이아웃을 만들고 바로 그림 에디터를 연다: 손으로 그린 그림이 그대로 버튼이 된다.
+                // 빈 레이아웃을 만들고 그리기를 켠 편집 화면을 연다: 손으로 그린 그림이 그대로 버튼이 된다.
                 askName("그림 레이아웃 이름", "그림 레이아웃") { name ->
                     val l = PadLayout(name = name)
                     LayoutStore.save(this@MainActivity, l)
-                    open(SketchActivity::class.java, l.id)
+                    startActivity(Intent(this@MainActivity, EditorActivity::class.java).putExtra("id", l.id).putExtra("sketch", true))
                 }
             }
         })
@@ -83,6 +83,7 @@ class MainActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         Updater.autoCheck(this)
+        Labs.refresh()
         // 업데이트한 뒤 처음 켰을 때 한 번, 무엇이 바뀌었는지 보여 준다(처음 설치했을 때는 보여 주지 않는다).
         val seen = Link.prefs.getString("seenVersion", null)
         val now = Updater.installedName(this)
@@ -128,7 +129,9 @@ class MainActivity : BaseActivity() {
                         menu.add("그림 에디터"); menu.add("이름 변경"); menu.add("복제"); menu.add("파일로 저장"); menu.add("삭제")
                         setOnMenuItemClickListener { item ->
                             when (item.title) {
-                                "그림 에디터" -> open(SketchActivity::class.java, l.id)
+                                "그림 에디터" -> startActivity(
+                                    Intent(this@MainActivity, EditorActivity::class.java).putExtra("id", l.id).putExtra("sketch", true),
+                                )
                                 "이름 변경" -> askName("이름 변경", l.name) { l.name = it; LayoutStore.save(this@MainActivity, l); refresh() }
                                 "복제" -> {
                                     val c = PadLayout(name = l.name + " 복사본", slide = l.slide,

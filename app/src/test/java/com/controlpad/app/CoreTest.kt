@@ -498,4 +498,21 @@ class CoreTest {
         }
         assertEquals(Turbo.timing(PadButton.MAX_RATE), Turbo.timing(999))
     }
+
+    @Test
+    fun labsMatchThePublishedListAndRequestsAreWellFormed() {
+        // 평가단 자동화(scripts/panel.py)는 release/labs.json 에 있는 기능만 정식으로 올린다.
+        val published = JSONObject(java.io.File("../release/labs.json").readText())
+        val names = published.getJSONArray("features").let { a -> (0 until a.length()).map { a.getString(it) } }
+        assertEquals(Labs.features.map { it.id }, names)
+        assertTrue(Labs.features.all { Regex("^[a-z0-9][a-z0-9-]{0,39}$").matches(it.id) })
+
+        assertEquals(setOf("kps"), Labs.parseGraduated("""{"graduated":["kps","unknown-feature"]}"""))
+        assertEquals(emptySet<String>(), Labs.parseGraduated("{}"))
+        assertEquals("[정식 요청] 빌드 1.21", Labs.buildTitle("1.21"))
+        assertEquals("[정식 요청] 실험실 kps", Labs.labTitle("kps"))
+        val url = Labs.requestUrl(Labs.buildTitle("1.21"), "본문 & 줄\n바꿈")
+        assertTrue(url.startsWith("https://github.com/jkyou1127-ship-it/control/issues/new?title=%5B"))
+        assertFalse(url.contains(" ") || url.contains("\n") || url.substringAfter("body=").contains("&"))
+    }
 }

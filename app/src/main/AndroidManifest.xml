@@ -38,9 +38,6 @@
             android:screenOrientation="sensorLandscape" />
         <activity android:name=".SettingsActivity" />
         <activity android:name=".ThemeEditorActivity" />
-        <activity
-            android:name=".SketchActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:screenOrientation="sensorLandscape" />
+        <activity android:name=".LabsActivity" />
     </application>
 </manifest>
