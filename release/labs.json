@@ -39,6 +39,7 @@
   ],
   "hidden": [
     "combo",
+    "max-brightness",
     "press-pop",
     "strong-haptic"
   ],
