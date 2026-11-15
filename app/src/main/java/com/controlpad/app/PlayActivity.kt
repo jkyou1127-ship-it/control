@@ -211,6 +211,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labHideStatus = Labs.isOn("hide-status")
     private val labSound = Labs.isOn("press-sound")
     private val labHistory = Labs.isOn("key-history")
+    /** 최근 입력 기록을 남겨야 하는지: 실험실 표시가 켜져 있거나, 최근 입력 기록 패널을 넣어 둔 경우. */
+    private val recordHistory = labHistory || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.HISTORY }
     private val history = ArrayDeque<String>()          // 최근에 누른 버튼의 키들
     private val audio = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
 
@@ -221,7 +223,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         lastPress = now
         total++
         if (labSound) audio?.playSoundEffect(android.media.AudioManager.FX_KEY_CLICK, 0.6f)
-        if (labHistory) {
+        if (recordHistory) {
             Combo.remember(history, if (b.mode == PadButton.MODE_MACRO) "매크로" else Keys.combo(b.keys))
         }
     }
@@ -745,11 +747,17 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 if (now - lastPress > Combo.WINDOW_MS) combo = 0
                 val n = if (kind == DisplayKind.KPS) kps() else 0
                 rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
-                painter.drawDisplay(c, b, rect, false, DisplayKind.value(kind, n, combo, total, now - startedAt), false)
+                val shown = when (kind) {
+                    DisplayKind.BATTERY -> battery()
+                    DisplayKind.HISTORY -> history.joinToString("  ›  ").ifEmpty { "—" }
+                    DisplayKind.STATUS -> (if (connected) "● " else "○ ") + status
+                    else -> DisplayKind.value(kind, n, combo, total, now - startedAt)
+                }
+                painter.drawDisplay(c, b, rect, false, shown, false)
                 when (kind) {
                     DisplayKind.KPS -> if (n > 0) postInvalidateDelayed(200)
                     DisplayKind.COMBO -> if (combo > 0) postInvalidateDelayed(250)
-                    DisplayKind.TIMER -> postInvalidateDelayed(1000)
+                    DisplayKind.TIMER, DisplayKind.BATTERY -> postInvalidateDelayed(1000)
                 }
                 continue
             }

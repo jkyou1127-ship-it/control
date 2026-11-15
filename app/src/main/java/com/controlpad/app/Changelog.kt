@@ -13,6 +13,7 @@ object Changelog {
     class Entry(val version: String, val notes: List<String>)
 
     val entries = listOf(
+        Entry("1.32", listOf("＋추가에 콤보, 총 입력 수, 실행 시간, 배터리·시각, 최근 입력 기록, 연결 상태 패널 추가 (초당 입력 수 패널처럼 원하는 곳에 배치)")),
         Entry("1.31", listOf(
             "실험실 전체 켜기/끄기 (설정, 실험실 화면)",
             "알파·정식으로 올라간 실험실 기능: 동작을 바꾸는 기능은 설정 화면의 켜기/끄기로, 버튼·도구 기능은 버튼으로 들어감",

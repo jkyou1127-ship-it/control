@@ -679,4 +679,14 @@ class CoreTest {
         assertEquals(null, Labs.feature("unknown"))
         assertEquals("초당 입력 수 표시", Labs.feature("kps")?.title)
     }
+
+    @Test
+    fun everyStatusDisplayHasAPanel() {
+        assertEquals(8, DisplayKind.names.size)
+        for (k in listOf(DisplayKind.BATTERY, DisplayKind.HISTORY, DisplayKind.STATUS)) {
+            val p = PadButton(0f, 0f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = k)
+            assertEquals(k, DisplayKind.of(PadButton.fromJson(JSONObject(p.toJson().toString()))))
+        }
+        assertEquals("최근 입력 기록 표시", DisplayKind.editorLabel(PadButton(0f, 0f, 0.1f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = DisplayKind.HISTORY)))
+    }
 }

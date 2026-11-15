@@ -102,9 +102,12 @@ class EditorActivity : BaseActivity() {
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
         }
-        add("초당 입력 수 패널") {
+        // 초당 입력 수처럼 화면에 놓는 표시 패널들. 실험실 기능을 켜지 않아도 쓸 수 있다.
+        for (kind in DisplayKind.names.indices.filter { it != DisplayKind.KEYS }) add(DisplayKind.names[kind] + " 패널") {
+            val wide = kind == DisplayKind.HISTORY || kind == DisplayKind.STATUS
             val t = PadButton(
-                0.4f, 0.03f, 0.2f, 0.12f, type = PadButton.TYPE_DISPLAY, mode = DisplayKind.KPS, color = PadButton.PALETTE[0],
+                if (wide) 0.3f else 0.4f, 0.03f, if (wide) 0.4f else 0.2f, 0.12f,
+                type = PadButton.TYPE_DISPLAY, mode = kind, color = PadButton.PALETTE[0],
             )
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)

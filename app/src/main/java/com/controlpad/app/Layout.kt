@@ -680,8 +680,11 @@ object DisplayKind {
     const val COMBO = 2      // 콤보
     const val TOTAL = 3      // 총 입력 수
     const val TIMER = 4      // 실행 시간
+    const val BATTERY = 5    // 배터리 · 시각
+    const val HISTORY = 6    // 최근 입력 기록
+    const val STATUS = 7     // 연결 상태
 
-    val names = listOf("눌리고 있는 키", "초당 입력 수", "콤보", "총 입력 수", "실행 시간")
+    val names = listOf("눌리고 있는 키", "초당 입력 수", "콤보", "총 입력 수", "실행 시간", "배터리 · 시각", "최근 입력 기록", "연결 상태")
 
     /** 예전 파일이나 엉뚱한 값은 '눌리고 있는 키'로 본다. */
     fun of(b: PadButton): Int = if (b.mode in names.indices) b.mode else KEYS
