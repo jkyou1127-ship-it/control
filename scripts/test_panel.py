@@ -128,6 +128,8 @@ class PanelTest(unittest.TestCase):
     def test_lab_goes_to_all_alpha_users_first_then_stable(self):
         self.assertEqual(panel.WAITS["lab"], (600, 1200))                   # 10분 뒤 알파, 그로부터 20분 뒤 정식
         self.assertEqual(panel.WAITS["build"], (1800, 0))
+        self.assertEqual(panel.WAITS["hide"], (0, 0))                       # 숨김은 바로
+        self.assertIn("바로", panel.plan("hide", "kps"))
         self.assertIn("10분 뒤", panel.plan("lab", "kps"))
         self.assertIn("30분 뒤", panel.plan("build", "1.21"))
         panel.apply("lab", "kps", self.dir, stage="alpha")

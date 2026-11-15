@@ -13,6 +13,7 @@ object Changelog {
     class Entry(val version: String, val notes: List<String>)
 
     val entries = listOf(
+        Entry("1.36", listOf("평가단: 숨김 건의는 기다리지 않고 바로 숨김 (알파)")),
         Entry("1.35.1", listOf("버튼을 누를 때 소리가 나지 않던 문제 수정 (기기의 터치 소리 설정과 관계없이 남)")),
         Entry("1.35", listOf(
             "실험실: 큰 크기 조절 손잡이, 삭제 전에 확인, 제자리 복제, 누를 때 화면 테두리 번쩍, 상태 표시를 아래로 (알파)",

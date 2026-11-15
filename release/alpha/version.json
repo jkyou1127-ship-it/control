@@ -1,5 +1,5 @@
 {
-  "versionCode": 63,
-  "versionName": "1.35.1",
-  "notes": "버튼을 누를 때 소리가 나지 않던 문제를 고쳤습니다."
+  "versionCode": 64,
+  "versionName": "1.36",
+  "notes": "평가단: 숨김 건의는 기다리지 않고 바로 숨깁니다."
 }
