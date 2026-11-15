@@ -56,10 +56,29 @@ class PlayActivity : BaseActivity() {
         show(layout)
     }
 
+    private var current: PadLayout? = null
+
     private fun show(layout: PadLayout) {
+        current = layout
         view = PlayView(this, layout).also {
             it.onSwitch = { id -> switchTo(id) }
+            it.onOption = { id -> toggleOption(id) }
             setContentView(it)
+        }
+    }
+
+    /** 옵션 버튼: 설정을 바꾸고, 바뀐 설정으로 실행 화면을 다시 띄운다(눌려 있던 키는 모두 뗀다). */
+    private fun toggleOption(id: String) {
+        val on = Options.toggle(id)
+        android.widget.Toast.makeText(this, Options.title(id) + if (on) " 켬" else " 끔", android.widget.Toast.LENGTH_SHORT).show()
+        view?.releaseAll()
+        current?.let { show(it) }
+        applyWindowOptions()
+    }
+
+    private fun applyWindowOptions() {
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (Labs.isOn("max-brightness")) 1f else android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         }
     }
 
@@ -87,7 +106,7 @@ class PlayActivity : BaseActivity() {
                 View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         }
-        if (Labs.isOn("max-brightness")) window.attributes = window.attributes.apply { screenBrightness = 1f }
+        applyWindowOptions()
         Link.setActive(true)
         ui.post(tick)
     }
@@ -228,6 +247,9 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         while (pressTimes.isNotEmpty() && now - pressTimes.first() > 1000) pressTimes.removeFirst()
         return pressTimes.size
     }
+
+    /** 옵션 버튼을 눌렀을 때 불린다(바꿀 옵션의 이름). */
+    var onOption: (String) -> Unit = {}
 
     /** 레이아웃 전환 버튼을 눌렀을 때 불린다(넘어갈 레이아웃의 id). */
     var onSwitch: (String) -> Unit = {}
@@ -526,6 +548,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             onSwitch(b.link)
             return
         }
+        if (b.isOption) {
+            if (haptic) performHapticFeedback(hapticKind)
+            post { onOption(b.link) }       // 터치 처리가 끝난 뒤에 화면을 바꾼다
+            return
+        }
         notePress(b)
         // 한/영을 누르면 글자 키의 표시도 함께 바꾼다(키를 R Alt 로 바꿔 둔 한/영 버튼 포함).
         if (Keys.HANGUL in b.keys || b.label == "한/영") hangul = !hangul
@@ -704,7 +731,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         for (i in buttons.indices) {
             val b = buttons[i]
             if (!groupVisible(b.group)) continue
-            val lit = if (b.isShow) groupVisible(b.target)
+            val lit = if (b.isOption) Options.isOn(b.link)
+            else if (b.isShow) groupVisible(b.target)
             else if (b.isKnob) holds[i] > 0
             else flash[i] || toggled[i] || timedOn[i] ||
                 (holds[i] > 0 && (b.mode == PadButton.MODE_HOLD || b.mode == PadButton.MODE_TURBO))

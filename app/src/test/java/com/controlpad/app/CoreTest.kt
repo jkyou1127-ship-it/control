@@ -651,4 +651,19 @@ class CoreTest {
         assertTrue(Labs.plan("build").contains("30분"))
         assertTrue(Labs.plan("hide").contains("5분") && Labs.plan("restore").contains("5분"))
     }
+
+    @Test
+    fun optionButtonsCoverSettingsAndRealLabsFeatures() {
+        val ids = Labs.features.map { it.id }
+        assertTrue(Options.labIds.all { it in ids })                       // 없는 실험실 기능을 가리키지 않는다
+        val all = Options.all
+        assertEquals(all.size, all.map { it.id }.toSet().size)
+        assertEquals(listOf("haptic", "show-pressed", "key-names"), all.take(3).map { it.id })
+        assertEquals(3 + Options.labIds.size, all.size)
+        assertEquals("초당 입력 수 표시", Options.title("kps"))
+        assertEquals("옵션", Options.title("unknown"))
+        val b = PadButton(0f, 0f, 0.1f, 0.1f, type = PadButton.TYPE_OPTION, link = "combo")
+        val back = PadButton.fromJson(JSONObject(b.toJson().toString()))
+        assertTrue(back.isOption && back.link == "combo")
+    }
 }

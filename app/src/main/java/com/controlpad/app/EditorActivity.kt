@@ -163,6 +163,11 @@ class EditorActivity : BaseActivity() {
             view.selection.clear(); view.selection += keys
             view.invalidate()
         }
+        if (Labs.isOn("option-buttons")) add("옵션 버튼 (설정 켜기/끄기)") {
+            val t = PadButton(0.43f, 0.03f, 0.14f, 0.12f, type = PadButton.TYPE_OPTION, link = "haptic", color = PadButton.PALETTE[6])
+            pad.buttons += t; view.selected = t; view.invalidate()
+            editButton(t, isNew = true)
+        }
         add("레이아웃 전환 버튼") {
             if (LayoutStore.list(this).none { it.id != pad.id }) {
                 android.widget.Toast.makeText(this, "넘어갈 다른 레이아웃이 없습니다. 먼저 레이아웃을 하나 더 만드세요", android.widget.Toast.LENGTH_LONG).show()
@@ -564,6 +569,7 @@ class EditorActivity : BaseActivity() {
         if (b.isDisplay) { editDisplay(b, isNew); return }
         if (b.isImage) { editImage(b); return }
         if (b.isSwitch) { editSwitch(b, isNew); return }
+        if (b.isOption) { editOption(b, isNew); return }
         if (b.isKnob) { editKnob(b, isNew); return }
         if (b.isPad || b.isMouse) { editPad(b, isNew); return }
         val keys = b.keys.toMutableList()
@@ -952,6 +958,44 @@ class EditorActivity : BaseActivity() {
                 val to = others.getOrNull(target.selectedItemPosition)
                 b.link = to?.id ?: ""
                 b.label = label.text.toString().trim().ifEmpty { "→ " + (to?.name ?: "?") }
+                b.group = group.selectedItemPosition
+                b.color = color
+                view.invalidate()
+            }
+            .setNegativeButton("취소", null)
+            .show().wide()
+    }
+
+    /** 실행 중에 누르면 고른 설정을 켜고 끄는 버튼. 켜져 있는 동안 버튼이 눌린 색으로 보인다. */
+    private fun editOption(b: PadButton, isNew: Boolean) {
+        val options = Options.all
+        var color = b.color
+        val m = dp(20)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
+        box.addView(TextView(this).apply {
+            text = "실행 화면에서 누를 때마다 아래 설정이 켜지고 꺼집니다. 켜져 있는 동안 버튼이 눌린 색으로 보입니다.\n" +
+                "설정 화면과 실험실의 같은 설정도 함께 바뀝니다."
+        })
+        box.addView(TextView(this).apply { text = "켜고 끌 설정"; setPadding(0, dp(8), 0, 0) })
+        val which = Spinner(this).apply {
+            adapter = ArrayAdapter(this@EditorActivity, android.R.layout.simple_spinner_dropdown_item, options.map { it.title })
+            setSelection(options.indexOfFirst { it.id == b.link }.coerceAtLeast(0))
+        }
+        box.addView(which)
+        box.addView(TextView(this).apply { text = "버튼에 표시할 이름 (비우면 설정 이름)"; setPadding(0, dp(8), 0, 0) })
+        val label = EditText(this).apply { setText(b.label); setSingleLine() }
+        box.addView(label)
+        val group = groupSpinner(b.group)
+        box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
+        box.addView(group)
+        box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
+
+        AlertDialog.Builder(this).setTitle(if (isNew) "새 옵션 버튼" else "옵션 버튼 속성")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인") { _, _ ->
+                checkpoint()
+                b.link = options.getOrNull(which.selectedItemPosition)?.id ?: "haptic"
+                b.label = label.text.toString().trim()
                 b.group = group.selectedItemPosition
                 b.color = color
                 view.invalidate()

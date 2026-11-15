@@ -21,7 +21,8 @@
     "hide-status",
     "press-sound",
     "key-history",
-    "editor-coords"
+    "editor-coords",
+    "option-buttons"
   ],
   "graduated": [
     "align",

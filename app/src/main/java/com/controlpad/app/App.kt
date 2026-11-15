@@ -312,6 +312,7 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
         val combo = when {
             b.isShow -> "그룹 ${b.target} 표시"
             b.isSwitch -> "레이아웃 전환"
+            b.isOption -> "옵션 켜기/끄기"
             b.isKnob -> Knob.describe(b)
             plain && b.mode == PadButton.MODE_MACRO -> "매크로 ${b.macro.size}단계"
             plain && b.mode == PadButton.MODE_TURBO -> Keys.combo(b.keys) + " ×${b.rate}/초"
@@ -323,7 +324,7 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
             else -> b.label + "/" + b.label2
         }
         if (photo != null && name.isEmpty()) return      // 사진이 있으면 이름을 적었을 때만 글자를 올린다
-        val label = name.ifEmpty { if (b.isShow) "그룹 ${b.target}" else if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
+        val label = name.ifEmpty { if (b.isOption) Options.title(b.link) else if (b.isShow) "그룹 ${b.target}" else if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
         text.color = if (pressed) onLit else if (b.textColor != 0) b.textColor else if (theme.colorText) b.color else theme.text
         text.textSize = (r.height() * 0.3f)
             .coerceAtMost(r.width() * (if (b.isKnob) 0.9f else 1.5f) / label.length.coerceAtLeast(2))

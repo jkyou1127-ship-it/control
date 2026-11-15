@@ -48,6 +48,21 @@ class SettingsActivity : BaseActivity() {
         root.addView(TextView(this).apply { text = "설정"; textSize = 24f; setTextColor(Themes.current.text) })
         status = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
         root.addView(status)
+        // 실험실과 평가단은 알파 빌드를 받는 사람에게만 보인다. 자주 쓰므로 맨 위에 둔다.
+        if (Updater.alpha) root.addView(Button(this).apply {
+            text = "실험실 · 평가단"
+            setOnClickListener {
+                // 중계 서버 주소가 바뀌었을 수 있으니 열기 전에 한 번 받아 온다(안 되면 전에 받은 값으로 연다).
+                isEnabled = false
+                Thread {
+                    Labs.fetchNow()
+                    runOnUiThread {
+                        isEnabled = true
+                        if (!isFinishing && !isDestroyed) startActivity(Intent(this@SettingsActivity, LabsActivity::class.java))
+                    }
+                }.start()
+            }
+        })
 
         root.addView(title("연결 방식"))
         val group = RadioGroup(this)
@@ -188,21 +203,6 @@ class SettingsActivity : BaseActivity() {
         })
         root.addView(Button(this).apply { text = "업데이트 확인"; setOnClickListener { Updater.check(this@SettingsActivity) } })
         root.addView(Button(this).apply { text = "업데이트 내역"; setOnClickListener { showChangelog(this@SettingsActivity) } })
-        // 실험실과 평가단은 알파 빌드를 받는 사람에게만 보인다.
-        if (Updater.alpha) root.addView(Button(this).apply {
-            text = "실험실 · 평가단"
-            setOnClickListener {
-                // 중계 서버 주소가 바뀌었을 수 있으니 열기 전에 한 번 받아 온다(안 되면 전에 받은 값으로 연다).
-                isEnabled = false
-                Thread {
-                    Labs.fetchNow()
-                    runOnUiThread {
-                        isEnabled = true
-                        if (!isFinishing && !isDestroyed) startActivity(Intent(this@SettingsActivity, LabsActivity::class.java))
-                    }
-                }.start()
-            }
-        })
 
         scroll = ScrollView(this).apply { addView(root) }
         setContentView(scroll)

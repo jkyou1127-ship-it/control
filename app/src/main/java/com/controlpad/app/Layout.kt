@@ -49,6 +49,7 @@ class PadButton(
     var textScale: Int = 100,
 ) {
     val isSwitch: Boolean get() = type == TYPE_SWITCH
+    val isOption: Boolean get() = type == TYPE_OPTION
     val isImage: Boolean get() = type == TYPE_IMAGE
     val isShow: Boolean get() = type == TYPE_SHOW
     val isStick: Boolean get() = type == TYPE_STICK
@@ -114,6 +115,7 @@ class PadButton(
         const val TYPE_DISPLAY = 6   // 지금 눌리고 있는 키를 보여 주는 패널(누를 수 없음)
         const val TYPE_IMAGE = 7     // 꾸미기용 사진(누를 수 없음)
         const val TYPE_SWITCH = 8    // 누르면 link 의 레이아웃으로 넘어가는 버튼
+        const val TYPE_OPTION = 9    // 누르면 link 의 설정(옵션)을 켜고 끄는 버튼
         const val GROUPS = 8
         const val KNOB_UNTIL_STOP = 0    // 키 방식 노브: 돌리는 동안만 누르고 멈추면 뗀다 (mode 값)
         const val KNOB_UNTIL_RELEASE = 1 // 키 방식 노브: 돌리기 시작하면 손을 뗄 때까지 계속 누른다
