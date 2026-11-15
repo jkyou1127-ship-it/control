@@ -26,6 +26,7 @@
   ],
   "graduated": [
     "align",
+    "battery",
     "distribute",
     "editor-coords",
     "exit-guard",
@@ -50,7 +51,6 @@
     "total"
   ],
   "alpha": [
-    "battery",
     "option-buttons"
   ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
