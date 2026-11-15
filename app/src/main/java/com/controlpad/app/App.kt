@@ -38,6 +38,7 @@ open class BaseActivity : Activity() {
      * 내용이 가려지지 않게 그만큼 안쪽 여백을 준다(그렇지 않은 빌드에서는 여백이 0 으로 들어온다).
      */
     override fun setContentView(view: android.view.View) {
+        Ui.restyle(view)
         super.setContentView(view)
         val l = view.paddingLeft; val t = view.paddingTop; val r = view.paddingRight; val b = view.paddingBottom
         view.setOnApplyWindowInsetsListener { v, insets ->
@@ -617,6 +618,7 @@ class FlowLayout(ctx: Context) : android.view.ViewGroup(ctx) {
 
 /** 대화상자를 화면 폭에 가깝게 넓힌다(기본 폭은 태블릿에서 좁아 내용이 잘린다). */
 fun android.app.AlertDialog.wide(): android.app.AlertDialog {
+    Ui.restyle(window?.decorView)
     window?.setLayout((context.resources.displayMetrics.widthPixels * 0.92f).toInt(), android.view.WindowManager.LayoutParams.WRAP_CONTENT)
     return this
 }

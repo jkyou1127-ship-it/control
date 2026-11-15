@@ -41,11 +41,11 @@ class SettingsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pad = dp(16)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-        fun title(t: String) = TextView(this).apply { text = t; textSize = 18f; setTextColor(Themes.current.text); setPadding(0, pad, 0, dp(4)) }
+        val root = SectionedLayout(this).apply { setPadding(pad, pad, pad, pad) }
+        fun title(t: String) = Ui.section(this, t)
         fun note(t: String) = TextView(this).apply { text = t; textSize = 14f; setLineSpacing(0f, 1.2f) }
 
-        root.addView(TextView(this).apply { text = "설정"; textSize = 24f; setTextColor(Themes.current.text) })
+        root.addView(Ui.header(this, "설정", "연결 · 화면 · 테마 · 업데이트"))
         status = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
         root.addView(status)
         // 실험실과 평가단은 알파 빌드를 받는 사람에게만 보인다. 자주 쓰므로 맨 위에 둔다.

@@ -159,6 +159,7 @@ class ThemeEditorActivity : BaseActivity() {
             this.text = "저장한 테마는 설정의 테마 목록 맨 아래에 나옵니다. 배경이 밝으면 목록과 설정 화면도 밝은 모양으로 바뀝니다."
             setPadding(0, dp(8), 0, 0)
         })
+        Ui.restyle(form)
     }
 
     private fun save() {

@@ -5,6 +5,8 @@
 #   scripts/publish.sh --fix "고친 점"
 # 알파에만 올리고 정식은 건드리지 않는다(정식에는 수정만 따로 넣은 빌드를 올린 경우).
 #   scripts/publish.sh --alpha-only "고친 점"
+# 평가단이 OK 해야 정식에 올라가는 빌드(큰 개편 등). 다음 빌드를 낼 때도 자동으로 정식에 내려가지 않는다.
+#   scripts/publish.sh --needs-panel "바뀐 점"
 # 실행 전에 app/build.gradle.kts 의 versionCode / versionName 을 올려 둔다. 끝나면 커밋하고 푸시한다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -12,7 +14,9 @@ cd "$(dirname "$0")/.."
 fix=0
 promote=1
 if [ "${1:-}" = "--fix" ]; then fix=1; promote=0; shift; fi
+needs_panel=0
 if [ "${1:-}" = "--alpha-only" ]; then promote=0; shift; fi
+if [ "${1:-}" = "--needs-panel" ]; then promote=0; needs_panel=1; shift; fi
 notes="${1:?바뀐 점을 적어 주세요}"
 code=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
 name=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
@@ -30,16 +34,23 @@ if [ -f release/alpha/version.json ]; then
         echo "versionCode($code)가 알파에 올라가 있는 버전($old)보다 커야 합니다" >&2
         exit 1
     fi
+    # 지금 알파가 평가단 OK 를 기다리는 빌드면, 다음 빌드를 낼 때도 정식으로 내리지 않는다.
+    if [ "$promote" = 1 ] && grep -q '"needsPanel": true' release/alpha/version.json; then
+        echo "알파 빌드가 평가단 OK 를 기다리는 중이라 정식으로 내리지 않습니다" >&2
+        promote=0
+    fi
     if [ "$promote" = 1 ]; then
         cp release/alpha/version.json release/alpha/ControlPad.apk release/   # 알파 → 정식
     fi
 fi
 
 mkdir -p release/alpha
-python3 - "$code" "$name" "$notes" <<'PY'
+python3 - "$code" "$name" "$notes" "$needs_panel" <<'PY'
 import json, sys
-json.dump({"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "notes": sys.argv[3]},
-          open("release/alpha/version.json", "w"), ensure_ascii=False, indent=2)
+info = {"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "notes": sys.argv[3]}
+if sys.argv[4] == "1":
+    info["needsPanel"] = True       # 평가단 OK(빌드 정식 추가 건의)가 있어야 정식에 올라간다
+json.dump(info, open("release/alpha/version.json", "w"), ensure_ascii=False, indent=2)
 PY
 
 python3 receiver/test_receiver.py

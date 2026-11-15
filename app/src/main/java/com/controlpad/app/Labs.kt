@@ -75,8 +75,6 @@ object Labs {
         Feature("editor-coords", "위치 · 크기 표시", "편집 화면에서 선택한 것의 위치와 크기를 화면 대비 %로 보여 줍니다."),
         Feature("center-guides", "가운데 안내선", "편집 화면 가운데에 가로·세로 안내선을 그려, 좌우 대칭으로 놓기 쉽게 합니다."),
         Feature("long-press-edit", "길게 눌러 속성 열기", "편집 화면에서 버튼을 길게 누르면 바로 속성 창이 열립니다."),
-        Feature("touch-dots", "터치 위치 표시", "실행 화면에서 손가락이 닿은 자리에 원을 그려 보여 줍니다."),
-        Feature("hold-time", "누른 시간 표시", "실행 화면에서 누르고 있는 버튼 위에 몇 초째 누르고 있는지 보여 줍니다."),
         Feature("auto-dim", "쉬는 동안 어둡게", "실행 화면에서 30초 동안 아무것도 누르지 않으면 화면을 어둡게 합니다. 누르면 바로 돌아옵니다."),
         Feature("option-buttons", "옵션 버튼", "편집 화면 ＋추가에 '옵션 버튼'이 생깁니다. 실행 중에 누르면 진동, 키 표시, 실험실 기능 같은 설정을 바로 켜고 끕니다.", button = true),
     )
@@ -252,9 +250,9 @@ class LabsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pad = dp(16)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
+        val root = SectionedLayout(this).apply { setPadding(pad, pad, pad, pad) }
         val text = Themes.current.text
-        fun title(t: String) = root.addView(TextView(this).apply { this.text = t; textSize = 18f; setTextColor(text); setPadding(0, pad, 0, dp(4)) })
+        fun title(t: String) = root.addView(Ui.section(this, t))
         fun note(t: String) = root.addView(TextView(this).apply { this.text = t; textSize = 14f; setLineSpacing(0f, 1.2f) })
         // 중계 서버가 있으면 앱에서 바로 보내고(평가단 코드만 필요), 없으면 GitHub 이슈 화면을 연다.
         val viaRelay = Labs.relay.isNotEmpty()
@@ -286,7 +284,7 @@ class LabsActivity : BaseActivity() {
         fun chip(label: String, action: () -> Unit) =
             root.addView(toolChip(this, label, action), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
 
-        root.addView(TextView(this).apply { this.text = "실험실 · 평가단"; textSize = 24f; setTextColor(text) })
+        root.addView(Ui.header(this, "실험실 · 평가단", "다듬는 중인 기능을 써 보고 건의합니다"))
 
         title("평가단")
         if (viaRelay) {

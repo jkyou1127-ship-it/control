@@ -126,8 +126,12 @@ def apply(kind, target, release="release", alpha_dir=None, stage=None):
     """요청을 반영한다. stage 가 'alpha' 이면 실험실 기능 정식 추가의 1단계(알파 사용자 모두에게 켜기)만 한다."""
     if kind == "build":
         source = alpha_dir or os.path.join(release, "alpha")
-        for name in ("version.json", "ControlPad.apk"):
-            shutil.copyfile(os.path.join(source, name), os.path.join(release, name))
+        shutil.copyfile(os.path.join(source, "ControlPad.apk"), os.path.join(release, "ControlPad.apk"))
+        # 평가단 OK 를 받아 올라가는 것이므로, 정식 쪽 정보에는 '평가단 OK 필요' 표시를 남기지 않는다.
+        info = load(os.path.join(source, "version.json"))
+        info.pop("needsPanel", None)
+        with open(os.path.join(release, "version.json"), "w", encoding="utf-8") as f:
+            json.dump(info, f, ensure_ascii=False, indent=2)
     else:
         path = os.path.join(release, "labs.json")
         labs = load(path)

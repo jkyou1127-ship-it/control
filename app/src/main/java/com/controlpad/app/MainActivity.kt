@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -38,10 +39,19 @@ class MainActivity : BaseActivity() {
         val pad = dp(16)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
 
-        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        header.addView(TextView(this).apply { text = "ControlPad"; textSize = 24f; setTextColor(Themes.current.text) })
-        status = TextView(this).apply { textSize = 14f; setPadding(pad, 0, pad, 0) }
-        header.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
+        // 2.0: 위쪽은 제목 줄(이름 + 연결 상태 + 설정), 그 아래 도구 줄(가로로 밀 수 있음)
+        val top = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        top.addView(TextView(this).apply {
+            text = "ControlPad"; textSize = 26f; setTextColor(Themes.current.text); typeface = android.graphics.Typeface.DEFAULT_BOLD
+        })
+        status = TextView(this).apply {
+            textSize = 13f; setPadding(dp(10), dp(4), dp(10), dp(4))
+            background = Ui.rounded(this@MainActivity, Ui.surface(), 20, Ui.line())
+        }
+        top.addView(status, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(12) })
+        top.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        root.addView(top)
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(10), 0, dp(6)) }
         header.addView(Button(this).apply {
             text = "설정"
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
@@ -63,7 +73,7 @@ class MainActivity : BaseActivity() {
             show()
             setOnClickListener { Link.listSort = (Link.listSort + 1) % ListSort.names.size; show(); refresh() }
         })
-        header.addView(Button(this).apply { text = "＋ 새 레이아웃"; setOnClickListener { newLayout() } })
+        header.addView(Button(this).apply { text = "＋ 새 레이아웃"; tag = Ui.PRIMARY; setOnClickListener { newLayout() } })
         header.addView(Button(this).apply {
             text = "✎ 그림 레이아웃"
             setOnClickListener {
@@ -75,7 +85,7 @@ class MainActivity : BaseActivity() {
                 }
             }
         })
-        root.addView(header)
+        root.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(header) })
 
         search = android.widget.EditText(this).apply {
             hint = "레이아웃 검색"; setSingleLine()
@@ -142,8 +152,8 @@ class MainActivity : BaseActivity() {
         for (l in layouts) {
             val row = LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL
+                background = Ui.rounded(this@MainActivity, Ui.surface(), 14, Ui.line())
                 if (compact) setPadding(dp(10), dp(2), dp(4), dp(2)) else setPadding(dp(12), dp(8), dp(4), dp(8))
-                setBackgroundColor(Themes.current.card)
                 isClickable = true
                 setOnClickListener { open(PlayActivity::class.java, l.id) }
             }
@@ -197,8 +207,9 @@ class MainActivity : BaseActivity() {
                     }.show()
                 }
             }, LinearLayout.LayoutParams(dp(56), -2))
-            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         }
+        Ui.restyle(list)       // 줄마다 새로 만든 버튼들에도 2.0 모양을 입힌다
     }
 
     /** 홈 화면에 이 레이아웃을 바로 실행하는 바로가기를 만든다. */

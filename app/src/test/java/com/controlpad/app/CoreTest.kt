@@ -753,7 +753,9 @@ class CoreTest {
         val labIds = Labs.features.map { it.id }.toSet()
         val permanentIds = Labs.permanent.map { it.id }.toSet()
         assertTrue(labIds.intersect(permanentIds).isEmpty())                 // 실험실 목록과 겹치지 않는다
-        assertTrue("align" in permanentIds && "touch-dots" in permanentIds)
+        assertTrue("align" in permanentIds && "auto-dim" in permanentIds)
+        assertEquals(null, Labs.feature("touch-dots"))                         // 평가단이 숨긴 기능은 지움
+        assertEquals(null, Labs.feature("hold-time"))
         assertEquals(20, listOf("press-count", "release-haptic", "release-sound", "hide-labels", "dim-buttons", "pressed-outline",
             "kps-peak", "clock-seconds", "session-summary", "status-large", "snap-edges", "selection-count", "grid-dots",
             "show-hidden-outline", "nudge", "random-color", "list-count", "list-compact", "open-last", "list-kinds").count { it in labIds })

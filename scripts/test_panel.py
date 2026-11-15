@@ -151,6 +151,14 @@ class PanelTest(unittest.TestCase):
         panel.apply("restore", "kps", self.dir)                              # 한 번 더 복귀하면 실험실로
         self.assertEqual(panel.load(os.path.join(self.dir, "labs.json"))["alpha"], [])
 
+    def test_needs_panel_flag_is_dropped_on_promotion(self):
+        self.write("alpha/version.json", {"versionCode": 47, "versionName": "2.0", "needsPanel": True})
+        self.assertIsNone(self.evaluate("[정식 요청] 빌드 2.0")[2])
+        panel.apply("build", "2.0", self.dir)
+        stable = panel.load(os.path.join(self.dir, "version.json"))
+        self.assertEqual(stable["versionName"], "2.0")
+        self.assertNotIn("needsPanel", stable)
+
     def test_real_release_files_are_consistent(self):
         release = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "release")
         labs = panel.load(os.path.join(release, "labs.json"))
