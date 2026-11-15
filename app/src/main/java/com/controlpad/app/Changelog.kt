@@ -10,12 +10,27 @@ import android.widget.TextView
  * 예전에 1.x 로 불리던 버전은 BETA, 2.x 로 불리던 버전은 1.x 다.
  * UI 대개편 빌드도 평가단 OK 전까지는 1.x 로 부른다(잠깐 2.0 · Uwe.x 로 부르던 1.39~1.41). 평가단이 2.0(UI 대개편)을 승인한 뒤부터는
  * NCP#1.00.a, NCP#1.00.b … 처럼 업데이트할 때마다 끝 알파벳을 하나씩 올렸다.
- * NES2 부터는 빌드 번호(NES2, NES3 …)와 코드명(NES1)을 쓴다.
+ * NES2 에서는 빌드 번호 NES2, 코드명 NES1 을 썼다.
+ * NWE 01 부터는 versionName 이 코드명(hd12, 버전 확인용)이고, 빌드 번호(NWE 01)는 화면 표시용으로 따로 둔다.
  */
 object Changelog {
-    class Entry(val version: String, val notes: List<String>)
+    /** version 은 코드명(versionName), build 는 화면에 보여 줄 빌드 번호(NWE 01 부터). */
+    class Entry(val version: String, val notes: List<String>, val build: String = "") {
+        val label: String get() = if (build.isEmpty()) version else "$build ($version)"
+    }
 
     val entries = listOf(
+        Entry("hd12", listOf(
+            "버전 표기: 빌드 번호 NWE 01, 코드명 hd12 (코드명은 버전 확인에, 빌드 번호는 화면 표시에 씀)",
+            "새 버전 알림 창 새 디자인: 새 빌드 번호를 크게, 바뀐 점과 진행 막대를 한 창에",
+            "모바일 기능 10개: 실행 화면 최대 밝기, 볼륨 버튼 막기, 실행 시간 표시, 화면 캡처 막기, PC 일시정지 크게 알림, " +
+                "시스템 다크 모드 따라가기, 다시 연결되면 알림, 배터리 부족 알림, 화면 자동 꺼짐 허용, 목록 카드 크기 (기능 · 기타 > 모바일)",
+            "레이아웃 프리셋 5개: 리듬게임 5키 · 6키 · 8키, 방향키 + 액션, 방송 · 녹화",
+            "오프셋 기본 프리셋 5개 추가 (모두 15개)",
+            "UI 소폭 수정: 연결 상태 알약 테두리 색, 묶음 제목 왼쪽 강조 막대",
+            "기능 · 기타 탭 새 디자인: 켜진 개수 요약, 기능 검색, 묶음(기능 · 모바일 · 기타)별 카드, 줄마다 제목 · 설명 · 스위치",
+            "평가단이 정식으로 올린 '누른 횟수 표시', '뗄 때 소리'를 실험실에서 내리고 늘 있는 기능으로",
+        ), build = "NWE 01"),
         Entry("NES2", listOf(
             "버전 표기: 빌드 번호 NES2, 코드명 NES1",
             "UI 개편: 레이아웃 목록을 카드 격자로(▶ 실행 · 편집 · ⋮), 설정 버튼은 제목 줄 오른쪽으로, 더 둥근 카드와 버튼",
@@ -136,7 +151,7 @@ object Changelog {
     /** 화면에 보여 줄 글. latestOnly 면 가장 최신 버전의 내용만. */
     fun text(latestOnly: Boolean = false): String =
         (if (latestOnly) entries.take(1) else entries).joinToString("\n\n") { e ->
-            e.version + "\n" + e.notes.joinToString("\n") { "  · $it" }
+            e.label + "\n" + e.notes.joinToString("\n") { "  · $it" }
         }
 }
 

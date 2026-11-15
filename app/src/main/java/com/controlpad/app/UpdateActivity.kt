@@ -35,9 +35,9 @@ class UpdateActivity : BaseActivity() {
             background = Ui.rounded(this@UpdateActivity, Ui.surface(), 18, Ui.accent() and 0x00FFFFFF or 0x88000000.toInt())
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, dp(8), 0, dp(8)) }
         }
-        hero.addView(muted("지금 쓰는 빌드  ·  코드명 " + Updater.CODENAME))
+        hero.addView(muted("지금 쓰는 빌드  ·  코드명 " + Updater.installedName(this)))
         hero.addView(TextView(this).apply {
-            text = Updater.installedName(this@UpdateActivity); textSize = 30f
+            text = Updater.BUILD; textSize = 30f
             typeface = Typeface.DEFAULT_BOLD; setTextColor(t.text)
         })
         hero.addView(TextView(this).apply {
@@ -130,7 +130,7 @@ class UpdateActivity : BaseActivity() {
             setPadding(dp(8), dp(2), 0, dp(14))
         }
         body.addView(TextView(this).apply {
-            text = e.version + if (first) "  ·  최신" else ""
+            text = e.label + if (first) "  ·  최신" else ""
             textSize = 16f; typeface = Typeface.DEFAULT_BOLD
             setTextColor(if (first) Ui.accent() else t.text)
         })
@@ -154,8 +154,8 @@ class UpdateActivity : BaseActivity() {
                 fun show(v: TextView, info: Updater.Info?) {
                     v.text = when {
                         info == null -> "확인 못 함"
-                        info.code > mine -> info.name + "  ↑"
-                        else -> info.name
+                        info.code > mine -> info.build.ifEmpty { info.name } + "  ↑"
+                        else -> info.build.ifEmpty { info.name }
                     }
                     v.setTextColor(if (info != null && info.code > mine) Ui.accent() else Themes.current.text)
                 }

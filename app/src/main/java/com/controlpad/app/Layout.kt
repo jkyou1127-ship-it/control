@@ -324,6 +324,8 @@ object Templates {
     val names = listOf(
         "빈 레이아웃", "리듬게임 4키 (D F J K)", "리듬게임 7키 (S D F Space J K L)", "작업용 단축키",
         "사운드 볼텍스 · KSM (노브 2개)", "트랙패드 + 마우스 버튼", "숫자 키패드", "영문 키보드", "한글 키보드",
+        "리듬게임 5키 (D F Space J K)", "리듬게임 6키 (S D F J K L)", "리듬게임 8키 (A S D F J K L ;)",
+        "방향키 + 액션 (Z X C V)", "방송 · 녹화 (F9~F12, 장면 1~4)",
     )
 
     fun create(index: Int, name: String): PadLayout = when (index) {
@@ -338,6 +340,11 @@ object Templates {
         7 -> PadLayout(name = name, buttons = Keyboard.create(false).toMutableList())
         8 -> PadLayout(name = name, buttons = Keyboard.create(true).toMutableList())
         6 -> PadLayout(name = name, buttons = Keypad.create(true, 0.3f, 0.03f, 0.4f, 0.94f).toMutableList())
+        9 -> row(name, listOf("D" to 0x07, "F" to 0x09, "Space" to 0x2C, "J" to 0x0D, "K" to 0x0E))
+        10 -> row(name, listOf("S" to 0x16, "D" to 0x07, "F" to 0x09, "J" to 0x0D, "K" to 0x0E, "L" to 0x0F))
+        11 -> row(name, listOf("A" to 0x04, "S" to 0x16, "D" to 0x07, "F" to 0x09, "J" to 0x0D, "K" to 0x0E, "L" to 0x0F, ";" to 0x33))
+        12 -> arrowsAndActions(name)
+        13 -> streaming(name)
         else -> PadLayout(name = name)
     }
 
@@ -372,6 +379,37 @@ object Templates {
         }
         l.buttons += PadButton(0.2f, 0.76f, 0.29f, 0.2f, "FX-L", mutableListOf(0x06), color = p[1])
         l.buttons += PadButton(0.51f, 0.76f, 0.29f, 0.2f, "FX-R", mutableListOf(0x10), color = p[1])
+        return l
+    }
+
+    /** 왼쪽에 방향키 십자, 오른쪽에 액션 키 네 개(Z X C V). */
+    private fun arrowsAndActions(name: String): PadLayout {
+        val l = PadLayout(name = name)
+        val p = PadButton.PALETTE
+        val s = 0.2f
+        fun key(x: Float, y: Float, label: String, usage: Int, color: Int) =
+            PadButton(x, y, s, 0.29f, label, mutableListOf(usage), color = color)
+        l.buttons += key(0.04f + s, 0.04f, "↑", 0x52, p[7])
+        l.buttons += key(0.04f, 0.355f, "←", 0x50, p[7])
+        l.buttons += key(0.04f + s * 2, 0.355f, "→", 0x4F, p[7])
+        l.buttons += key(0.04f + s, 0.67f, "↓", 0x51, p[7])
+        listOf("Z" to 0x1D, "X" to 0x1B, "C" to 0x06, "V" to 0x19).forEachIndexed { i, (label, usage) ->
+            l.buttons += PadButton(0.7f + (i % 2) * 0.145f, 0.2f + (i / 2) * 0.32f, 0.135f, 0.3f, label, mutableListOf(usage), color = p[i % 4])
+        }
+        return l
+    }
+
+    /** 방송 · 녹화 프로그램에 단축키로 지정해 쓰는 버튼들: F9~F12 와 Ctrl+Shift+1~4(장면 전환). */
+    private fun streaming(name: String): PadLayout {
+        val l = PadLayout(name = name)
+        val p = PadButton.PALETTE
+        val top = listOf("방송 시작/끝 (F9)" to 0x42, "녹화 시작/끝 (F10)" to 0x43, "마이크 끄기 (F11)" to 0x44, "리플레이 저장 (F12)" to 0x45)
+        top.forEachIndexed { i, (label, usage) ->
+            l.buttons += PadButton(0.02f + i * 0.245f, 0.05f, 0.225f, 0.4f, label, mutableListOf(usage), PadButton.MODE_TAP, color = p[if (i < 2) 3 else 1])
+        }
+        for (i in 0 until 4) {
+            l.buttons += PadButton(0.02f + i * 0.245f, 0.53f, 0.225f, 0.4f, "장면 ${i + 1}", mutableListOf(0xE0, 0xE1, 0x1E + i), PadButton.MODE_TAP, color = p[7])
+        }
         return l
     }
 

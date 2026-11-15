@@ -27,9 +27,7 @@ object Labs {
 
     /** 지금 실험실에 있는 기능들. */
     val features = listOf(
-        Feature("press-count", "버튼별 누른 횟수", "실행 화면의 각 버튼 오른쪽 위에 그 버튼을 누른 횟수를 작게 보여 줍니다."),
         Feature("release-haptic", "뗄 때도 진동", "버튼을 뗄 때도 짧게 진동합니다('버튼을 누를 때 진동'이 켜져 있어야 합니다)."),
-        Feature("release-sound", "뗄 때도 소리", "버튼을 뗄 때도 클릭 소리를 냅니다."),
         Feature("clock-seconds", "시각에 초 표시", "배터리 · 시각 표시와 패널의 시각에 초까지 보여 줍니다."),
         Feature("session-summary", "나갈 때 기록 요약", "실행 화면을 나갈 때 누른 횟수와 시간을 알려 줍니다."),
         Feature("list-count", "레이아웃 개수 표시", "목록 화면 위쪽에 레이아웃이 모두 몇 개인지 보여 줍니다."),
@@ -40,6 +38,8 @@ object Labs {
      * 이제 늘 있는 기능이다: 버튼형은 그 버튼이 그냥 있고, 설정형은 설정 화면 '기능'에서 켜고 끈다(처음엔 켜짐).
      */
     val permanent = listOf(
+        Feature("press-count", "버튼별 누른 횟수", "실행 화면의 각 버튼 오른쪽 위에 그 버튼을 누른 횟수를 작게 보여 줍니다."),
+        Feature("release-sound", "뗄 때도 소리", "버튼을 뗄 때도 클릭 소리를 냅니다."),
         Feature("dim-buttons", "눌리지 않은 버튼 흐리게", "실행 화면에서 누르지 않은 버튼을 흐리게 그려, 누른 버튼이 더 눈에 띕니다."),
         Feature("list-kinds", "레이아웃 구성 표시", "목록의 각 레이아웃 아래에 노브·조이스틱 등 버튼 종류별 개수를 보여 줍니다."),
         Feature("nudge", "한 칸씩 옮기기", "편집 화면 도구 모음에 ← ↑ ↓ → 버튼이 생겨, 선택한 것을 격자 한 칸씩 옮깁니다.", button = true),
@@ -299,13 +299,14 @@ class LabsActivity : BaseActivity() {
         )
         val versions = TextView(this).apply { textSize = 15f; setTextColor(text); setPadding(0, dp(8), 0, 0) }
         val mine = Updater.installedName(this)
-        versions.text = "지금 쓰는 빌드: $mine · 정식 채널: 확인 중…"
+        val mineLabel = Updater.installedLabel(this)      // 화면에는 빌드 번호, 요청에는 코드명(mine)
+        versions.text = "지금 쓰는 빌드: $mineLabel · 정식 채널: 확인 중…"
         root.addView(versions)
         Thread {
-            val stable = runCatching { JSONObject(Labs.get(Updater.BASE + "version.json")).optString("versionName") }.getOrNull()
-            runOnUiThread { versions.text = "지금 쓰는 빌드: $mine · 정식 채널: " + (stable ?: "확인하지 못함") }
+            val stable = runCatching { Updater.parse(Labs.get(Updater.BASE + "version.json")).label }.getOrNull()
+            runOnUiThread { versions.text = "지금 쓰는 빌드: $mineLabel · 정식 채널: " + (stable ?: "확인하지 못함") }
         }.start()
-        chip("이 빌드($mine)를 정식에 추가 요청") {
+        chip("이 빌드($mineLabel)를 정식에 추가 요청") {
             request("build", Labs.shortName(mine), Labs.buildTitle(Labs.shortName(mine)), "알파 빌드 $mine 을(를) 써 보았고, 정식 채널에 올려 주세요.\n\n써 본 내용:\n")
         }
 

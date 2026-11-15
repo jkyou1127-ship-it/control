@@ -34,16 +34,38 @@ class PlayActivity : BaseActivity() {
     private var view: PlayView? = null
     private val ui = Handler(Looper.getMainLooper())
     private var wasConnected = false
+    private var everConnected = false
+    private var batteryWarned = false
+    private val startedAt = SystemClock.elapsedRealtime()
+    private var banner: android.widget.TextView? = null
     private val tick = object : Runnable {
         override fun run() {
             val connected = Link.connected
+            // 끊겼던 연결이 돌아오면 알려 준다(모바일 기능).
+            if (!wasConnected && connected && everConnected && Mobile.reconnect) {
+                view?.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP, android.view.HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
+                android.widget.Toast.makeText(this@PlayActivity, "PC에 다시 연결되었습니다", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            if (connected) everConnected = true
+            // 배터리가 15% 이하로 내려가면 한 번 알려 준다(모바일 기능).
+            if (!batteryWarned && Mobile.lowBattery) {
+                val bm = getSystemService(android.os.BatteryManager::class.java)
+                val level = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+                if (level in 0..15 && bm?.isCharging != true) {
+                    batteryWarned = true
+                    android.widget.Toast.makeText(this@PlayActivity, "배터리가 ${level}% 남았습니다", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+            // PC 에서 입력을 일시정지했으면 위쪽에 크게 알린다(모바일 기능).
+            banner?.visibility = if (Mobile.pausedBanner && Link.pcPaused) View.VISIBLE else View.GONE
             // 쓰는 도중에 PC 연결이 끊기면 진동과 알림으로 알려 준다(기능 · 기타에서 끌 수 있음).
             if (wasConnected && !connected && Link.disconnectAlert) {
                 view?.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS, android.view.HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
                 android.widget.Toast.makeText(this@PlayActivity, "PC 연결이 끊겼습니다", android.widget.Toast.LENGTH_SHORT).show()
             }
             wasConnected = connected
-            view?.setStatus(connected, Link.status())
+            val timer = if (Mobile.timer) " · ⏱ " + Mobile.elapsed(SystemClock.elapsedRealtime() - startedAt) else ""
+            view?.setStatus(connected, Link.status() + timer)
             ui.postDelayed(this, 500)
         }
     }
@@ -51,7 +73,9 @@ class PlayActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val layout = LayoutStore.load(this, intent.getStringExtra("id") ?: "") ?: run { finish(); return }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (!Mobile.screenOff) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (Mobile.secure) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (Mobile.maxBright) window.attributes = window.attributes.apply { screenBrightness = 1f }
         // 화면 주사율이 높을수록 터치도 더 자주 읽는 기기가 많으므로, 지원하는 가장 높은 주사율을 쓴다.
         runCatching {
             @Suppress("DEPRECATION")
@@ -70,11 +94,23 @@ class PlayActivity : BaseActivity() {
     private fun show(layout: PadLayout) {
         current = layout
         Link.prefs.edit().putString("lastLayout", layout.id).apply()     // '마지막 레이아웃 바로 실행'(실험실 기능)용
+        val frame = android.widget.FrameLayout(this)
         view = PlayView(this, layout).also {
             it.onSwitch = { id -> switchTo(id) }
             it.onOption = { id -> toggleOption(id) }
-            setContentView(it)
+            frame.addView(it)
         }
+        banner = android.widget.TextView(this).apply {
+            text = "⏸ PC에서 입력을 일시정지했습니다 — 수신 프로그램에서 '입력 다시 받기' 또는 Ctrl+Alt+P"
+            textSize = 16f; setTextColor(0xFF1A1205.toInt()); gravity = android.view.Gravity.CENTER
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = Ui.rounded(this@PlayActivity, 0xFFFBBF24.toInt(), 14)
+            setPadding(dp(18), dp(10), dp(18), dp(10))
+            visibility = View.GONE
+            isClickable = false
+        }
+        frame.addView(banner, android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL).apply { topMargin = dp(12) })
+        setContentView(frame)
     }
 
     /** 옵션 버튼: 설정을 바꾸고, 바뀐 설정으로 실행 화면을 다시 띄운다(눌려 있던 키는 모두 뗀다). */
@@ -102,6 +138,17 @@ class PlayActivity : BaseActivity() {
         }
         view?.releaseAll()
         show(next)
+    }
+
+    // 볼륨 버튼 막기(모바일 기능): 실행 중 실수로 소리가 바뀌지 않게 한다.
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (Mobile.blockVolume && (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) return true
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (Mobile.blockVolume && (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) return true
+        return super.onKeyUp(keyCode, event)
     }
 
     override fun onResume() {

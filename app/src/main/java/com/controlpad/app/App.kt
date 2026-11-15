@@ -486,7 +486,14 @@ object Themes {
         }
 
     val current: PadTheme
-        get() = index.let { if (it < all.size) all[it] else user[it - all.size] }
+        get() {
+            // 모바일 기능 '시스템 다크 모드 따라가기': 기기 설정에 따라 다크(0번) 또는 라이트(2번)
+            if (Mobile.autoTheme) return if (Link.systemDark()) all[0] else all[2]
+            return index.let { if (it < all.size) all[it] else user[it - all.size] }
+        }
+
+    /** 테마를 고르는 방식이 바뀌었을 때 떠 있는 화면이 다시 그리게 한다. */
+    fun touch() { revision++ }
 
     /** 배경 밝기에 맞춰 밝은/어두운 테마를 정한다. base 와 card 를 주지 않으면 배경에서 알아서 고른다. */
     fun make(

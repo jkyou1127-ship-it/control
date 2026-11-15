@@ -148,10 +148,25 @@ class CoreTest {
     fun builtInThemesAreDistinctAndReadable() {
         assertEquals(30, Themes.all.size)
         // 오프셋 기본 프리셋 10개: 이름이 겹치지 않고, 값이 조절 범위 안에 있다
-        assertEquals(10, OffsetPresets.all.size)
-        assertEquals(10, OffsetPresets.all.map { it.name }.toSet().size)
+        assertEquals(15, OffsetPresets.all.size)
+        assertEquals(15, OffsetPresets.all.map { it.name }.toSet().size)
         assertTrue(OffsetPresets.all.all { kotlin.math.abs(it.x) <= Link.OFFSET_MAX && kotlin.math.abs(it.y) <= Link.OFFSET_MAX && it.delay in 0..Link.DELAY_MAX })
         assertEquals("기본", OffsetPresets.all[0].name)
+        // 레이아웃 프리셋 14개(빈 레이아웃 포함), 새로 넣은 5개도 버튼이 있다
+        assertEquals(14, Templates.names.size)
+        for (i in 9..13) assertTrue(Templates.create(i, "t").buttons.size >= 5)
+        // 모바일 기능: 토글 9개 + 카드 크기 = 10개
+        assertEquals(9, Mobile.toggles.size)
+        assertEquals(9, Mobile.toggles.map { it.key }.toSet().size)
+        assertEquals("1:05", Mobile.elapsed(65_000))
+        assertEquals("1:00:01", Mobile.elapsed(3_601_000))
+        // 버전 표기: 화면에는 빌드 번호, 확인에는 코드명
+        val info = Updater.parse("""{"versionCode":75,"versionName":"hd12","build":"NWE 01","notes":"x"}""")
+        assertEquals("hd12", info.name)
+        assertEquals("NWE 01 (hd12)", info.label)
+        assertEquals("1.41", Updater.parse("""{"versionCode":71,"versionName":"1.41"}""").label)
+        assertEquals("NWE 01", Changelog.entries.first().build)
+        assertEquals(Updater.BUILD, Changelog.entries.first().build)
         assertEquals(Themes.all.size, Themes.all.map { it.name }.toSet().size)
         for (t in Themes.all) {
             // 글자가 배경과 충분히 구분되어야 하고, 밝은 테마 표시는 실제 배경 밝기와 맞아야 한다.
@@ -467,7 +482,7 @@ class CoreTest {
         assertEquals(Changelog.entries.size, Changelog.entries.map { it.version }.toSet().size)
         assertTrue(Changelog.entries.all { it.notes.isNotEmpty() })
         assertEquals("BETA 1.0", Changelog.entries.last().version)
-        assertTrue(Changelog.text(latestOnly = true).startsWith(Changelog.entries.first().version + "\n  · "))
+        assertTrue(Changelog.text(latestOnly = true).startsWith(Changelog.entries.first().label + "\n  · "))
         assertTrue(Changelog.text().contains("BETA 1.9"))
     }
 
@@ -512,7 +527,7 @@ class CoreTest {
         assertEquals(Labs.features.map { it.id }, names)
         assertTrue(Labs.features.all { Regex("^[a-z0-9][a-z0-9-]{0,39}$").matches(it.id) })
 
-        assertEquals(setOf("press-count"), Labs.parseGraduated("""{"graduated":["press-count","unknown-feature"]}"""))
+        assertEquals(setOf("release-haptic"), Labs.parseGraduated("""{"graduated":["release-haptic","unknown-feature"]}"""))
         assertEquals(emptySet<String>(), Labs.parseGraduated("{}"))
         assertEquals("[정식 요청] 빌드 1.21", Labs.buildTitle("1.21"))
         assertEquals("[정식 요청] 실험실 kps", Labs.labTitle("kps"))
@@ -611,8 +626,8 @@ class CoreTest {
 
     @Test
     fun hiddenLabsFeaturesAreParsedAndRequestTitlesMatchThePanelScript() {
-        assertEquals(setOf("press-count"), Labs.parseHidden("""{"hidden":["press-count","unknown"]}"""))
-        assertEquals(emptySet<String>(), Labs.parseHidden("""{"graduated":["press-count"]}"""))
+        assertEquals(setOf("release-haptic"), Labs.parseHidden("""{"hidden":["release-haptic","unknown"]}"""))
+        assertEquals(emptySet<String>(), Labs.parseHidden("""{"graduated":["release-haptic"]}"""))
         assertTrue(JSONObject(java.io.File("../release/labs.json").readText()).has("hidden"))
         assertEquals("[숨김 요청] 실험실 kps", Labs.hideTitle("kps"))
         assertEquals("[복귀 요청] 실험실 kps", Labs.restoreTitle("kps"))
@@ -657,7 +672,7 @@ class CoreTest {
 
     @Test
     fun alphaWideStageIsParsedAndPlansMatchThePanelSchedule() {
-        assertEquals(setOf("press-count"), Labs.parseAlpha("""{"alpha":["press-count","unknown"]}"""))
+        assertEquals(setOf("release-haptic"), Labs.parseAlpha("""{"alpha":["release-haptic","unknown"]}"""))
         assertEquals(emptySet<String>(), Labs.parseAlpha("{}"))
         assertTrue(Labs.plan("lab").contains("1~2분 안에"))                  // 정식 추가 건의는 바로 반영
         assertTrue(Labs.plan("build").contains("1~2분 안에"))
@@ -773,7 +788,7 @@ class CoreTest {
             assertEquals(null, Labs.feature(gone))                            // 평가단이 숨긴 기능은 다음 업데이트에서 지움
         assertTrue(listOf("dim-buttons", "list-kinds", "nudge", "open-last", "selection-count", "show-hidden-outline", "snap-edges")
             .all { it in permanentIds })                                     // 정식으로 간 기능은 늘 있는 기능으로
-        assertEquals(6, listOf("press-count", "release-haptic", "release-sound", "dim-buttons", "pressed-outline",
+        assertEquals(4, listOf("press-count", "release-haptic", "release-sound", "dim-buttons", "pressed-outline",
             "kps-peak", "clock-seconds", "session-summary", "status-large", "snap-edges", "selection-count", "grid-dots",
             "show-hidden-outline", "nudge", "random-color", "list-count", "list-compact", "open-last", "list-kinds").count { it in labIds })
         assertEquals(null, Labs.feature("confirm-delete"))                     // 숨겼던 기능은 지움

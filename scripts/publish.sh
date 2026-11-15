@@ -19,7 +19,8 @@ if [ "${1:-}" = "--alpha-only" ]; then promote=0; shift; fi
 if [ "${1:-}" = "--needs-panel" ]; then promote=0; needs_panel=1; shift; fi
 notes="${1:?바뀐 점을 적어 주세요}"
 code=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
-name=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+name=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)        # 코드명(버전 확인용)
+build=$(sed -n 's/.*const val BUILD = "\(.*\)".*/\1/p' app/src/main/java/com/controlpad/app/Updater.kt)   # 빌드 번호(화면 표시용)
 
 # 시험이나 빌드가 실패하면 release/ 를 시작하기 전 상태로 되돌린다(반쯤 바뀐 채로 남지 않게).
 backup=$(mktemp -d)
@@ -45,9 +46,9 @@ if [ -f release/alpha/version.json ]; then
 fi
 
 mkdir -p release/alpha
-python3 - "$code" "$name" "$notes" "$needs_panel" <<'PY'
+python3 - "$code" "$name" "$notes" "$needs_panel" "$build" <<'PY'
 import json, sys
-info = {"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "notes": sys.argv[3]}
+info = {"versionCode": int(sys.argv[1]), "versionName": sys.argv[2], "build": sys.argv[5], "notes": sys.argv[3]}
 if sys.argv[4] == "1":
     info["needsPanel"] = True       # 평가단 OK(빌드 정식 추가 건의)가 있어야 정식에 올라간다
 json.dump(info, open("release/alpha/version.json", "w"), ensure_ascii=False, indent=2)
@@ -62,4 +63,4 @@ if [ "$fix" = 1 ]; then
     cp release/alpha/version.json release/alpha/ControlPad.apk release/   # 버그 수정은 정식에도 바로
 fi
 done_ok=1
-echo "알파: $name ($code) / 정식: $(sed -n 's/.*"versionName": *"\(.*\)".*/\1/p' release/version.json)"
+echo "알파: $build / $name ($code) / 정식: $(sed -n 's/.*"versionName": *"\(.*\)".*/\1/p' release/version.json)"

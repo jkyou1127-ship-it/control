@@ -3,7 +3,6 @@ package com.controlpad.app
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.PendingIntent
-import android.app.ProgressDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -43,15 +42,25 @@ object Updater {
     private fun base(alpha: Boolean) = if (alpha) BASE + "alpha/" else BASE
     private var receiverRegistered = false
 
-    class Info(val code: Int, val name: String, val notes: String)
+    /**
+     * name 은 코드명(versionName, 예: hd12): 버전을 확인할 때(업데이트 비교, 평가단 빌드 요청) 쓴다.
+     * build 는 빌드 번호(예: NWE 01): 화면에 보여 줄 때 쓴다. 옛 버전 정보에는 없을 수 있다.
+     */
+    class Info(val code: Int, val name: String, val notes: String, val build: String = "") {
+        /** 화면에 보여 줄 이름: 빌드 번호가 있으면 '빌드 번호 (코드명)'. */
+        val label: String get() = if (build.isEmpty()) name else "$build ($name)"
+    }
 
-    /** 이 빌드 줄기의 코드명. 빌드 번호(versionName, 예: NES2)와 따로 붙는 이름이다. */
-    const val CODENAME = "NES1"
+    /** 이 앱의 빌드 번호(화면 표시용). 코드명은 versionName 이다. publish.sh 가 이 값을 version.json 에 적는다. */
+    const val BUILD = "NWE 01"
 
     fun parse(json: String): Info {
         val o = JSONObject(json)
-        return Info(o.getInt("versionCode"), o.optString("versionName"), o.optString("notes"))
+        return Info(o.getInt("versionCode"), o.optString("versionName"), o.optString("notes"), o.optString("build"))
     }
+
+    /** 지금 설치된 앱을 화면에 보여 줄 이름: 'NWE 01 (hd12)'. */
+    fun installedLabel(ctx: Context): String = "$BUILD (${installedName(ctx)})"
 
     fun installedCode(ctx: Context): Int =
         ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode.toInt()
@@ -81,17 +90,12 @@ object Updater {
                 if (a.isFinishing || a.isDestroyed) return@runOnUiThread
                 when {
                     info == null -> if (!silent) toast(a, "업데이트를 확인하지 못했습니다. 인터넷 연결을 확인하세요")
-                    info.code <= installedCode(a) -> if (!silent) toast(a, "최신 버전입니다 (${installedName(a)})")
+                    info.code <= installedCode(a) -> if (!silent) toast(a, "최신 버전입니다 (${installedLabel(a)})")
                     silent && auto -> {
-                        toast(a, "새 버전 ${info.name}을(를) 내려받아 설치합니다")
-                        download(a, alpha, quiet = true)
+                        toast(a, "새 버전 ${info.label}을(를) 내려받아 설치합니다")
+                        download(a, alpha)
                     }
-                    else -> AlertDialog.Builder(a)
-                        .setTitle("새 버전 ${info.name}" + if (alpha) " (알파)" else "")
-                        .setMessage(info.notes.ifEmpty { "새 버전이 있습니다." } + "\n\n지금 업데이트할까요?")
-                        .setPositiveButton("업데이트") { _, _ -> download(a, alpha) }
-                        .setNegativeButton("나중에", null)
-                        .show()
+                    else -> UpdateDialog.show(a, info, alpha) { onProgress, onDone -> download(a, alpha, onProgress, onDone) }
                 }
             }
         }.start()
@@ -120,20 +124,17 @@ object Updater {
         }
     }
 
-    @Suppress("DEPRECATION")
-    private fun download(a: Activity, alpha: Boolean, quiet: Boolean = false) {
-        val progress = if (quiet) null else ProgressDialog(a).apply {
-            setMessage("내려받는 중…"); setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
-            max = 100; setCancelable(false); show()
-        }
+    /** 새 APK 를 받아 설치한다. 진행률(0~100)과 끝(실패하면 이유)을 화면 스레드로 알려 준다. */
+    private fun download(a: Activity, alpha: Boolean, onProgress: (Int) -> Unit = {}, onDone: (String?) -> Unit = {}) {
         Thread {
             val result = runCatching {
-                val apk = fetch(base(alpha) + "ControlPad.apk") { p -> a.runOnUiThread { progress?.progress = p } }
+                val apk = fetch(base(alpha) + "ControlPad.apk") { p -> a.runOnUiThread { onProgress(p) } }
                 install(a.applicationContext, apk)
             }
             a.runOnUiThread {
-                runCatching { progress?.dismiss() }
-                if (result.isFailure) toast(a, "업데이트에 실패했습니다: " + (result.exceptionOrNull()?.message ?: ""))
+                val error = result.exceptionOrNull()?.let { it.message ?: "알 수 없는 오류" }
+                onDone(error)
+                if (error != null) toast(a, "업데이트에 실패했습니다: $error")
             }
         }.start()
     }

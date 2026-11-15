@@ -45,6 +45,12 @@ object Ui {
         val ctx = view.context
         val t = Themes.current
         when (view) {
+            is android.widget.Switch -> {
+                // 켜짐은 강조색, 꺼짐은 회색(버튼 모양을 입히지 않는다)
+                val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+                view.thumbTintList = ColorStateList(states, intArrayOf(accent(), 0xFFBDBDBD.toInt()))
+                view.trackTintList = ColorStateList(states, intArrayOf(accent() and 0x00FFFFFF or 0x88000000.toInt(), line()))
+            }
             is CheckBox, is RadioButton -> {
                 view as android.widget.CompoundButton
                 view.buttonTintList = ColorStateList.valueOf(accent())
@@ -123,6 +129,10 @@ object Ui {
         typeface = android.graphics.Typeface.DEFAULT_BOLD
         setTextColor(accent())
         setPadding(0, 0, 0, ctx.dp(6))
+        // NES3: 제목 왼쪽에 강조색 막대
+        val bar = rounded(ctx, accent(), 2).apply { setSize(ctx.dp(4), ctx.dp(14)) }
+        setCompoundDrawablesRelativeWithIntrinsicBounds(bar, null, null, null)
+        compoundDrawablePadding = ctx.dp(8)
     }
 }
 

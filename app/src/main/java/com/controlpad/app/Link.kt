@@ -96,6 +96,14 @@ object Link {
         get() = prefs.getBoolean("showKeyNames", true)
         set(on) = prefs.edit().putBoolean("showKeyNames", on).apply()
 
+    /** 기기가 다크 모드인지. */
+    fun systemDark(): Boolean =
+        (app.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+
+    /** Wi-Fi 연결에서 PC 수신 프로그램이 입력을 일시정지했는지. */
+    val pcPaused: Boolean get() = mode == MODE_UDP && udp?.let { it.alive && it.pcPaused } == true
+
     fun init(ctx: Context) {
         app = ctx.applicationContext
     }

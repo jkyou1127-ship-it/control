@@ -1,16 +1,11 @@
 {
   "features": [
-    "press-count",
     "release-haptic",
-    "release-sound",
     "clock-seconds",
     "session-summary",
     "list-count"
   ],
-  "graduated": [
-    "press-count",
-    "release-sound"
-  ],
+  "graduated": [],
   "hidden": [],
   "alpha": [
     "clock-seconds",

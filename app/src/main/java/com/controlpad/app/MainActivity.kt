@@ -23,8 +23,15 @@ class MainActivity : BaseActivity() {
     private val ui = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
         override fun run() {
+            // NES3: 연결 상태 알약은 상태에 따라 테두리 색도 바꾼다(연결됨 초록 · PC 일시정지 노랑 · 끊김 주황).
+            val color = when {
+                Link.pcPaused -> 0xFFFBBF24.toInt()
+                Link.connected -> 0xFF81C784.toInt()
+                else -> 0xFFFFB74D.toInt()
+            }
             status.text = (if (Link.connected) "● " else "○ ") + Link.status()
-            status.setTextColor(if (Link.connected) 0xFF81C784.toInt() else 0xFFFFB74D.toInt())
+            status.setTextColor(color)
+            status.background = Ui.rounded(this@MainActivity, Ui.surface(), 20, color and 0x00FFFFFF or 0x88000000.toInt())
             ui.postDelayed(this, 500)
         }
     }
@@ -151,7 +158,7 @@ class MainActivity : BaseActivity() {
         }
         // NES2: 레이아웃을 카드 격자로 보여 준다(화면이 넓을수록 한 줄에 더 많이).
         val widthDp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
-        val columns = ((widthDp - 32) / 280).toInt().coerceIn(1, 4)
+        val columns = ((widthDp - 32) / Mobile.cardWidthDp()).toInt().coerceIn(1, 5)
         var line: LinearLayout? = null
         layouts.forEachIndexed { i, l ->
             if (i % columns == 0) {
@@ -168,7 +175,7 @@ class MainActivity : BaseActivity() {
                     Ui.rounded(this@MainActivity, -1, 18))
                 setOnClickListener { open(PlayActivity::class.java, l.id) }
             }
-            if (Link.thumbnails) card.addView(LayoutThumb(this, l), LinearLayout.LayoutParams(-1, 0).apply { height = dp(120) })
+            if (Link.thumbnails) card.addView(LayoutThumb(this, l), LinearLayout.LayoutParams(-1, 0).apply { height = dp(Mobile.thumbHeightDp()) })
             card.addView(TextView(this).apply {
                 text = (if (pinOn && l.pinned) "★ " else "") + l.name; textSize = 17f; setTextColor(Themes.current.text)
                 typeface = android.graphics.Typeface.DEFAULT_BOLD; setSingleLine(); ellipsize = android.text.TextUtils.TruncateAt.END
