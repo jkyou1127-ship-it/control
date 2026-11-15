@@ -22,7 +22,8 @@
   ],
   "graduated": [],
   "hidden": [
-    "kps-peak"
+    "kps-peak",
+    "status-large"
   ],
   "alpha": [
     "dim-buttons",
