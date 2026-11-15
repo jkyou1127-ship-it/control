@@ -644,6 +644,13 @@ class CoreTest {
     }
 
     @Test
+    fun buildRequestsUseTheNameWithoutPrefix() {
+        assertEquals("1.00.a", Labs.shortName("NCP#1.00.a"))
+        assertEquals("1.41", Labs.shortName("1.41"))
+        assertTrue(Regex("^[0-9A-Za-z][0-9A-Za-z. ]{0,19}$").matches(Labs.shortName("NCP#1.00.a")))   // 중계 서버가 받는 모양
+    }
+
+    @Test
     fun alphaWideStageIsParsedAndPlansMatchThePanelSchedule() {
         assertEquals(setOf("kps"), Labs.parseAlpha("""{"alpha":["kps","unknown"]}"""))
         assertEquals(emptySet<String>(), Labs.parseAlpha("{}"))
@@ -756,7 +763,8 @@ class CoreTest {
         assertTrue("align" in permanentIds && "auto-dim" in permanentIds)
         assertEquals(null, Labs.feature("touch-dots"))                         // 평가단이 숨긴 기능은 지움
         assertEquals(null, Labs.feature("hold-time"))
-        assertEquals(20, listOf("press-count", "release-haptic", "release-sound", "hide-labels", "dim-buttons", "pressed-outline",
+        assertEquals(null, Labs.feature("hide-labels"))
+        assertEquals(19, listOf("press-count", "release-haptic", "release-sound", "dim-buttons", "pressed-outline",
             "kps-peak", "clock-seconds", "session-summary", "status-large", "snap-edges", "selection-count", "grid-dots",
             "show-hidden-outline", "nudge", "random-color", "list-count", "list-compact", "open-last", "list-kinds").count { it in labIds })
         assertEquals(null, Labs.feature("confirm-delete"))                     // 숨겼던 기능은 지움

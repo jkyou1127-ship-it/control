@@ -67,6 +67,9 @@ object Updater {
         check(a, silent = true)
     }
 
+    /** 그 채널의 최신 버전 정보(받지 못하면 null). 화면 밖 스레드에서 부른다. */
+    fun latest(alpha: Boolean): Info? = runCatching { parse(String(fetch(base(alpha) + "version.json"))) }.getOrNull()
+
     fun check(a: Activity, silent: Boolean = false) {
         val alpha = alpha
         Thread {

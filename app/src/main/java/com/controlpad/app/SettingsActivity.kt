@@ -45,7 +45,7 @@ class SettingsActivity : BaseActivity() {
         fun title(t: String) = Ui.section(this, t)
         fun note(t: String) = TextView(this).apply { text = t; textSize = 14f; setLineSpacing(0f, 1.2f) }
 
-        root.addView(Ui.header(this, "설정", "연결 · 화면 · 테마 · 업데이트"))
+        root.addView(Ui.header(this, "설정", "연결 · 테마 · 오프셋 · 화면"))
         status = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
         root.addView(status)
         // 실험실과 평가단은 알파 빌드를 받는 사람에게만 보인다. 자주 쓰므로 맨 위에 둔다.
@@ -174,16 +174,12 @@ class SettingsActivity : BaseActivity() {
             setOnClickListener { startActivity(Intent(this@SettingsActivity, ThemeEditorActivity::class.java)) }
         })
 
-        // 실험실에서 알파·정식으로 올라온 기능 중 켜고 끄는 것들
-        val promoted = Labs.settingFeatures()
-        if (promoted.isNotEmpty()) {
-            root.addView(title("기능"))
-            root.addView(note("평가단 건의로 실험실에서 올라온 기능입니다. 처음에는 켜져 있습니다."))
-            for (f in promoted) root.addView(CheckBox(this).apply {
-                text = f.title + if (f.id in Labs.graduated) "" else "  (알파)"; isChecked = Labs.isOn(f.id)
-                setOnCheckedChangeListener { _, on -> Labs.set(f.id, on) }
-            })
-        }
+        root.addView(title("기능 · 기타"))
+        root.addView(note("실험실에서 올라온 기능과 진동, 키 표시 같은 설정은 따로 모았습니다."))
+        root.addView(Button(this).apply {
+            text = "기능 · 기타 설정 열기"; tag = Ui.PRIMARY
+            setOnClickListener { startActivity(Intent(this@SettingsActivity, FeaturesActivity::class.java)) }
+        })
 
         root.addView(title("오프셋"))
         root.addView(note("손가락이 닿는 자리와 버튼이 눌리는 자리가 어긋나거나, 다른 기기와 박자가 안 맞을 때 맞춥니다."))
@@ -223,39 +219,12 @@ class SettingsActivity : BaseActivity() {
             setOnCheckedChangeListener { _, on -> Link.thumbnails = on }
         })
 
-        root.addView(title("기타"))
-        root.addView(CheckBox(this).apply {
-            text = "눌리고 있는 키 표시 — 실행 화면 위쪽에 지금 입력 중인 키를 보여 줍니다"; isChecked = Link.showPressed
-            setOnCheckedChangeListener { _, on -> Link.showPressed = on }
-        })
-        root.addView(CheckBox(this).apply {
-            text = "버튼에 키 이름 표시 — 버튼 아래쪽에 그 버튼이 입력하는 키를 작게 보여 줍니다"; isChecked = Link.showKeyNames
-            setOnCheckedChangeListener { _, on -> Link.showKeyNames = on; reload() }
-        })
-        root.addView(CheckBox(this).apply {
-            text = "버튼을 누를 때 진동"; isChecked = Link.haptic
-            setOnCheckedChangeListener { _, on -> Link.prefs.edit().putBoolean("haptic", on).apply() }
-        })
-
         root.addView(title("업데이트"))
-        root.addView(note("현재 버전 " + Updater.installedName(this) + " · 앱을 켤 때 새 버전을 자동으로 확인합니다."))
-        root.addView(CheckBox(this).apply {
-            text = "자동 업데이트 — 앱을 켤 때 새 버전이 있으면 묻지 않고 바로 설치합니다"
-            isChecked = Updater.auto
-            setOnCheckedChangeListener { _, on -> Updater.auto = on }
+        root.addView(note("현재 버전 " + Updater.installedName(this) + " · 자동 업데이트, 알파 빌드 받기, 업데이트 내역은 따로 모았습니다."))
+        root.addView(Button(this).apply {
+            text = "업데이트 열기"; tag = Ui.PRIMARY
+            setOnClickListener { startActivity(Intent(this@SettingsActivity, UpdateActivity::class.java)) }
         })
-        root.addView(CheckBox(this).apply {
-            text = "알파 빌드 받기 — 최신 빌드를 바로 받습니다. 끄면 한 번 전의 빌드(정식)를 받습니다"
-            isChecked = Updater.alpha
-            setOnCheckedChangeListener { _, on ->
-                Updater.alpha = on
-                reload()        // 실험실 · 평가단 버튼을 보이거나 감춘다
-                // 채널을 바꾸면 그 채널의 새 버전을 바로 확인한다.
-                Updater.check(this@SettingsActivity)
-            }
-        })
-        root.addView(Button(this).apply { text = "업데이트 확인"; setOnClickListener { Updater.check(this@SettingsActivity) } })
-        root.addView(Button(this).apply { text = "업데이트 내역"; setOnClickListener { showChangelog(this@SettingsActivity) } })
 
         scroll = ScrollView(this).apply { addView(root) }
         setContentView(scroll)

@@ -22,7 +22,7 @@ object Options {
     val labIds = listOf(
         "kps", "battery", "exit-guard", "hide-status", "press-sound", "key-history",
         "auto-dim", "status-bottom",
-        "press-count", "release-haptic", "release-sound", "hide-labels", "dim-buttons", "pressed-outline",
+        "press-count", "release-haptic", "release-sound", "dim-buttons", "pressed-outline",
         "kps-peak", "clock-seconds", "session-summary", "status-large",
     )
 

@@ -1,12 +1,8 @@
 {
   "features": [
-    "kps",
-    "big-handle",
-    "status-bottom",
     "press-count",
     "release-haptic",
     "release-sound",
-    "hide-labels",
     "dim-buttons",
     "pressed-outline",
     "kps-peak",
@@ -24,14 +20,8 @@
     "open-last",
     "list-kinds"
   ],
-  "graduated": [
-    "big-handle",
-    "kps",
-    "status-bottom"
-  ],
-  "hidden": [
-    "hide-labels"
-  ],
+  "graduated": [],
+  "hidden": [],
   "alpha": [
     "dim-buttons",
     "press-count",

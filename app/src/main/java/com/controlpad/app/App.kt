@@ -92,7 +92,6 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
     private val sub = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
     private val keyNames = Link.showKeyNames
     /** 버튼 글자 숨기기(실험실 기능): 실행 화면에서만 켠다. */
-    var hideLabels = false
     private val opacityOn = Labs.isOn("opacity")
     private val textScaleOn = Labs.isOn("text-scale")
 
@@ -354,7 +353,6 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
             else -> b.label + "/" + b.label2
         }
         if (photo != null && name.isEmpty()) return      // 사진이 있으면 이름을 적었을 때만 글자를 올린다
-        if (hideLabels) return
         val label = name.ifEmpty { if (b.isOption) Options.title(b.link) else if (b.isShow) "그룹 ${b.target}" else if (b.isKnob) "노브" else combo.ifEmpty { "키 없음" } }
         text.color = if (pressed) onLit else if (b.textColor != 0) b.textColor else if (theme.colorText) b.color else theme.text
         text.textSize = (r.height() * 0.3f)

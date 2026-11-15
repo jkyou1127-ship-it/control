@@ -33,7 +33,6 @@ object Labs {
         Feature("press-count", "버튼별 누른 횟수", "실행 화면의 각 버튼 오른쪽 위에 그 버튼을 누른 횟수를 작게 보여 줍니다."),
         Feature("release-haptic", "뗄 때도 진동", "버튼을 뗄 때도 짧게 진동합니다('버튼을 누를 때 진동'이 켜져 있어야 합니다)."),
         Feature("release-sound", "뗄 때도 소리", "버튼을 뗄 때도 클릭 소리를 냅니다."),
-        Feature("hide-labels", "버튼 글자 숨기기", "실행 화면에서 버튼의 이름과 키 글자를 감춥니다. 편집 화면에서는 그대로 보입니다."),
         Feature("dim-buttons", "눌리지 않은 버튼 흐리게", "실행 화면에서 누르지 않은 버튼을 흐리게 그려, 누른 버튼이 더 눈에 띕니다."),
         Feature("pressed-outline", "눌린 버튼 테두리 강조", "누르고 있는 버튼에 굵은 테두리를 그립니다."),
         Feature("kps-peak", "최고 초당 입력 수", "실행 화면을 연 뒤로 가장 빨랐던 초당 입력 수를 상태 줄에 보여 줍니다."),
@@ -233,6 +232,8 @@ object Labs {
         }
     }
 
+    /** 'NCP#1.00.a' → '1.00.a'. 건의(중계 서버 · 이슈 제목)에는 글자 · 숫자 · 점만 쓴다. */
+    fun shortName(name: String) = name.substringAfterLast('#')
     fun buildTitle(version: String) = "$REQUEST_PREFIX 빌드 $version"
     fun labTitle(id: String) = "$REQUEST_PREFIX 실험실 $id"
     fun hideTitle(id: String) = "[숨김 요청] 실험실 $id"
@@ -311,7 +312,7 @@ class LabsActivity : BaseActivity() {
             runOnUiThread { versions.text = "지금 쓰는 빌드: $mine · 정식 채널: " + (stable ?: "확인하지 못함") }
         }.start()
         chip("이 빌드($mine)를 정식에 추가 요청") {
-            request("build", mine, Labs.buildTitle(mine), "알파 빌드 $mine 을(를) 써 보았고, 정식 채널에 올려 주세요.\n\n써 본 내용:\n")
+            request("build", Labs.shortName(mine), Labs.buildTitle(Labs.shortName(mine)), "알파 빌드 $mine 을(를) 써 보았고, 정식 채널에 올려 주세요.\n\n써 본 내용:\n")
         }
 
         title("실험실")

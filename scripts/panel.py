@@ -54,9 +54,14 @@ def is_member(author, owner, panel_text):
     return author.lower() in (n.lower() for n in names)
 
 
+def short_name(name):
+    """버전 이름에서 'NCP#' 같은 머리말을 뗀다. 건의에는 머리말 없이 '1.00.a' 처럼 온다."""
+    return name.split("#")[-1]
+
+
 def check_build(version, alpha, stable):
     """알파 빌드를 정식에 올려도 되는지. 안 되면 이유를, 되면 None 을 돌려준다."""
-    if version != alpha["versionName"]:
+    if short_name(version) != short_name(alpha["versionName"]):
         return "요청한 빌드(%s)가 지금 알파 빌드(%s)가 아닙니다" % (version, alpha["versionName"])
     if alpha["versionCode"] <= stable["versionCode"]:
         return "빌드 %s 은(는) 이미 정식 채널에 있습니다" % version

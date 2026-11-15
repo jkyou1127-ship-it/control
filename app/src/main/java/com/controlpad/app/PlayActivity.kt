@@ -256,7 +256,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     fun summary(): Pair<Int, Long> = total to (SystemClock.uptimeMillis() - startedAt)
 
     init {
-        if (Labs.isOn("hide-labels")) painter.hideLabels = true
         if (Labs.isOn("status-large")) statusPaint.textSize = ctx.dp(18).toFloat()
         if (labReleaseSound) ClickSound.prepare(ctx)
     }
