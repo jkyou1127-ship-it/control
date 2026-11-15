@@ -28,7 +28,8 @@
   ],
   "hidden": [
     "combo",
-    "press-pop"
+    "press-pop",
+    "strong-haptic"
   ],
   "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
