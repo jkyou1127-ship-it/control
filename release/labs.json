@@ -51,7 +51,9 @@
     "text-scale",
     "touch-dots"
   ],
-  "hidden": [],
+  "hidden": [
+    "confirm-delete"
+  ],
   "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
