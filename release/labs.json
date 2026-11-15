@@ -8,12 +8,12 @@
     "list-count"
   ],
   "graduated": [
-    "press-count"
+    "press-count",
+    "release-sound"
   ],
   "hidden": [],
   "alpha": [
     "clock-seconds",
-    "release-sound",
     "session-summary"
   ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
