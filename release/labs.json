@@ -40,7 +40,8 @@
   "alpha": [
     "clock-seconds",
     "press-count",
-    "release-sound"
+    "release-sound",
+    "session-summary"
   ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
