@@ -33,6 +33,7 @@
     "hide-labels"
   ],
   "alpha": [
+    "dim-buttons",
     "press-count",
     "release-sound"
   ],
