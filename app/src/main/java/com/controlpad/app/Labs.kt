@@ -72,6 +72,14 @@ object Labs {
     /** 이 기기에서 바로 숨긴 것으로 친다(숨김 건의를 보낸 직후). 다음에 목록을 받아 오면 저장소 값으로 맞춰진다. */
     fun hideNow(id: String) = prefs.edit().putStringSet("labsHidden", hidden + id).apply()
 
+    /** 복귀 건의를 보낸 직후, 이 기기에서 바로 되돌린 것으로 친다(scripts/panel.py 의 복귀와 같은 규칙). */
+    fun restoreNow(id: String) {
+        val e = prefs.edit()
+        if (id in hidden) e.putStringSet("labsHidden", hidden - id)
+        else { e.putStringSet("labsGraduated", graduated - id); e.putStringSet("labsAlpha", alphaWide - id) }
+        e.apply()
+    }
+
     /** 정식 추가 1단계로 알파 사용자 모두에게 켜진 기능들(마지막으로 받아 온 목록). */
     val alphaWide: Set<String> get() = prefs.getStringSet("labsAlpha", emptySet()) ?: emptySet()
 
@@ -115,7 +123,7 @@ object Labs {
         "build" -> "요청했습니다. 30분 뒤에 정식 채널에 올라갑니다."
         "lab" -> "요청했습니다. 10분 뒤에 알파 사용자 모두에게 켜지고, 그로부터 20분 뒤에 정식 기능이 됩니다."
         "hide" -> "숨겼습니다. 다른 사람들에게도 1분쯤 안에 숨겨집니다."
-        else -> "요청했습니다. 5분 뒤에 실험실로 돌아옵니다."
+        else -> "되돌렸습니다. 다른 사람들에게도 1분쯤 안에 반영됩니다."
     }
 
     private fun parseList(json: String, key: String): Set<String> {
@@ -235,11 +243,12 @@ class LabsActivity : BaseActivity() {
                 val problem = Labs.send(kind, target)
                 // 숨김은 기다리지 않으므로, 건의한 사람의 화면에서는 바로 숨긴다(저장소 반영은 곧 뒤따른다).
                 if (problem == null && kind == "hide") Labs.hideNow(target)
+                if (problem == null && kind == "restore") Labs.restoreNow(target)
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     android.app.AlertDialog.Builder(this)
                         .setMessage(problem ?: Labs.plan(kind))
-                        .setPositiveButton("확인") { _, _ -> if (problem == null && kind == "hide") recreate() }
+                        .setPositiveButton("확인") { _, _ -> if (problem == null && (kind == "hide" || kind == "restore")) recreate() }
                         .show()
                 }
             }.start()
@@ -284,7 +293,7 @@ class LabsActivity : BaseActivity() {
             "아직 다듬는 중인 기능입니다. 켜서 써 보고 평가단으로 건의하세요.\n" +
                 "· 정식 추가: 10분 뒤 알파 사용자 모두에게 켜지고, 그로부터 20분 뒤 정식 사용자에게도 켜집니다\n" +
                 "· 숨김: 바로 실험실에서 빠지고 누구에게도 켜지지 않습니다\n" +
-                "· 복귀: 5분 뒤 숨긴 기능이나 정식이 된 기능을 실험실로 되돌립니다"
+                "· 복귀: 바로 숨긴 기능이나 정식이 된 기능을 실험실로 되돌립니다"
         )
         // 실험실 전체 켜기/끄기
         val boxes = ArrayList<CheckBox>()
@@ -330,7 +339,7 @@ class LabsActivity : BaseActivity() {
         val gone = Labs.features.filter { it.id in hidden }
         if (gone.isNotEmpty()) {
             title("숨긴 기능")
-            note("평가단 건의로 숨긴 기능입니다. 복귀를 건의하면 5분 뒤 숨기기 전 상태로 돌아옵니다.")
+            note("평가단 건의로 숨긴 기능입니다. 복귀를 건의하면 바로 숨기기 전 상태로 돌아옵니다.")
             for (f in gone) {
                 root.addView(TextView(this).apply { this.text = f.title; textSize = 16f; setTextColor(text); setPadding(0, dp(10), 0, 0) })
                 chip("'${f.title}' 복귀 건의") {

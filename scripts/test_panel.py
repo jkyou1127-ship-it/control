@@ -129,6 +129,8 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(panel.WAITS["lab"], (600, 1200))                   # 10분 뒤 알파, 그로부터 20분 뒤 정식
         self.assertEqual(panel.WAITS["build"], (1800, 0))
         self.assertEqual(panel.WAITS["hide"], (0, 0))                       # 숨김은 바로
+        self.assertEqual(panel.WAITS["restore"], (0, 0))                    # 복귀도 바로
+        self.assertIn("바로", panel.plan("restore", "kps"))
         self.assertIn("바로", panel.plan("hide", "kps"))
         self.assertIn("10분 뒤", panel.plan("lab", "kps"))
         self.assertIn("30분 뒤", panel.plan("build", "1.21"))

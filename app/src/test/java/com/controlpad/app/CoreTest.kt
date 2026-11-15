@@ -649,7 +649,7 @@ class CoreTest {
         assertEquals(emptySet<String>(), Labs.parseAlpha("{}"))
         assertTrue(Labs.plan("lab").contains("10분") && Labs.plan("lab").contains("20분"))
         assertTrue(Labs.plan("build").contains("30분"))
-        assertTrue(Labs.plan("hide").contains("숨겼습니다") && Labs.plan("restore").contains("5분"))
+        assertTrue(Labs.plan("hide").contains("숨겼습니다") && Labs.plan("restore").contains("되돌렸습니다"))
     }
 
     @Test
