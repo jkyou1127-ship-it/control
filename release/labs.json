@@ -45,7 +45,8 @@
     "combo",
     "max-brightness",
     "press-pop",
-    "strong-haptic"
+    "strong-haptic",
+    "timer"
   ],
   "alpha": [
     "battery"
