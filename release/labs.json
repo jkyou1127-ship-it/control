@@ -26,6 +26,8 @@
   "graduated": [
     "kps"
   ],
-  "hidden": [],
+  "hidden": [
+    "press-pop"
+  ],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
