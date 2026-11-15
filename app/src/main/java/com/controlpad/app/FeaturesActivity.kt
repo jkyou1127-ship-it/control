@@ -18,6 +18,7 @@ class FeaturesActivity : BaseActivity() {
         })
 
         root.addView(Ui.header(this, "기능 · 기타", "켜고 끄는 기능과 그 밖의 설정"))
+        root.addView(Ui.tabs(this, 1))
 
         root.addView(Ui.section(this, "기능"))
         val promoted = Labs.settingFeatures()
@@ -31,6 +32,7 @@ class FeaturesActivity : BaseActivity() {
         check("눌리고 있는 키 표시 — 실행 화면 위쪽에 지금 입력 중인 키를 보여 줍니다", Link.showPressed) { Link.showPressed = it }
         check("버튼에 키 이름 표시 — 버튼 아래쪽에 그 버튼이 입력하는 키를 작게 보여 줍니다", Link.showKeyNames) { Link.showKeyNames = it }
         check("버튼을 누를 때 진동", Link.haptic) { Link.prefs.edit().putBoolean("haptic", it).apply() }
+        check("연결이 끊기면 알림 — 실행 중에 PC 연결이 끊기면 진동과 알림으로 알려 줍니다", Link.disconnectAlert) { Link.disconnectAlert = it }
 
         setContentView(ScrollView(this).apply { addView(root) })
     }

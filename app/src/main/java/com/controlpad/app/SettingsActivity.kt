@@ -46,6 +46,7 @@ class SettingsActivity : BaseActivity() {
         fun note(t: String) = TextView(this).apply { text = t; textSize = 14f; setLineSpacing(0f, 1.2f) }
 
         root.addView(Ui.header(this, "설정", "연결 · 테마 · 오프셋 · 화면"))
+        root.addView(Ui.tabs(this, 0))
         status = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
         root.addView(status)
         // 실험실과 평가단은 알파 빌드를 받는 사람에게만 보인다. 자주 쓰므로 맨 위에 둔다.
@@ -174,15 +175,19 @@ class SettingsActivity : BaseActivity() {
             setOnClickListener { startActivity(Intent(this@SettingsActivity, ThemeEditorActivity::class.java)) }
         })
 
-        root.addView(title("기능 · 기타"))
-        root.addView(note("실험실에서 올라온 기능과 진동, 키 표시 같은 설정은 따로 모았습니다."))
-        root.addView(Button(this).apply {
-            text = "기능 · 기타 설정 열기"; tag = Ui.PRIMARY
-            setOnClickListener { startActivity(Intent(this@SettingsActivity, FeaturesActivity::class.java)) }
-        })
-
         root.addView(title("오프셋"))
         root.addView(note("손가락이 닿는 자리와 버튼이 눌리는 자리가 어긋나거나, 다른 기기와 박자가 안 맞을 때 맞춥니다."))
+        root.addView(Button(this).apply {
+            text = "기본 프리셋: " + (OffsetPresets.current()?.name ?: "직접 맞춤")
+            setOnClickListener {
+                val names = OffsetPresets.all.map { it.name + "\n   " + it.note }.toTypedArray()
+                android.app.AlertDialog.Builder(this@SettingsActivity)
+                    .setTitle("오프셋 기본 프리셋")
+                    .setItems(names) { _, i -> OffsetPresets.apply(OffsetPresets.all[i]); reload() }
+                    .setNegativeButton("닫기", null)
+                    .show().wide()
+            }
+        })
         fun offsetSlider(label: (Int) -> String, min: Int, max: Int, value: Int, set: (Int) -> Unit) {
             val shown = TextView(this).apply { setPadding(0, dp(8), 0, 0) }
             val bar = android.widget.SeekBar(this).apply { this.max = max - min; progress = value - min }
@@ -217,13 +222,6 @@ class SettingsActivity : BaseActivity() {
         root.addView(CheckBox(this).apply {
             text = "목록에 레이아웃 미리보기 표시"; isChecked = Link.thumbnails
             setOnCheckedChangeListener { _, on -> Link.thumbnails = on }
-        })
-
-        root.addView(title("업데이트"))
-        root.addView(note("현재 버전 " + Updater.installedName(this) + " · 자동 업데이트, 알파 빌드 받기, 업데이트 내역은 따로 모았습니다."))
-        root.addView(Button(this).apply {
-            text = "업데이트 열기"; tag = Ui.PRIMARY
-            setOnClickListener { startActivity(Intent(this@SettingsActivity, UpdateActivity::class.java)) }
         })
 
         scroll = ScrollView(this).apply { addView(root) }

@@ -55,19 +55,19 @@ object Ui {
                 val primary = view.tag == PRIMARY
                 view.isAllCaps = false
                 view.stateListAnimator = null
-                view.background = ripple(ctx, rounded(ctx, if (primary) accent() else surface(), 10, if (primary) 0 else line()))
+                view.background = ripple(ctx, rounded(ctx, if (primary) accent() else surface(), 12, if (primary) 0 else line()))
                 view.setTextColor(if (primary) (if (Themes.luminance(accent()) > 0.5f) 0xFF0B1A24.toInt() else 0xFFFFFFFF.toInt()) else t.text)
                 view.minHeight = ctx.dp(42); view.minimumHeight = ctx.dp(42)
                 view.setPadding(ctx.dp(14), ctx.dp(8), ctx.dp(14), ctx.dp(8))
                 (view.layoutParams as? ViewGroup.MarginLayoutParams)?.let { it.setMargins(ctx.dp(3), ctx.dp(3), ctx.dp(3), ctx.dp(3)); view.layoutParams = it }
             }
             is EditText -> {
-                view.background = rounded(ctx, surface(), 10, line())
+                view.background = rounded(ctx, surface(), 12, line())
                 view.setPadding(ctx.dp(12), ctx.dp(10), ctx.dp(12), ctx.dp(10))
                 view.setTextColor(t.text)
                 view.setHintTextColor(t.text and 0x00FFFFFF or 0x77000000)
             }
-            is Spinner -> view.background = rounded(ctx, surface(), 10, line())
+            is Spinner -> view.background = rounded(ctx, surface(), 12, line())
             is SeekBar -> {
                 view.progressTintList = ColorStateList.valueOf(accent())
                 view.thumbTintList = ColorStateList.valueOf(accent())
@@ -89,6 +89,33 @@ object Ui {
                 text = subtitle; textSize = 13f; setTextColor(Themes.current.text and 0x00FFFFFF or 0x99000000.toInt())
             })
         }
+
+    /** 설정 화면들의 탭: 설정 · 기능 · 업데이트. 누르면 그 화면으로 바로 바꾼다(뒤로 가기는 목록으로). */
+    val TABS = listOf("설정" to SettingsActivity::class.java, "기능 · 기타" to FeaturesActivity::class.java, "업데이트" to UpdateActivity::class.java)
+
+    fun tabs(a: android.app.Activity, selected: Int): LinearLayout = LinearLayout(a).apply {
+        orientation = LinearLayout.HORIZONTAL
+        val pad = a.dp(4)
+        setPadding(pad, pad, pad, pad)
+        background = rounded(a, surface(), 14, line())
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { setMargins(0, 0, 0, a.dp(12)) }
+        TABS.forEachIndexed { i, (label, cls) ->
+            val on = i == selected
+            addView(TextView(a).apply {
+                text = label; textSize = 15f; gravity = android.view.Gravity.CENTER
+                typeface = if (on) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
+                setTextColor(if (on) (if (Themes.luminance(accent()) > 0.5f) 0xFF0B1A24.toInt() else 0xFFFFFFFF.toInt()) else Themes.current.text)
+                if (on) background = rounded(a, accent(), 10)
+                setPadding(0, a.dp(10), 0, a.dp(10))
+                isClickable = true
+                if (!on) setOnClickListener {
+                    a.startActivity(android.content.Intent(a, cls).addFlags(android.content.Intent.FLAG_ACTIVITY_NO_ANIMATION))
+                    a.finish()
+                    @Suppress("DEPRECATION") a.overridePendingTransition(0, 0)
+                }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+    }
 
     /** 묶음 제목. SectionedLayout 에 넣으면 새 카드가 열린다. */
     fun section(ctx: Context, title: String): TextView = TextView(ctx).apply {
@@ -112,7 +139,7 @@ class SectionedLayout(ctx: Context) : LinearLayout(ctx) {
         if (child.tag == Ui.SECTION) {
             val c = LinearLayout(context).apply {
                 orientation = VERTICAL
-                background = Ui.rounded(context, Ui.surface(), 16, Ui.line())
+                background = Ui.rounded(context, Ui.surface(), 20, Ui.line())
                 setPadding(context.dp(16), context.dp(14), context.dp(16), context.dp(12))
             }
             super.addView(c, -1, LayoutParams(-1, -2).apply { topMargin = context.dp(12) })

@@ -419,6 +419,16 @@ object Themes {
         PadTheme("슬레이트", c(0xFF1E2430), c(0xFF121722), 1f, c(0xFFE6EBF5), 1.5f, card = c(0xFF2A3242)),
         PadTheme("크림", c(0xFFFFF8E1), Color.WHITE, 1.2f, c(0xFF4E342E), 1.5f, light = true, card = Color.WHITE),
         PadTheme("고대비", Color.BLACK, Color.BLACK, 1.3f, Color.WHITE, 3f, card = c(0xFF1A1A1A)),
+        PadTheme("딥 퍼플", c(0xFF150B24), c(0xFF0B0514), 1f, c(0xFFEDE1FF), 1.5f, card = c(0xFF231538)),
+        PadTheme("모카", c(0xFF1F1813), c(0xFF120D09), 1.05f, c(0xFFF3E6D8), 1.5f, card = c(0xFF2E241C)),
+        PadTheme("아이스", c(0xFFE8F4FD), Color.WHITE, 1.2f, c(0xFF0D3B66), 1.5f, light = true, card = Color.WHITE),
+        PadTheme("모노 라이트", c(0xFFF5F5F5), Color.WHITE, 1.15f, c(0xFF111111), 2f, light = true, card = Color.WHITE),
+        PadTheme("신스웨이브", c(0xFF1A0933), c(0xFF0E0420), 0.3f, c(0xFFFF6AD5), 3f, colorText = true, card = c(0xFF2A1250)),
+        PadTheme("터미널", Color.BLACK, Color.BLACK, 0.35f, c(0xFF33FF66), 2f, colorText = true, card = c(0xFF0C140E)),
+        PadTheme("앰버", c(0xFF1A1205), c(0xFF0F0A02), 1f, c(0xFFFFC857), 1.5f, card = c(0xFF2A1E0A)),
+        PadTheme("피치", c(0xFFFFEDE4), Color.WHITE, 1.2f, c(0xFF7A2E16), 1.5f, light = true, card = Color.WHITE),
+        PadTheme("딥 씨", c(0xFF020F1E), c(0xFF010812), 1f, c(0xFF8FD3FF), 1.5f, card = c(0xFF0A1F36)),
+        PadTheme("올리브", c(0xFF181C0E), c(0xFF0D1007), 1.05f, c(0xFFE8F0C8), 1.5f, card = c(0xFF252B16)),
     )
 
     /** 고를 수 있는 이름들: 기본 테마 다음에 테마 에디터로 직접 만든 테마가 온다. */
@@ -460,7 +470,16 @@ object Themes {
     }
 
     var index: Int
-        get() = prefs.getInt("theme", 0).coerceIn(0, all.size + user.size - 1)
+        get() {
+            // 기본 테마가 늘어나면 직접 만든 테마의 번호가 밀리므로, 고른 것이 직접 만든 테마였다면 그만큼 옮긴다.
+            val known = prefs.getInt("themeBuiltIn", 20)
+            var i = prefs.getInt("theme", 0)
+            if (known != all.size) {
+                if (i >= known) i += all.size - known
+                prefs.edit().putInt("theme", i).putInt("themeBuiltIn", all.size).apply()
+            }
+            return i.coerceIn(0, all.size + user.size - 1)
+        }
         set(i) {
             prefs.edit().putInt("theme", i).apply()
             revision++

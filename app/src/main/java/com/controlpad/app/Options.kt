@@ -22,8 +22,8 @@ object Options {
     val labIds = listOf(
         "kps", "battery", "exit-guard", "hide-status", "press-sound", "key-history",
         "auto-dim", "status-bottom",
-        "press-count", "release-haptic", "release-sound", "dim-buttons", "pressed-outline",
-        "kps-peak", "clock-seconds", "session-summary", "status-large",
+        "press-count", "release-haptic", "release-sound", "dim-buttons",
+        "clock-seconds", "session-summary",
     )
 
     val all: List<Option>

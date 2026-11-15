@@ -208,9 +208,7 @@ class EditorActivity : BaseActivity() {
         if (Labs.isOn("big-handle")) view.handleScale = 1.8f
         view.snapEdges = Labs.isOn("snap-edges")
         view.countOn = Labs.isOn("selection-count")
-        view.dots = Labs.isOn("grid-dots")
         view.outlineHidden = Labs.isOn("show-hidden-outline")
-        view.randomColor = Labs.isOn("random-color")
         view.longPressOn = Labs.isOn("long-press-edit")
         val alignOn = Labs.isOn("align")
         val distributeOn = Labs.isOn("distribute")
@@ -1250,9 +1248,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     // 실험실 기능들
     var snapEdges = false
     var countOn = false
-    var dots = false
     var outlineHidden = false
-    var randomColor = false
     private val dashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = ctx.dp(1).toFloat()
         pathEffect = android.graphics.DashPathEffect(floatArrayOf(ctx.dp(6).toFloat(), ctx.dp(4).toFloat()), 0f)
@@ -1445,13 +1441,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     private fun rectOf(b: PadButton) = rect.apply { set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height) }
 
     override fun onDraw(c: Canvas) {
-        if (snap && dots) {
-            // 점 격자(실험실 기능)
-            gridPaint.strokeWidth = context.dp(2).toFloat()
-            var y = 0f
-            while (y < height) { var x = 0f; while (x < width) { c.drawPoint(x, y, gridPaint); x += cell }; y += cell }
-            gridPaint.strokeWidth = 1f
-        } else if (snap) {
+        if (snap) {
             var x = 0f
             while (x < width) { c.drawLine(x, 0f, x, height.toFloat(), gridPaint); x += cell }
             var y = 0f
@@ -1581,7 +1571,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                         val w = abs(curX - downX); val h = abs(curY - downY)
                         if (w >= minSize && h >= minSize) {
                             val b = PadButton(l / width, t / height, w / width, h / height,
-                                color = if (randomColor) PadButton.PALETTE.random() else PadButton.PALETTE[pad.buttons.size % PadButton.PALETTE.size])
+                                color = PadButton.PALETTE[pad.buttons.size % PadButton.PALETTE.size])
                             beforeChange()
                             pad.buttons += b
                             selected = b

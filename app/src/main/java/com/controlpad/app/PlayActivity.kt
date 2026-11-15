@@ -33,9 +33,17 @@ class PlayActivity : BaseActivity() {
     }
     private var view: PlayView? = null
     private val ui = Handler(Looper.getMainLooper())
+    private var wasConnected = false
     private val tick = object : Runnable {
         override fun run() {
-            view?.setStatus(Link.connected, Link.status())
+            val connected = Link.connected
+            // 쓰는 도중에 PC 연결이 끊기면 진동과 알림으로 알려 준다(기능 · 기타에서 끌 수 있음).
+            if (wasConnected && !connected && Link.disconnectAlert) {
+                view?.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS, android.view.HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
+                android.widget.Toast.makeText(this@PlayActivity, "PC 연결이 끊겼습니다", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            wasConnected = connected
+            view?.setStatus(connected, Link.status())
             ui.postDelayed(this, 500)
         }
     }
@@ -197,7 +205,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     // 실험실 기능
     private val labKps = Labs.isOn("kps")
     /** 초당 입력 수를 세야 하는지: 실험실 표시가 켜져 있거나, 초당 입력 수 패널을 넣어 둔 경우. */
-    private val countKps = labKps || Labs.isOn("kps-peak") || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.KPS }
+    private val countKps = labKps || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.KPS }
     private val pressTimes = ArrayDeque<Long>()         // 최근에 버튼을 누른 시각들(초당 입력 수 계산용)
     private val labBattery = Labs.isOn("battery")
     private val hapticKind = HapticFeedbackConstants.KEYBOARD_TAP
@@ -243,20 +251,15 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labReleaseHaptic = Labs.isOn("release-haptic")
     private val labReleaseSound = Labs.isOn("release-sound")
     private val labDimButtons = Labs.isOn("dim-buttons")
-    private val labOutline = Labs.isOn("pressed-outline")
-    private val labPeak = Labs.isOn("kps-peak")
     private val labSeconds = Labs.isOn("clock-seconds")
     private val pressCount = IntArray(layout.buttons.size)
-    private var peak = 0
     private val countPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.RIGHT; textSize = ctx.dp(11).toFloat() }
-    private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(4).toFloat() }
     private val dimLayer = Paint().apply { alpha = 110 }
 
     /** 나갈 때 기록 요약(실험실 기능)에 쓰는 값: 누른 횟수와 실행한 시간(ms). */
     fun summary(): Pair<Int, Long> = total to (SystemClock.uptimeMillis() - startedAt)
 
     init {
-        if (Labs.isOn("status-large")) statusPaint.textSize = ctx.dp(18).toFloat()
         if (labReleaseSound) ClickSound.prepare(ctx)
     }
 
@@ -833,7 +836,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             if (!lit && parts == 0 && knobAngle[i] == 0f) continue    // 미리 그린 모습 그대로
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)
-            if (labOutline && lit) { outlinePaint.color = theme.text; c.drawRect(rect, outlinePaint) }
         }
         if (labCount) {
             countPaint.color = theme.text and 0x00FFFFFF or 0xAA000000.toInt()
@@ -859,11 +861,9 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         // 왼쪽 위 한 줄: 연결 상태와, 켜 둔 실험실 표시들
         val parts = ArrayList<String>()
         if (!labHideStatus) parts += (if (connected) "● " else "○ ") + status
-        if (labKps || labPeak) {
+        if (labKps) {
             val n = kps()
-            if (n > peak) peak = n
-            if (labKps) parts += "${n}회/초"
-            if (labPeak) parts += "최고 ${peak}회/초"
+            parts += "${n}회/초"
             if (n > 0) postInvalidateDelayed(200)       // 손을 떼도 숫자가 0 으로 내려가게
         }
         if (labBattery) { parts += battery(); postInvalidateDelayed(1000) }

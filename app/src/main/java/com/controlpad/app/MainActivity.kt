@@ -39,7 +39,7 @@ class MainActivity : BaseActivity() {
         val pad = dp(16)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
 
-        // 2.0: 위쪽은 제목 줄(이름 + 연결 상태 + 설정), 그 아래 도구 줄(가로로 밀 수 있음)
+        // 위쪽은 제목 줄(이름 + 연결 상태 + 설정), 그 아래 도구 줄(가로로 밀 수 있음)
         val top = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         top.addView(TextView(this).apply {
             text = "ControlPad"; textSize = 26f; setTextColor(Themes.current.text); typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -50,12 +50,13 @@ class MainActivity : BaseActivity() {
         }
         top.addView(status, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(12) })
         top.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        root.addView(top)
-        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(10), 0, dp(6)) }
-        header.addView(Button(this).apply {
-            text = "설정"
+        // NES2: 설정은 제목 줄 오른쪽으로
+        top.addView(Button(this).apply {
+            text = "⚙ 설정"
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         })
+        root.addView(top)
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(10), 0, dp(6)) }
         header.addView(Button(this).apply {
             text = "불러오기"
             setOnClickListener {
@@ -141,7 +142,6 @@ class MainActivity : BaseActivity() {
             text = "레이아웃 ${everything.size}개" + if (layouts.size != everything.size) " 중 ${layouts.size}개" else ""
             setPadding(0, dp(8), 0, 0)
         })
-        val compact = Labs.isOn("list-compact")
         val kinds = Labs.isOn("list-kinds")
         if (layouts.isEmpty()) {
             list.addView(TextView(this).apply {
@@ -149,67 +149,94 @@ class MainActivity : BaseActivity() {
                 setPadding(0, dp(24), 0, 0)
             })
         }
-        for (l in layouts) {
-            val row = LinearLayout(this).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                background = Ui.rounded(this@MainActivity, Ui.surface(), 14, Ui.line())
-                if (compact) setPadding(dp(10), dp(2), dp(4), dp(2)) else setPadding(dp(12), dp(8), dp(4), dp(8))
+        // NES2: 레이아웃을 카드 격자로 보여 준다(화면이 넓을수록 한 줄에 더 많이).
+        val widthDp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
+        val columns = ((widthDp - 32) / 280).toInt().coerceIn(1, 4)
+        var line: LinearLayout? = null
+        layouts.forEachIndexed { i, l ->
+            if (i % columns == 0) {
+                line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                list.addView(line, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+            }
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = Ui.rounded(this@MainActivity, Ui.surface(), 18, Ui.line())
+                setPadding(dp(12), dp(12), dp(12), dp(10))
                 isClickable = true
+                foreground = android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Ui.accent() and 0x00FFFFFF or 0x33000000), null,
+                    Ui.rounded(this@MainActivity, -1, 18))
                 setOnClickListener { open(PlayActivity::class.java, l.id) }
             }
-            if (Link.thumbnails && !compact) row.addView(LayoutThumb(this, l), LinearLayout.LayoutParams(dp(112), dp(63)).apply { rightMargin = dp(12) })
-            val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            texts.addView(TextView(this).apply { text = (if (pinOn && l.pinned) "★ " else "") + l.name; textSize = 18f; setTextColor(Themes.current.text) })
-            if (!compact) texts.addView(TextView(this).apply { text = "버튼 ${l.buttons.size}개 · 눌러서 실행"; textSize = 13f })
-            if (kinds) texts.addView(TextView(this).apply { text = LayoutKinds.describe(l); textSize = 12f })
-            row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
-            row.addView(Button(this).apply { text = "편집"; setOnClickListener { open(EditorActivity::class.java, l.id) } })
-            row.addView(Button(this).apply {
-                text = "⋮"
-                setOnClickListener { v ->
-                    PopupMenu(this@MainActivity, v).apply {
-                        val pin = if (l.pinned) "고정 해제" else "맨 위에 고정"
-                        if (pinOn) menu.add(pin)
-                        if (Labs.isOn("home-shortcut")) menu.add("홈 화면에 추가")
-                        menu.add("그림 에디터"); menu.add("이름 변경"); menu.add("복제"); menu.add("파일로 저장"); menu.add("삭제")
-                        setOnMenuItemClickListener { item ->
-                            when (item.title) {
-                                "그림 에디터" -> startActivity(
-                                    Intent(this@MainActivity, EditorActivity::class.java).putExtra("id", l.id).putExtra("sketch", true),
-                                )
-                                "이름 변경" -> askName("이름 변경", l.name) { l.name = it; LayoutStore.save(this@MainActivity, l); refresh() }
-                                "복제" -> {
-                                    val c = PadLayout(name = l.name + " 복사본", slide = l.slide,
-                                        buttons = l.buttons.map { it.copy() }.toMutableList())
-                                    LayoutStore.save(this@MainActivity, c); refresh()
-                                }
-                                "파일로 저장" -> {
-                                    exporting = l
-                                    runCatching {
-                                        @Suppress("DEPRECATION")
-                                        startActivityForResult(
-                                            Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-                                                .setType("application/json")
-                                                .putExtra(Intent.EXTRA_TITLE, LayoutFile.fileName(l.name)),
-                                            REQ_EXPORT,
-                                        )
-                                    }.onFailure { toast("파일을 저장할 수 있는 앱이 없습니다") }
-                                }
-                                pin -> { l.pinned = !l.pinned; LayoutStore.save(this@MainActivity, l); refresh() }
-                                "홈 화면에 추가" -> addShortcut(l)
-                                "삭제" -> AlertDialog.Builder(this@MainActivity)
-                                    .setMessage("'${l.name}' 레이아웃을 삭제할까요?")
-                                    .setPositiveButton("삭제") { _, _ -> LayoutStore.delete(this@MainActivity, l.id); refresh() }
-                                    .setNegativeButton("취소", null).show()
-                            }
-                            true
-                        }
-                    }.show()
-                }
-            }, LinearLayout.LayoutParams(dp(56), -2))
-            list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+            if (Link.thumbnails) card.addView(LayoutThumb(this, l), LinearLayout.LayoutParams(-1, 0).apply { height = dp(120) })
+            card.addView(TextView(this).apply {
+                text = (if (pinOn && l.pinned) "★ " else "") + l.name; textSize = 17f; setTextColor(Themes.current.text)
+                typeface = android.graphics.Typeface.DEFAULT_BOLD; setSingleLine(); ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(2), dp(10), dp(2), 0)
+            })
+            card.addView(TextView(this).apply {
+                text = "버튼 ${l.buttons.size}개" + if (kinds) " · " + LayoutKinds.describe(l) else ""
+                textSize = 12f; setSingleLine(); ellipsize = android.text.TextUtils.TruncateAt.END
+                setTextColor(Themes.current.text and 0x00FFFFFF or 0x99000000.toInt()); setPadding(dp(2), dp(2), dp(2), dp(8))
+            })
+            val actions = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            actions.addView(Button(this).apply { text = "▶ 실행"; tag = Ui.PRIMARY; setOnClickListener { open(PlayActivity::class.java, l.id) } },
+                LinearLayout.LayoutParams(0, -2, 1f))
+            actions.addView(Button(this).apply { text = "편집"; setOnClickListener { open(EditorActivity::class.java, l.id) } },
+                LinearLayout.LayoutParams(0, -2, 1f))
+            actions.addView(Button(this).apply { text = "⋮"; setOnClickListener { v -> layoutMenu(l, v, pinOn) } },
+                LinearLayout.LayoutParams(dp(52), -2))
+            card.addView(actions)
+            line!!.addView(card, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                if (i % columns != 0) leftMargin = dp(12)
+            })
         }
+        // 마지막 줄이 덜 찼으면 빈 칸으로 채워 카드 너비를 맞춘다.
+        val rest = (columns - layouts.size % columns) % columns
+        repeat(rest) { line?.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f).apply { leftMargin = dp(12) }) }
         Ui.restyle(list)       // 줄마다 새로 만든 버튼들에도 새 UI 모양을 입힌다
+    }
+
+    /** 레이아웃 카드의 ⋮ 메뉴. */
+    private fun layoutMenu(l: PadLayout, v: View, pinOn: Boolean) {
+        PopupMenu(this@MainActivity, v).apply {
+            val pin = if (l.pinned) "고정 해제" else "맨 위에 고정"
+            if (pinOn) menu.add(pin)
+            if (Labs.isOn("home-shortcut")) menu.add("홈 화면에 추가")
+            menu.add("그림 에디터"); menu.add("이름 변경"); menu.add("복제"); menu.add("파일로 저장"); menu.add("삭제")
+            setOnMenuItemClickListener { item ->
+                when (item.title) {
+                    "그림 에디터" -> startActivity(
+                        Intent(this@MainActivity, EditorActivity::class.java).putExtra("id", l.id).putExtra("sketch", true),
+                    )
+                    "이름 변경" -> askName("이름 변경", l.name) { l.name = it; LayoutStore.save(this@MainActivity, l); refresh() }
+                    "복제" -> {
+                        val c = PadLayout(name = l.name + " 복사본", slide = l.slide,
+                            buttons = l.buttons.map { it.copy() }.toMutableList())
+                        LayoutStore.save(this@MainActivity, c); refresh()
+                    }
+                    "파일로 저장" -> {
+                        exporting = l
+                        runCatching {
+                            @Suppress("DEPRECATION")
+                            startActivityForResult(
+                                Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                                    .setType("application/json")
+                                    .putExtra(Intent.EXTRA_TITLE, LayoutFile.fileName(l.name)),
+                                REQ_EXPORT,
+                            )
+                        }.onFailure { toast("파일을 저장할 수 있는 앱이 없습니다") }
+                    }
+                    pin -> { l.pinned = !l.pinned; LayoutStore.save(this@MainActivity, l); refresh() }
+                    "홈 화면에 추가" -> addShortcut(l)
+                    "삭제" -> AlertDialog.Builder(this@MainActivity)
+                        .setMessage("'${l.name}' 레이아웃을 삭제할까요?")
+                        .setPositiveButton("삭제") { _, _ -> LayoutStore.delete(this@MainActivity, l.id); refresh() }
+                        .setNegativeButton("취소", null).show()
+                }
+                true
+            }
+        }.show()
     }
 
     /** 홈 화면에 이 레이아웃을 바로 실행하는 바로가기를 만든다. */

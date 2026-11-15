@@ -146,7 +146,12 @@ class CoreTest {
 
     @Test
     fun builtInThemesAreDistinctAndReadable() {
-        assertEquals(20, Themes.all.size)
+        assertEquals(30, Themes.all.size)
+        // 오프셋 기본 프리셋 10개: 이름이 겹치지 않고, 값이 조절 범위 안에 있다
+        assertEquals(10, OffsetPresets.all.size)
+        assertEquals(10, OffsetPresets.all.map { it.name }.toSet().size)
+        assertTrue(OffsetPresets.all.all { kotlin.math.abs(it.x) <= Link.OFFSET_MAX && kotlin.math.abs(it.y) <= Link.OFFSET_MAX && it.delay in 0..Link.DELAY_MAX })
+        assertEquals("기본", OffsetPresets.all[0].name)
         assertEquals(Themes.all.size, Themes.all.map { it.name }.toSet().size)
         for (t in Themes.all) {
             // 글자가 배경과 충분히 구분되어야 하고, 밝은 테마 표시는 실제 배경 밝기와 맞아야 한다.
@@ -507,7 +512,7 @@ class CoreTest {
         assertEquals(Labs.features.map { it.id }, names)
         assertTrue(Labs.features.all { Regex("^[a-z0-9][a-z0-9-]{0,39}$").matches(it.id) })
 
-        assertEquals(setOf("nudge"), Labs.parseGraduated("""{"graduated":["nudge","unknown-feature"]}"""))
+        assertEquals(setOf("press-count"), Labs.parseGraduated("""{"graduated":["press-count","unknown-feature"]}"""))
         assertEquals(emptySet<String>(), Labs.parseGraduated("{}"))
         assertEquals("[정식 요청] 빌드 1.21", Labs.buildTitle("1.21"))
         assertEquals("[정식 요청] 실험실 kps", Labs.labTitle("kps"))
@@ -606,8 +611,8 @@ class CoreTest {
 
     @Test
     fun hiddenLabsFeaturesAreParsedAndRequestTitlesMatchThePanelScript() {
-        assertEquals(setOf("nudge"), Labs.parseHidden("""{"hidden":["nudge","unknown"]}"""))
-        assertEquals(emptySet<String>(), Labs.parseHidden("""{"graduated":["nudge"]}"""))
+        assertEquals(setOf("press-count"), Labs.parseHidden("""{"hidden":["press-count","unknown"]}"""))
+        assertEquals(emptySet<String>(), Labs.parseHidden("""{"graduated":["press-count"]}"""))
         assertTrue(JSONObject(java.io.File("../release/labs.json").readText()).has("hidden"))
         assertEquals("[숨김 요청] 실험실 kps", Labs.hideTitle("kps"))
         assertEquals("[복귀 요청] 실험실 kps", Labs.restoreTitle("kps"))
@@ -652,7 +657,7 @@ class CoreTest {
 
     @Test
     fun alphaWideStageIsParsedAndPlansMatchThePanelSchedule() {
-        assertEquals(setOf("nudge"), Labs.parseAlpha("""{"alpha":["nudge","unknown"]}"""))
+        assertEquals(setOf("press-count"), Labs.parseAlpha("""{"alpha":["press-count","unknown"]}"""))
         assertEquals(emptySet<String>(), Labs.parseAlpha("{}"))
         assertTrue(Labs.plan("lab").contains("1~2분 안에"))                  // 정식 추가 건의는 바로 반영
         assertTrue(Labs.plan("build").contains("1~2분 안에"))
@@ -764,7 +769,11 @@ class CoreTest {
         assertEquals(null, Labs.feature("touch-dots"))                         // 평가단이 숨긴 기능은 지움
         assertEquals(null, Labs.feature("hold-time"))
         assertEquals(null, Labs.feature("hide-labels"))
-        assertEquals(19, listOf("press-count", "release-haptic", "release-sound", "dim-buttons", "pressed-outline",
+        for (gone in listOf("grid-dots", "kps-peak", "list-compact", "pressed-outline", "random-color", "status-large"))
+            assertEquals(null, Labs.feature(gone))                            // 평가단이 숨긴 기능은 다음 업데이트에서 지움
+        assertTrue(listOf("dim-buttons", "list-kinds", "nudge", "open-last", "selection-count", "show-hidden-outline", "snap-edges")
+            .all { it in permanentIds })                                     // 정식으로 간 기능은 늘 있는 기능으로
+        assertEquals(6, listOf("press-count", "release-haptic", "release-sound", "dim-buttons", "pressed-outline",
             "kps-peak", "clock-seconds", "session-summary", "status-large", "snap-edges", "selection-count", "grid-dots",
             "show-hidden-outline", "nudge", "random-color", "list-count", "list-compact", "open-last", "list-kinds").count { it in labIds })
         assertEquals(null, Labs.feature("confirm-delete"))                     // 숨겼던 기능은 지움

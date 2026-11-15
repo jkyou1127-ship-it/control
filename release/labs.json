@@ -3,41 +3,14 @@
     "press-count",
     "release-haptic",
     "release-sound",
-    "dim-buttons",
-    "pressed-outline",
-    "kps-peak",
     "clock-seconds",
     "session-summary",
-    "status-large",
-    "snap-edges",
-    "selection-count",
-    "grid-dots",
-    "show-hidden-outline",
-    "nudge",
-    "random-color",
-    "list-count",
-    "list-compact",
-    "open-last",
-    "list-kinds"
+    "list-count"
   ],
   "graduated": [
-    "dim-buttons",
-    "list-kinds",
-    "nudge",
-    "open-last",
-    "press-count",
-    "selection-count",
-    "show-hidden-outline",
-    "snap-edges"
+    "press-count"
   ],
-  "hidden": [
-    "grid-dots",
-    "kps-peak",
-    "list-compact",
-    "pressed-outline",
-    "random-color",
-    "status-large"
-  ],
+  "hidden": [],
   "alpha": [
     "clock-seconds",
     "release-sound",

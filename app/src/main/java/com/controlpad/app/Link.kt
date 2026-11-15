@@ -86,6 +86,11 @@ object Link {
         get() = prefs.getBoolean("showPressed", true)
         set(on) = prefs.edit().putBoolean("showPressed", on).apply()
 
+    /** 실행 화면에서 PC 연결이 끊기면 진동과 알림으로 알려 줄지. */
+    var disconnectAlert: Boolean
+        get() = prefs.getBoolean("disconnectAlert", true)
+        set(on) = prefs.edit().putBoolean("disconnectAlert", on).apply()
+
     /** 버튼 아래쪽에 그 버튼이 입력하는 키 이름을 보여 줄지. */
     var showKeyNames: Boolean
         get() = prefs.getBoolean("showKeyNames", true)
@@ -204,6 +209,7 @@ object Link {
             val u = udp
             when {
                 u == null -> "PC 주소가 설정되지 않음"
+                u.alive && u.pcPaused -> "PC 연결됨 (${u.host}) · PC에서 입력 일시정지됨"
                 u.alive -> "PC 연결됨 (${u.host})" + if (u.rttMs >= 0) " · 왕복 ${u.rttMs}ms" else ""
                 else -> "PC 응답 없음 (${u.host}:${u.port})"
             }
@@ -393,6 +399,7 @@ class BtHid(private val ctx: Context) {
 /**
  * UDP 로 PC 수신 프로그램(receiver/controlpad_receiver.py)에 키 상태를 보낸다.
  * 키 패킷: 'C' 'P' 버전(1) 순번(4바이트, big-endian) 리포트(20바이트). 수신 측은 'C' 'A' + 순번으로 답한다.
+ * 수신 프로그램 v6 부터는 답 끝에 상태 1바이트가 붙는다(비트 0: PC 에서 입력 일시정지 중).
  * 마우스 패킷: 'C' 'M' 버전(1) 순번(4바이트) dx(2바이트) dy(2바이트) 버튼(1바이트) 휠(1바이트), 부호 있는 big-endian.
  */
 class UdpLink(val host: String, val port: Int) {
@@ -403,6 +410,10 @@ class UdpLink(val host: String, val port: Int) {
 
     /** 최근 키 패킷이 PC 에 갔다가 응답이 돌아오기까지 걸린 시간(ms). 아직 모르면 -1. */
     @Volatile var rttMs = -1
+        private set
+
+    /** PC 수신 프로그램에서 '입력 일시정지'를 켜 두었는지(수신 프로그램 v6 이상이 알려 준다). */
+    @Volatile var pcPaused = false
         private set
     private val sentAt = java.util.concurrent.atomic.AtomicLongArray(64)   // 순번 % 64 → 보낸 시각(ns)
     @Volatile private var closed = false
@@ -418,6 +429,7 @@ class UdpLink(val host: String, val port: Int) {
                     socket.receive(p)
                     if (p.length >= 2 && buf[0] == 'C'.code.toByte() && buf[1] == 'A'.code.toByte()) {
                         lastAck = SystemClock.elapsedRealtime()
+                        pcPaused = p.length >= 7 && buf[6].toInt() and 1 != 0
                         if (p.length >= 6) {
                             val seq = (buf[2].toInt() and 0xFF shl 24) or (buf[3].toInt() and 0xFF shl 16) or
                                 (buf[4].toInt() and 0xFF shl 8) or (buf[5].toInt() and 0xFF)

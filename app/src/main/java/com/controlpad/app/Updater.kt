@@ -45,6 +45,9 @@ object Updater {
 
     class Info(val code: Int, val name: String, val notes: String)
 
+    /** 이 빌드 줄기의 코드명. 빌드 번호(versionName, 예: NES2)와 따로 붙는 이름이다. */
+    const val CODENAME = "NES1"
+
     fun parse(json: String): Info {
         val o = JSONObject(json)
         return Info(o.getInt("versionCode"), o.optString("versionName"), o.optString("notes"))
