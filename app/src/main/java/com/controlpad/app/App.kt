@@ -259,7 +259,15 @@ class PadPainter(private val ctx: Context, private val theme: PadTheme = Themes.
             return
         }
 
-        val combo = if (b.isShow) "그룹 ${b.target} 표시" else if (b.isKnob) Knob.describe(b) else Keys.combo(b.keys)
+        val plain = b.type == PadButton.TYPE_BUTTON
+        val combo = when {
+            b.isShow -> "그룹 ${b.target} 표시"
+            b.isSwitch -> "레이아웃 전환"
+            b.isKnob -> Knob.describe(b)
+            plain && b.mode == PadButton.MODE_MACRO -> "매크로 ${b.macro.size}단계"
+            plain && b.mode == PadButton.MODE_TURBO -> Keys.combo(b.keys) + " ×${b.rate}/초"
+            else -> Keys.combo(b.keys)
+        }
         val name = when {
             b.label2.isEmpty() || alt == 0 -> b.label
             alt == 1 -> b.label2

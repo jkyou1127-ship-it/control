@@ -149,6 +149,15 @@ class EditorActivity : BaseActivity() {
             view.selection.clear(); view.selection += keys
             view.invalidate()
         }
+        add("레이아웃 전환 버튼") {
+            if (LayoutStore.list(this).none { it.id != pad.id }) {
+                android.widget.Toast.makeText(this, "넘어갈 다른 레이아웃이 없습니다. 먼저 레이아웃을 하나 더 만드세요", android.widget.Toast.LENGTH_LONG).show()
+            } else {
+                val t = PadButton(0.43f, 0.03f, 0.14f, 0.14f, type = PadButton.TYPE_SWITCH, color = PadButton.PALETTE[4])
+                pad.buttons += t; view.selected = t; view.invalidate()
+                editButton(t, isNew = true)
+            }
+        }
         add("표시 버튼 (누르면 그룹이 나타남)") {
             // 아직 표시 버튼이 없는 가장 작은 그룹 번호를 기본으로 한다.
             val used = pad.buttons.filter { it.isShow }.map { it.target }
@@ -422,6 +431,7 @@ class EditorActivity : BaseActivity() {
         if (b.isStick) { editStick(b, isNew); return }
         if (b.isDisplay) { editDisplay(b, isNew); return }
         if (b.isImage) { editImage(b); return }
+        if (b.isSwitch) { editSwitch(b, isNew); return }
         if (b.isKnob) { editKnob(b, isNew); return }
         if (b.isPad || b.isMouse) { editPad(b, isNew); return }
         val keys = b.keys.toMutableList()
@@ -456,7 +466,8 @@ class EditorActivity : BaseActivity() {
                 this@EditorActivity, android.R.layout.simple_spinner_dropdown_item,
                 listOf(
                     "누르고 있는 동안 입력 (게임용)", "누를 때 한 번 입력 (단축키용)", "누를 때마다 켜짐/꺼짐",
-                    "누르면 일정 시간 동안 입력",
+                    "누르면 일정 시간 동안 입력", "매크로 — 누르면 여러 키 조합을 차례로 입력",
+                    "연타 — 누르고 있는 동안 빠르게 반복 입력",
                 ),
             )
             setSelection(b.mode)
@@ -471,13 +482,43 @@ class EditorActivity : BaseActivity() {
         }
         holdRow.addView(hold)
         box.addView(holdRow)
+        // 연타: 1초에 몇 번
+        val rateRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        rateRow.addView(TextView(this).apply { text = "1초에 누르는 횟수 (1~30)  " })
+        val rate = EditText(this).apply {
+            setText(b.rate.toString()); setSingleLine(); minWidth = dp(90)
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        }
+        rateRow.addView(rate)
+        box.addView(rateRow)
+        // 매크로: 차례로 입력할 조합들 (위의 '입력할 키'는 쓰지 않는다)
+        val macro = b.macro.map { it.toMutableList() }.toMutableList()
+        val macroBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val macroText = TextView(this).apply { textSize = 16f; setTextColor(Themes.current.text) }
+        fun showMacro() { macroText.text = "순서: " + Macro.describe(macro) }
+        showMacro()
+        macroBox.addView(macroText)
+        val macroButtons = LinearLayout(this)
+        macroButtons.addView(Button(this).apply {
+            text = "단계 추가"
+            setOnClickListener { pickKeys(this@EditorActivity, emptyList()) { if (it.isNotEmpty()) { macro += it.toMutableList(); showMacro() } } }
+        })
+        macroButtons.addView(Button(this).apply {
+            text = "마지막 단계 삭제"
+            setOnClickListener { if (macro.isNotEmpty()) macro.removeAt(macro.size - 1); showMacro() }
+        })
+        macroBox.addView(macroButtons)
+        box.addView(macroBox)
+        fun showModeRows(pos: Int) {
+            holdRow.visibility = if (pos == PadButton.MODE_TIMED) View.VISIBLE else View.GONE
+            rateRow.visibility = if (pos == PadButton.MODE_TURBO) View.VISIBLE else View.GONE
+            macroBox.visibility = if (pos == PadButton.MODE_MACRO) View.VISIBLE else View.GONE
+        }
         mode.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
-                holdRow.visibility = if (pos == PadButton.MODE_TIMED) View.VISIBLE else View.GONE
-            }
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) = showModeRows(pos)
             override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
         }
-        holdRow.visibility = if (b.mode == PadButton.MODE_TIMED) View.VISIBLE else View.GONE
+        showModeRows(b.mode)
 
         val oval = CheckBox(this).apply { text = "원형 버튼"; isChecked = b.shape == PadButton.SHAPE_OVAL }
         if (b.shape != PadButton.SHAPE_FREE) box.addView(oval)
@@ -509,6 +550,8 @@ class EditorActivity : BaseActivity() {
                 b.label2 = label2.text.toString().trim()
                 b.image = image
                 b.holdMs = PadButton.parseHold(hold.text.toString())
+                b.rate = (rate.text.toString().toIntOrNull() ?: 10).coerceIn(PadButton.MIN_RATE, PadButton.MAX_RATE)
+                b.macro = macro
                 // 그림 에디터로 만든 버튼은 그린 모양을 그대로 유지한다.
                 if (b.shape != PadButton.SHAPE_FREE) b.shape = if (oval.isChecked) PadButton.SHAPE_OVAL else PadButton.SHAPE_RECT
                 b.color = color; b.textColor = textColor; b.pressColor = pressColor
@@ -717,6 +760,45 @@ class EditorActivity : BaseActivity() {
         // 바뀌는 모습이 보이도록 화면을 어둡게 하지 않고 창을 아래쪽에 둔다.
         dialog.window?.setDimAmount(0f)
         dialog.window?.setGravity(Gravity.BOTTOM)
+    }
+
+    /** 누르면 다른 레이아웃으로 넘어가는 버튼. 여러 레이아웃을 페이지처럼 오갈 때 쓴다. */
+    private fun editSwitch(b: PadButton, isNew: Boolean) {
+        val others = LayoutStore.list(this).filter { it.id != pad.id }
+        var color = b.color
+        val m = dp(20)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
+        box.addView(TextView(this).apply {
+            text = "실행 화면에서 이 버튼을 누르면 아래 레이아웃으로 바로 넘어갑니다. " +
+                "돌아오려면 그 레이아웃에도 전환 버튼을 하나 만들어 두세요."
+        })
+        box.addView(TextView(this).apply { text = "넘어갈 레이아웃"; setPadding(0, dp(8), 0, 0) })
+        val target = Spinner(this).apply {
+            adapter = ArrayAdapter(this@EditorActivity, android.R.layout.simple_spinner_dropdown_item, others.map { it.name })
+            setSelection(others.indexOfFirst { it.id == b.link }.coerceAtLeast(0))
+        }
+        box.addView(target)
+        box.addView(TextView(this).apply { text = "버튼에 표시할 이름 (비우면 레이아웃 이름)"; setPadding(0, dp(8), 0, 0) })
+        val label = EditText(this).apply { setText(if (isNew) "" else b.label); setSingleLine() }
+        box.addView(label)
+        val group = groupSpinner(b.group)
+        box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
+        box.addView(group)
+        box.addView(colorRow(color) { color = it }, LinearLayout.LayoutParams(-1, -2))
+
+        AlertDialog.Builder(this).setTitle(if (isNew) "새 레이아웃 전환 버튼" else "레이아웃 전환 버튼 속성")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("확인") { _, _ ->
+                checkpoint()
+                val to = others.getOrNull(target.selectedItemPosition)
+                b.link = to?.id ?: ""
+                b.label = label.text.toString().trim().ifEmpty { "→ " + (to?.name ?: "?") }
+                b.group = group.selectedItemPosition
+                b.color = color
+                view.invalidate()
+            }
+            .setNegativeButton("취소", null)
+            .show().wide()
     }
 
     private fun groupSpinner(initial: Int) = Spinner(this).apply {

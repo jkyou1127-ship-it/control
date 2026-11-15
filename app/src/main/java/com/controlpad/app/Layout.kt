@@ -35,7 +35,14 @@ class PadButton(
     var label2: String = "",
     /** 버튼 면에 그릴 사진(앱 저장소 안의 파일 이름). TYPE_IMAGE 에서는 보여 줄 사진. */
     var image: String = "",
+    /** MODE_MACRO 일 때 차례로 입력할 키 조합들. */
+    var macro: MutableList<MutableList<Int>> = mutableListOf(),
+    /** MODE_TURBO 일 때 1초에 누르는 횟수. */
+    var rate: Int = 10,
+    /** TYPE_SWITCH 일 때 넘어갈 레이아웃의 id. */
+    var link: String = "",
 ) {
+    val isSwitch: Boolean get() = type == TYPE_SWITCH
     val isImage: Boolean get() = type == TYPE_IMAGE
     val isShow: Boolean get() = type == TYPE_SHOW
     val isStick: Boolean get() = type == TYPE_STICK
@@ -46,7 +53,7 @@ class PadButton(
 
     fun copy() = PadButton(
         x, y, w, h, label, keys.toMutableList(), mode, shape, color,
-        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor, holdMs, label2, image,
+        type, keys2.toMutableList(), knobOut, sens, invert, group, target, textColor, pressColor, holdMs, label2, image, macro.map { it.toMutableList() }.toMutableList(), rate, link,
     )
 
     fun contains(px: Float, py: Float): Boolean {
@@ -66,12 +73,17 @@ class PadButton(
         .put("group", group).put("target", target)
         .put("textColor", textColor).put("pressColor", pressColor).put("holdMs", holdMs)
         .put("label2", label2).put("image", image)
+        .put("macro", JSONArray().also { a -> macro.forEach { a.put(JSONArray(it)) } }).put("rate", rate).put("link", link)
 
     companion object {
         const val MODE_HOLD = 0    // 누르고 있는 동안 입력 (게임)
         const val MODE_TAP = 1     // 누를 때 한 번 입력 (단축키)
         const val MODE_TOGGLE = 2  // 누를 때마다 켜짐/꺼짐
         const val MODE_TIMED = 3   // 누르면 holdMs 동안 입력하고 스스로 뗀다
+        const val MODE_MACRO = 4   // 누르면 macro 의 키 조합들을 차례로 입력한다
+        const val MODE_TURBO = 5   // 누르고 있는 동안 1초에 rate 번씩 연타한다
+        const val MIN_RATE = 1
+        const val MAX_RATE = 30
         const val MIN_HOLD_MS = 50
         const val MAX_HOLD_MS = 60000
 
@@ -91,6 +103,7 @@ class PadButton(
         const val STICK_4WAY = 1     // 항상 한 방향만
         const val TYPE_DISPLAY = 6   // 지금 눌리고 있는 키를 보여 주는 패널(누를 수 없음)
         const val TYPE_IMAGE = 7     // 꾸미기용 사진(누를 수 없음)
+        const val TYPE_SWITCH = 8    // 누르면 link 의 레이아웃으로 넘어가는 버튼
         const val GROUPS = 8
         const val KNOB_UNTIL_STOP = 0    // 키 방식 노브: 돌리는 동안만 누르고 멈추면 뗀다 (mode 값)
         const val KNOB_UNTIL_RELEASE = 1 // 키 방식 노브: 돌리기 시작하면 손을 뗄 때까지 계속 누른다
@@ -120,6 +133,10 @@ class PadButton(
                 o.optInt("textColor"), o.optInt("pressColor"),
                 o.optInt("holdMs", 1000).coerceIn(MIN_HOLD_MS, MAX_HOLD_MS),
                 o.optString("label2"), o.optString("image"),
+                (o.optJSONArray("macro") ?: JSONArray()).let { a ->
+                    MutableList(a.length()) { i -> a.getJSONArray(i).let { s -> MutableList(s.length()) { s.getInt(it) } } }
+                },
+                o.optInt("rate", 10).coerceIn(MIN_RATE, MAX_RATE), o.optString("link"),
             )
         }
     }
@@ -556,4 +573,20 @@ object Geometry {
         val sy = if (oh > 0f) h / oh else 1f
         return starts.map { floatArrayOf(x + (it[0] - ox) * sx, y + (it[1] - oy) * sy, it[2] * sx, it[3] * sy) }
     }
+}
+
+/** 연타(터보) 버튼의 시간 계산. */
+object Turbo {
+    /** 1초에 rate 번 누를 때, 한 번 누르고 있는 시간과 떼고 있는 시간(ms). */
+    fun timing(rate: Int): Pair<Long, Long> {
+        val period = 1000L / rate.coerceIn(PadButton.MIN_RATE, PadButton.MAX_RATE)
+        val down = (period / 2).coerceIn(10L, 40L)
+        return down to (period - down).coerceAtLeast(5L)
+    }
+}
+
+object Macro {
+    /** 화면에 보여 줄 매크로 설명: "Ctrl + C → Alt + Tab → Ctrl + V". */
+    fun describe(steps: List<List<Int>>): String =
+        if (steps.isEmpty()) "(단계 없음)" else steps.joinToString(" → ") { Keys.combo(it) }
 }

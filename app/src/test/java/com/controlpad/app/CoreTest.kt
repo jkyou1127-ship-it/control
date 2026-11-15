@@ -465,4 +465,37 @@ class CoreTest {
         assertTrue(Changelog.text(latestOnly = true).startsWith(Changelog.entries.first().version + "\n  · "))
         assertTrue(Changelog.text().contains("BETA 1.9"))
     }
+
+    @Test
+    fun macroTurboAndSwitchRoundTrip() {
+        val m = PadButton(0f, 0f, 0.1f, 0.1f, mode = PadButton.MODE_MACRO,
+            macro = mutableListOf(mutableListOf(0xE0, 0x06), mutableListOf(0xE2, 0x2B), mutableListOf(0xE0, 0x19)))
+        val back = PadButton.fromJson(JSONObject(m.toJson().toString()))
+        assertEquals(m.macro, back.macro)
+        assertEquals("Ctrl + C → Alt + Tab → Ctrl + V", Macro.describe(back.macro))
+        val copy = back.copy()
+        copy.macro[0].clear()
+        assertEquals(2, back.macro[0].size)                       // 복제본을 고쳐도 원본은 그대로
+        assertEquals("(단계 없음)", Macro.describe(emptyList()))
+
+        val t = PadButton(0f, 0f, 0.1f, 0.1f, mode = PadButton.MODE_TURBO, rate = 20)
+        assertEquals(20, PadButton.fromJson(JSONObject(t.toJson().toString())).rate)
+        assertEquals(PadButton.MAX_RATE, PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1,"rate":999}""")).rate)
+        assertEquals(10, PadButton.fromJson(JSONObject("""{"x":0,"y":0,"w":0.1,"h":0.1}""")).rate)
+
+        val s = PadButton(0f, 0f, 0.1f, 0.1f, type = PadButton.TYPE_SWITCH, link = "abc")
+        val sb = PadButton.fromJson(JSONObject(s.toJson().toString()))
+        assertTrue(sb.isSwitch)
+        assertEquals("abc", sb.copy().link)
+    }
+
+    @Test
+    fun turboTimingMatchesRate() {
+        for (rate in listOf(1, 5, 10, 20, 30)) {
+            val (down, up) = Turbo.timing(rate)
+            assertTrue(down >= 10 && up >= 5)
+            assertEquals(1000L / rate, down + up)                 // 한 번 누르고 떼는 데 걸리는 시간
+        }
+        assertEquals(Turbo.timing(PadButton.MAX_RATE), Turbo.timing(999))
+    }
 }

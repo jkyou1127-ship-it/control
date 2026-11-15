@@ -13,6 +13,7 @@ object Changelog {
     class Entry(val version: String, val notes: List<String>)
 
     val entries = listOf(
+        Entry("1.20", listOf("매크로 버튼: 누르면 여러 키 조합을 차례로 입력", "연타 버튼: 누르고 있는 동안 빠르게 반복 입력", "레이아웃 전환 버튼: 실행 화면에서 다른 레이아웃으로 바로 넘어감", "앱 이름을 Control Pad 로 변경")),
         Entry("1.19", listOf("목록 화면의 '그림 레이아웃' 버튼으로 그림 에디터를 바로 엽니다")),
         Entry("1.18", listOf("테마 에디터: 나만의 테마를 여러 개 만들고 이름을 붙여 저장", "그림 에디터: 손으로 그린 그림이 그대로 버튼이 됨")),
         Entry("1.17.1", listOf("업데이트 내역 화면 추가 (설정 > 업데이트 내역)", "버전 번호 정리: 예전 1.x 는 BETA, 예전 2.x 는 1.x 로 부릅니다")),

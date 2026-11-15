@@ -39,7 +39,25 @@ class PlayActivity : BaseActivity() {
                 .maxByOrNull { it.refreshRate }
             if (best != null) window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
         }
-        view = PlayView(this, layout).also { setContentView(it) }
+        show(layout)
+    }
+
+    private fun show(layout: PadLayout) {
+        view = PlayView(this, layout).also {
+            it.onSwitch = { id -> switchTo(id) }
+            setContentView(it)
+        }
+    }
+
+    /** 레이아웃 전환 버튼: 지금 눌린 키를 모두 떼고 다른 레이아웃을 띄운다. */
+    private fun switchTo(id: String) {
+        val next = LayoutStore.load(this, id)
+        if (next == null) {
+            android.widget.Toast.makeText(this, "넘어갈 레이아웃을 찾을 수 없습니다 (삭제되었을 수 있음)", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        view?.releaseAll()
+        show(next)
     }
 
     override fun onResume() {
@@ -136,6 +154,55 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     /** PC 가 한글 입력 상태라고 보고 있는지. 화면을 열 때는 영문으로 시작한다. */
     private var hangul = false
 
+    /** 레이아웃 전환 버튼을 눌렀을 때 불린다(넘어갈 레이아웃의 id). */
+    var onSwitch: (String) -> Unit = {}
+
+    // 매크로·연타 버튼 상태 (버튼 인덱스별). 예약은 버튼마다 따로 취소할 수 있게 tokens 로 구분한다.
+    private val tokens = Array(buttons.size) { Any() }
+    private val macroOn = BooleanArray(buttons.size)
+    private val busyKeys = arrayOfNulls<List<Int>>(buttons.size)   // 매크로·연타가 지금 누르고 있는 키
+    private val turboOn = BooleanArray(buttons.size)
+
+    private fun later(i: Int, delay: Long, action: () -> Unit) =
+        taps.postAtTime(action, tokens[i], SystemClock.uptimeMillis() + delay)
+
+    private fun hold(i: Int, keys: List<Int>?) {
+        busyKeys[i]?.let { state.release(it) }
+        keys?.let { state.press(it) }
+        busyKeys[i] = keys
+        send()
+    }
+
+    /** 매크로의 step 번째 조합을 잠깐 눌렀다 떼고 다음으로 넘어간다. */
+    private fun runMacro(i: Int, step: Int) {
+        val steps = buttons[i].macro
+        if (step >= steps.size) { macroOn[i] = false; flash[i] = false; invalidate(); return }
+        macroOn[i] = true; flash[i] = true
+        hold(i, steps[step])
+        later(i, TAP_MS) {
+            hold(i, null)
+            later(i, MACRO_GAP_MS) { runMacro(i, step + 1) }
+        }
+    }
+
+    /** 연타: 누르고 있는 동안 키를 눌렀다 뗐다 한다. */
+    private fun runTurbo(i: Int) {
+        if (!turboOn[i]) return
+        val (down, upTime) = Turbo.timing(buttons[i].rate)
+        hold(i, buttons[i].keys)
+        later(i, down) {
+            hold(i, null)
+            later(i, upTime) { runTurbo(i) }
+        }
+    }
+
+    /** 진행 중인 매크로·연타를 멈추고 누르고 있던 키를 뗀다. */
+    private fun stopBusy(i: Int) {
+        taps.removeCallbacksAndMessages(tokens[i])
+        macroOn[i] = false; turboOn[i] = false
+        if (busyKeys[i] != null) hold(i, null)
+    }
+
     // 그룹 표시 상태. 0번은 항상 보이는 버튼들이다.
     private val groupOn = BooleanArray(PadButton.GROUPS + 1)     // 표시 버튼으로 켜 둔 그룹
     private val groupHolds = IntArray(PadButton.GROUPS + 1)      // '누르는 동안만' 표시 버튼을 누르고 있는 손가락 수
@@ -156,6 +223,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             holds[i] = 0
             if (b.isStick && stickMask[i] != 0) { state.release(Stick.keysFor(stickMask[i], b.keys)); stickMask[i] = 0 }
             if (b.isStick) { stickX[i] = 0f; stickY[i] = 0f }
+            if (macroOn[i] || turboOn[i]) { stopBusy(i); flash[i] = false }
             if (toggled[i]) { toggled[i] = false; state.release(b.keys) }
             if (timedOn[i]) { taps.removeCallbacks(timedOff[i]); timedOn[i] = false; state.release(b.keys) }
             // 사라진 그룹 안의 표시 버튼이 켜 둔 그룹도 함께 닫는다.
@@ -378,6 +446,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
             return
         }
+        if (b.isSwitch) {
+            if (haptic) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            onSwitch(b.link)
+            return
+        }
         // 한/영을 누르면 글자 키의 표시도 함께 바꾼다(키를 R Alt 로 바꿔 둔 한/영 버튼 포함).
         if (Keys.HANGUL in b.keys || b.label == "한/영") hangul = !hangul
         when (b.mode) {
@@ -396,6 +469,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 if (toggled[i]) state.press(b.keys) else state.release(b.keys)
                 send()
             }
+            PadButton.MODE_MACRO -> if (!macroOn[i]) runMacro(i, 0)     // 진행 중에 또 누르면 무시
+            PadButton.MODE_TURBO -> { turboOn[i] = true; runTurbo(i) }
             else -> { state.press(b.keys); send() }
         }
         // 진동은 시스템 호출이라 시간이 걸릴 수 있으므로, 입력을 먼저 보낸 뒤에 울린다.
@@ -430,7 +505,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             knobAngle[i] = Knob.delta(0f, knobAngle[i])   // 여러 바퀴 돌렸어도 가까운 쪽으로 돌아가게
             taps.removeCallbacks(knobReturn)
             taps.post(knobReturn)
-        } else if (b.mode == PadButton.MODE_HOLD) { state.release(b.keys); send() }
+        } else if (b.type == PadButton.TYPE_BUTTON && b.mode == PadButton.MODE_TURBO) { stopBusy(i); invalidate() }
+        else if (b.mode == PadButton.MODE_HOLD) { state.release(b.keys); send() }
     }
 
     fun releaseAll() {
@@ -439,6 +515,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         knobDir.fill(0); knobRem.fill(0f); knobAngle.fill(0f)
         groupOn.fill(false); groupHolds.fill(0); timedOn.fill(false)
         stickMask.fill(0); stickX.fill(0f); stickY.fill(0f)
+        macroOn.fill(false); turboOn.fill(false); busyKeys.fill(null)
         holds.fill(0); toggled.fill(false); flash.fill(false)
         taps.removeCallbacksAndMessages(null)
         state.clear(); send()
@@ -553,7 +630,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             if (!groupVisible(b.group)) continue
             val lit = if (b.isShow) groupVisible(b.target)
             else if (b.isKnob) holds[i] > 0
-            else flash[i] || toggled[i] || timedOn[i] || (holds[i] > 0 && b.mode == PadButton.MODE_HOLD)
+            else flash[i] || toggled[i] || timedOn[i] ||
+                (holds[i] > 0 && (b.mode == PadButton.MODE_HOLD || b.mode == PadButton.MODE_TURBO))
             var parts = 0
             if (b.isMouse) for ((id, part) in mouseParts) if (pointers[id] == i) parts = parts or (1 shl part)
             if (b.isDisplay) {
@@ -591,6 +669,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     companion object {
         const val TAP_MS = 40L
+        const val MACRO_GAP_MS = 40L         // 매크로: 한 조합을 뗀 뒤 다음 조합을 누르기까지
         const val PRESSED_LINGER_MS = 600L   // 키를 뗀 뒤 표시를 남겨 두는 시간
         const val PAD_GAIN = 0.35f       // 트랙패드: 감도 1 일 때 1dp 당 마우스 이동량
         const val SCROLL_STEP_DP = 18f   // 트랙패드: 휠 한 칸에 해당하는 두 손가락 이동 거리
