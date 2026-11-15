@@ -23,7 +23,9 @@
     "key-history",
     "editor-coords"
   ],
-  "graduated": [],
+  "graduated": [
+    "kps"
+  ],
   "hidden": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
