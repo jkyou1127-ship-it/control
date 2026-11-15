@@ -209,7 +209,7 @@ class MainActivity : BaseActivity() {
             }, LinearLayout.LayoutParams(dp(56), -2))
             list.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         }
-        Ui.restyle(list)       // 줄마다 새로 만든 버튼들에도 2.0 모양을 입힌다
+        Ui.restyle(list)       // 줄마다 새로 만든 버튼들에도 새 UI 모양을 입힌다
     }
 
     /** 홈 화면에 이 레이아웃을 바로 실행하는 바로가기를 만든다. */

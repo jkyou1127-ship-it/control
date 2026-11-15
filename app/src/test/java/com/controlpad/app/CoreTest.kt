@@ -647,8 +647,8 @@ class CoreTest {
     fun alphaWideStageIsParsedAndPlansMatchThePanelSchedule() {
         assertEquals(setOf("kps"), Labs.parseAlpha("""{"alpha":["kps","unknown"]}"""))
         assertEquals(emptySet<String>(), Labs.parseAlpha("{}"))
-        assertTrue(Labs.plan("lab").contains("10분") && Labs.plan("lab").contains("20분"))
-        assertTrue(Labs.plan("build").contains("30분"))
+        assertTrue(Labs.plan("lab").contains("1~2분 안에"))                  // 정식 추가 건의는 바로 반영
+        assertTrue(Labs.plan("build").contains("1~2분 안에"))
         assertTrue(Labs.plan("hide").contains("숨겼습니다") && Labs.plan("restore").contains("되돌렸습니다"))
     }
 

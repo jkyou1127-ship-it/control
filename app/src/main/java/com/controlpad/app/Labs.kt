@@ -16,8 +16,7 @@ import java.net.URLEncoder
 
 /**
  * 실험실: 아직 다듬는 중인 기능들. 알파 빌드를 받는 사람만 켜 볼 수 있다.
- * 평가단이 정식 추가를 건의하면 10분 뒤 release/labs.json 의 alpha 에 올라가 알파 사용자 모두에게 켜지고,
- * 그로부터 20분 뒤 graduated 에 올라가 정식 사용자에게도 켜진다.
+ * 평가단이 정식 추가를 건의하면 바로 release/labs.json 의 graduated 에 올라가 모두에게 켜진다.
  */
 object Labs {
     /**
@@ -147,8 +146,8 @@ object Labs {
 
     /** 건의를 보낸 뒤 알려 줄 진행 계획. scripts/panel.py 의 plan 과 같은 일정이다. */
     fun plan(kind: String): String = when (kind) {
-        "build" -> "요청했습니다. 30분 뒤에 정식 채널에 올라갑니다."
-        "lab" -> "요청했습니다. 10분 뒤에 알파 사용자 모두에게 켜지고, 그로부터 20분 뒤에 정식 기능이 됩니다."
+        "build" -> "요청했습니다. 1~2분 안에 정식 채널에 올라갑니다."
+        "lab" -> "요청했습니다. 1~2분 안에 정식 기능이 됩니다."
         "hide" -> "숨겼습니다. 다른 사람들에게도 1분쯤 안에 숨겨집니다."
         else -> "되돌렸습니다. 다른 사람들에게도 1분쯤 안에 반영됩니다."
     }
@@ -287,7 +286,7 @@ class LabsActivity : BaseActivity() {
 
         title("평가단")
         if (viaRelay) {
-            note("알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 30분 뒤에 정식 채널에 올라갑니다. 평가단 코드가 필요합니다.")
+            note("알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 바로 정식 채널에 올라갑니다. 평가단 코드가 필요합니다.")
             root.addView(android.widget.EditText(this).apply {
                 hint = "평가단 코드"; setSingleLine(); setText(Labs.code)
                 inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -298,10 +297,10 @@ class LabsActivity : BaseActivity() {
                 })
             })
         } else note(
-            "알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 30분 뒤에 지금 알파 빌드가 정식 채널에 올라갑니다.\n" +
+            "알파 빌드를 써 보고 괜찮으면 정식 추가를 요청합니다. 요청하면 바로 지금 알파 빌드가 정식 채널에 올라갑니다.\n" +
                 "· 요청은 저장소의 이슈로 접수되어 GitHub 로그인이 필요합니다.\n" +
                 "· 평가단으로 등록된 계정의 요청만 반영됩니다.\n" +
-                "· 반영되기 전에 그 이슈를 닫으면 취소됩니다."
+                "· 요청은 바로 반영됩니다."
         )
         val versions = TextView(this).apply { textSize = 15f; setTextColor(text); setPadding(0, dp(8), 0, 0) }
         val mine = Updater.installedName(this)
@@ -318,7 +317,7 @@ class LabsActivity : BaseActivity() {
         title("실험실")
         note(
             "아직 다듬는 중인 기능입니다. 켜서 써 보고 평가단으로 건의하세요.\n" +
-                "· 정식 추가: 10분 뒤 알파 사용자 모두에게 켜지고, 그로부터 20분 뒤 정식 사용자에게도 켜집니다\n" +
+                "· 정식 추가: 바로 정식 기능이 됩니다\n" +
                 "· 숨김: 바로 실험실에서 빠지고 누구에게도 켜지지 않습니다\n" +
                 "· 복귀: 바로 숨긴 기능이나 정식이 된 기능을 실험실로 되돌립니다"
         )

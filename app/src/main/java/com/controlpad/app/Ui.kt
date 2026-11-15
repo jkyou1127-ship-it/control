@@ -16,7 +16,7 @@ import android.widget.Spinner
 import android.widget.TextView
 
 /**
- * 2.0 화면 모양: 둥근 카드, 납작한 버튼, 테마 색을 따르는 강조색.
+ * 새 UI(Uwe) 화면 모양: 둥근 카드, 납작한 버튼, 테마 색을 따르는 강조색.
  * 화면을 만든 뒤 restyle 로 한꺼번에 입히므로, 각 화면은 평소처럼 기본 위젯으로 만들면 된다.
  */
 object Ui {
@@ -39,7 +39,7 @@ object Ui {
     private fun ripple(ctx: Context, base: GradientDrawable): RippleDrawable =
         RippleDrawable(ColorStateList.valueOf(accent() and 0x00FFFFFF or 0x44000000), base, null)
 
-    /** 화면(또는 대화상자) 안의 위젯을 2.0 모양으로 바꾼다. */
+    /** 화면(또는 대화상자) 안의 위젯을 새 UI 모양으로 바꾼다. */
     fun restyle(view: View?) {
         if (view == null) return
         val ctx = view.context

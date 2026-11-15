@@ -8,15 +8,19 @@ import android.widget.TextView
 /**
  * 버전별로 바뀐 점. 새 버전을 낼 때 맨 위에 한 항목을 더한다(맨 위 항목의 버전은 빌드 버전과 같아야 한다).
  * 예전에 1.x 로 불리던 버전은 BETA, 2.x 로 불리던 버전은 1.x 다.
+ * UI 대개편 빌드는 평가단 OK 전까지 Uwe.x 로 부른다(2.0 이라 부르던 것). 그 밖의 빌드는 계속 1.x 다.
  */
 object Changelog {
     class Entry(val version: String, val notes: List<String>)
 
     val entries = listOf(
-        Entry("2.0.1", listOf(
+        Entry("Uwe.3", listOf(
+            "평가단 정식 추가 건의가 기다리지 않고 바로 반영됨",
+        )),
+        Entry("Uwe.2", listOf(
             "편집 화면 가운데 안내선(중앙선) 삭제",
         )),
-        Entry("2.0", listOf(
+        Entry("Uwe.1", listOf(
             "UI 대개편: 둥근 카드와 납작한 버튼, 테마 색을 따르는 강조색",
             "목록 화면: 제목 줄과 가로로 밀 수 있는 도구 줄, 카드 모양 레이아웃 목록",
             "설정 · 실험실 화면: 묶음별 카드",

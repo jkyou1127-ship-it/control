@@ -1,7 +1,7 @@
 // Control Pad 평가단 중계 서버 (Cloudflare Workers).
 //
 // 앱의 '실험실 · 평가단' 화면이 여기로 정식 추가 요청을 보낸다. 평가단 코드가 맞으면
-// 저장소의 자동화(.github/workflows/panel.yml)를 대신 실행하고, 5분 뒤 정식에 반영된다.
+// 저장소의 자동화(.github/workflows/panel.yml)를 대신 실행하고, 바로 반영된다.
 // 평가단은 GitHub 계정이 없어도 된다. 설정 방법은 relay/README.md 에 있다.
 //
 // 비밀 값(대시보드의 Variables and Secrets 에 넣는다. 코드나 저장소에 적지 않는다):

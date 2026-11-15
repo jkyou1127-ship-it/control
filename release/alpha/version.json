@@ -1,6 +1,6 @@
 {
-  "versionCode": 69,
-  "versionName": "2.0.1",
-  "notes": "2.0.1: 편집 화면 가운데 안내선(중앙선) 삭제. 2.0 UI 대개편 포함, 평가단이 OK 해야 정식에 올라갑니다.",
+  "versionCode": 70,
+  "versionName": "Uwe.3",
+  "notes": "Uwe.3: 평가단 정식 추가 건의가 바로 반영됨, 편집 화면 중앙선 삭제. UI 대개편 빌드로, 평가단이 OK 해야 정식에 올라갑니다.",
   "needsPanel": true
 }

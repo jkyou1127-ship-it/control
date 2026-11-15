@@ -1,8 +1,8 @@
 name: Panel request
 
 # 평가단의 요청을 release/ 에 반영한다. 기다리는 시간은 scripts/panel.py 의 WAITS 에 있다.
-#   실험실 기능 정식 추가  10분 뒤 알파 사용자 모두에게 켜고, 그로부터 20분 뒤 정식 기능으로
-#   빌드 정식 추가        30분 뒤 정식 채널에 (요청한 순간의 알파 빌드)
+#   실험실 기능 정식 추가  바로 정식 기능으로
+#   빌드 정식 추가        바로 정식 채널에 (요청한 순간의 알파 빌드)
 #   숨김 · 복귀           바로
 # 요청은 두 길로 온다.
 #   relay  앱 → 중계 서버(relay/worker.js, 평가단 코드 확인) → 이 워크플로 실행. 취소하려면 이 실행을 취소한다.
@@ -129,7 +129,7 @@ jobs:
             exit 0
           fi
           if result=$(bash "$RUNNER_TEMP/panel_apply.sh" alpha); then
-            gh issue comment "$ISSUE_NUMBER" --body "$result. 20분 뒤에 정식 기능으로 올립니다."
+            gh issue comment "$ISSUE_NUMBER" --body "$result. 곧 정식 기능으로 올립니다."
           else
             gh issue close "$ISSUE_NUMBER" --reason "not planned" --comment "요청을 반영하지 않았습니다: $result"
             echo "cancelled=true" >> "$GITHUB_OUTPUT"

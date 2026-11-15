@@ -126,14 +126,14 @@ class PanelTest(unittest.TestCase):
         self.assertIn("이미 정식", panel.evaluate("[정식 요청] 빌드 1.21", "owner", "Owner", self.dir, snap)[2])
 
     def test_lab_goes_to_all_alpha_users_first_then_stable(self):
-        self.assertEqual(panel.WAITS["lab"], (600, 1200))                   # 10분 뒤 알파, 그로부터 20분 뒤 정식
-        self.assertEqual(panel.WAITS["build"], (1800, 0))
+        self.assertEqual(panel.WAITS["lab"], (0, 0))                        # 정식 추가도 바로
+        self.assertEqual(panel.WAITS["build"], (0, 0))
         self.assertEqual(panel.WAITS["hide"], (0, 0))                       # 숨김은 바로
         self.assertEqual(panel.WAITS["restore"], (0, 0))                    # 복귀도 바로
         self.assertIn("바로", panel.plan("restore", "kps"))
         self.assertIn("바로", panel.plan("hide", "kps"))
-        self.assertIn("10분 뒤", panel.plan("lab", "kps"))
-        self.assertIn("30분 뒤", panel.plan("build", "1.21"))
+        self.assertIn("바로", panel.plan("lab", "kps"))
+        self.assertIn("바로", panel.plan("build", "1.21"))
         panel.apply("lab", "kps", self.dir, stage="alpha")
         labs = panel.load(os.path.join(self.dir, "labs.json"))
         self.assertEqual((labs["alpha"], labs["graduated"]), (["kps"], []))
@@ -152,11 +152,11 @@ class PanelTest(unittest.TestCase):
         self.assertEqual(panel.load(os.path.join(self.dir, "labs.json"))["alpha"], [])
 
     def test_needs_panel_flag_is_dropped_on_promotion(self):
-        self.write("alpha/version.json", {"versionCode": 47, "versionName": "2.0", "needsPanel": True})
-        self.assertIsNone(self.evaluate("[정식 요청] 빌드 2.0")[2])
-        panel.apply("build", "2.0", self.dir)
+        self.write("alpha/version.json", {"versionCode": 47, "versionName": "Uwe.1", "needsPanel": True})
+        self.assertIsNone(self.evaluate("[정식 요청] 빌드 Uwe.1")[2])
+        panel.apply("build", "Uwe.1", self.dir)
         stable = panel.load(os.path.join(self.dir, "version.json"))
-        self.assertEqual(stable["versionName"], "2.0")
+        self.assertEqual(stable["versionName"], "Uwe.1")
         self.assertNotIn("needsPanel", stable)
 
     def test_real_release_files_are_consistent(self):
