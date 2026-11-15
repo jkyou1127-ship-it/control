@@ -86,8 +86,8 @@ def load(path):
         return json.load(f)
 
 
-def evaluate(title, author, owner, release="release"):
-    """(종류, 대상, 안 되는 이유 또는 None)."""
+def evaluate(title, author, owner, release="release", alpha_dir=None):
+    """(종류, 대상, 안 되는 이유 또는 None). alpha_dir 를 주면 그곳의 알파 빌드를 기준으로 본다."""
     parsed = parse_title(title)
     if parsed is None:
         return None, None, ("제목은 '[정식 요청] 빌드 <버전>', '[정식 요청] 실험실 <기능>', "
@@ -97,17 +97,18 @@ def evaluate(title, author, owner, release="release"):
         if not is_member(author, owner, f.read()):
             return kind, target, "평가단으로 등록된 계정만 요청할 수 있습니다"
     if kind == "build":
-        problem = check_build(target, load(os.path.join(release, "alpha", "version.json")),
+        problem = check_build(target, load(os.path.join(alpha_dir or os.path.join(release, "alpha"), "version.json")),
                               load(os.path.join(release, "version.json")))
     else:
         problem = check_lab(target, load(os.path.join(release, "labs.json")), kind)
     return kind, target, problem
 
 
-def apply(kind, target, release="release"):
+def apply(kind, target, release="release", alpha_dir=None):
     if kind == "build":
+        source = alpha_dir or os.path.join(release, "alpha")
         for name in ("version.json", "ControlPad.apk"):
-            shutil.copyfile(os.path.join(release, "alpha", name), os.path.join(release, name))
+            shutil.copyfile(os.path.join(source, name), os.path.join(release, name))
     else:
         path = os.path.join(release, "labs.json")
         labs = load(path)
@@ -151,7 +152,10 @@ def request_from_env(env):
 
 
 def main(argv):
-    kind, target, problem = evaluate(*request_from_env(os.environ))
+    # 요청을 받은 순간의 알파 빌드를 따로 떠 둔 곳(ALPHA_SNAPSHOT). 기다리는 사이에 새 알파가 올라와도
+    # 요청한 그 빌드를 정식에 올린다. 없으면 지금 저장소의 알파 빌드를 본다.
+    snapshot = os.environ.get("ALPHA_SNAPSHOT") or None
+    kind, target, problem = evaluate(*request_from_env(os.environ), alpha_dir=snapshot)
     if argv[1:] == ["check"]:
         print("ok=%s" % ("false" if problem else "true"))
         print("reason=%s" % (problem or ""))
@@ -159,7 +163,7 @@ def main(argv):
     elif argv[1:] == ["apply"]:
         if problem:
             sys.exit(problem)
-        apply(kind, target)
+        apply(kind, target, alpha_dir=snapshot)
         print(summary(kind, target) + " 올렸습니다")
     else:
         sys.exit(__doc__)

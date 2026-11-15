@@ -20,10 +20,7 @@ permissions:
   contents: write
   issues: write
 
-# 요청이 겹치면 차례로 처리한다.
-concurrency:
-  group: panel-request
-  cancel-in-progress: false
+# 요청마다 따로 실행된다. (concurrency 로 줄을 세우면 기다리는 요청이 하나만 남고 나머지가 취소되므로 쓰지 않는다.)
 
 jobs:
   relay:
@@ -49,20 +46,37 @@ jobs:
           echo "요청을 반영하지 않았습니다: $REASON" >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
+      - name: Remember the requested alpha build
+        if: steps.check.outputs.ok == 'true'
+        run: |
+          # 기다리는 사이에 새 알파가 올라와도 요청한 그 빌드를 올릴 수 있게 지금 알파 빌드를 떠 둔다.
+          mkdir -p "$RUNNER_TEMP/alpha"
+          cp release/alpha/version.json release/alpha/ControlPad.apk "$RUNNER_TEMP/alpha/"
+          echo "ALPHA_SNAPSHOT=$RUNNER_TEMP/alpha" >> "$GITHUB_ENV"
+
       - name: Wait five minutes
         run: sleep 300
 
       - name: Apply
         run: |
-          # 기다리는 동안 새 빌드가 올라왔을 수 있으니 최신 상태에서 다시 확인한다.
-          git pull --ff-only
-          result=$(python3 scripts/panel.py apply)
+          # 여러 요청이 겹쳐도 서로 지우지 않게, 밀리면 최신 상태에서 다시 반영한다.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add release
-          git commit -m "Panel request: promote to stable"
-          git push
-          echo "$result" >> "$GITHUB_STEP_SUMMARY"
+          for attempt in 1 2 3 4 5 6; do
+            git fetch -q origin "$GITHUB_REF_NAME"
+            git reset -q --hard "origin/$GITHUB_REF_NAME"
+            if ! result=$(python3 scripts/panel.py apply 2>&1); then
+              echo "요청을 반영하지 않았습니다: $result" >> "$GITHUB_STEP_SUMMARY"; exit 1
+            fi
+            git add release
+            git commit -q -m "Panel request: $result"
+            if git push -q origin "HEAD:$GITHUB_REF_NAME"; then
+              echo "$result" >> "$GITHUB_STEP_SUMMARY"; exit 0
+            fi
+            sleep $((attempt * 3 + RANDOM % 5))
+          done
+          echo "다른 변경과 계속 겹쳐서 반영하지 못했습니다" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
   promote:
     if: >-
@@ -98,6 +112,14 @@ jobs:
         run: |
           gh issue comment "$ISSUE_NUMBER" --body "요청을 받았습니다. 5분 뒤에 $SUMMARY 올립니다. 취소하려면 그 전에 이 이슈를 닫으세요."
 
+      - name: Remember the requested alpha build
+        if: steps.check.outputs.ok == 'true'
+        run: |
+          # 기다리는 사이에 새 알파가 올라와도 요청한 그 빌드를 올릴 수 있게 지금 알파 빌드를 떠 둔다.
+          mkdir -p "$RUNNER_TEMP/alpha"
+          cp release/alpha/version.json release/alpha/ControlPad.apk "$RUNNER_TEMP/alpha/"
+          echo "ALPHA_SNAPSHOT=$RUNNER_TEMP/alpha" >> "$GITHUB_ENV"
+
       - name: Wait five minutes
         if: steps.check.outputs.ok == 'true'
         run: sleep 300
@@ -109,15 +131,21 @@ jobs:
             echo "이슈가 닫혀서 취소되었습니다"
             exit 0
           fi
-          # 기다리는 동안 새 빌드가 올라왔을 수 있으니 최신 상태에서 다시 확인한다.
-          git pull --ff-only
-          if ! result=$(python3 scripts/panel.py apply 2>&1); then
-            gh issue close "$ISSUE_NUMBER" --reason "not planned" --comment "요청을 반영하지 않았습니다: $result"
-            exit 0
-          fi
+          # 여러 요청이 겹쳐도 서로 지우지 않게, 밀리면 최신 상태에서 다시 반영한다.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add release
-          git commit -m "Panel request #$ISSUE_NUMBER: promote to stable"
-          git push
-          gh issue close "$ISSUE_NUMBER" --comment "$result"
+          for attempt in 1 2 3 4 5 6; do
+            git fetch -q origin "$GITHUB_REF_NAME"
+            git reset -q --hard "origin/$GITHUB_REF_NAME"
+            if ! result=$(python3 scripts/panel.py apply 2>&1); then
+              gh issue close "$ISSUE_NUMBER" --reason "not planned" --comment "요청을 반영하지 않았습니다: $result"; exit 0
+            fi
+            git add release
+            git commit -q -m "Panel request: $result"
+            if git push -q origin "HEAD:$GITHUB_REF_NAME"; then
+              gh issue close "$ISSUE_NUMBER" --comment "$result"; exit 0
+            fi
+            sleep $((attempt * 3 + RANDOM % 5))
+          done
+          gh issue comment "$ISSUE_NUMBER" --body "다른 변경과 계속 겹쳐서 반영하지 못했습니다. 다시 요청해 주세요."
+          exit 1

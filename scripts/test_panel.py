@@ -107,6 +107,24 @@ class PanelTest(unittest.TestCase):
             title, _, _ = panel.request_from_env({"REQUEST_KIND": kind, "REQUEST_TARGET": "kps", "REPO_OWNER": "o"})
             self.assertEqual(title, word + " 실험실 kps")
 
+    def test_snapshot_keeps_the_requested_build_when_a_newer_alpha_arrives(self):
+        snap = os.path.join(self.dir, "snap")
+        os.mkdir(snap)
+        for name in ("version.json", "ControlPad.apk"):
+            with open(os.path.join(self.dir, "alpha", name), "rb") as a, open(os.path.join(snap, name), "wb") as b:
+                b.write(a.read())
+        # 기다리는 사이에 새 알파(1.22)가 올라옴
+        self.write("alpha/version.json", {"versionCode": 48, "versionName": "1.22"})
+        self.assertIn("지금 알파 빌드", self.evaluate("[정식 요청] 빌드 1.21")[2])                # 떠 둔 것이 없으면 거절
+        self.assertIsNone(panel.evaluate("[정식 요청] 빌드 1.21", "owner", "Owner", self.dir, snap)[2])
+        panel.apply("build", "1.21", self.dir, snap)
+        self.assertEqual(panel.load(os.path.join(self.dir, "version.json"))["versionName"], "1.21")
+        with open(os.path.join(self.dir, "ControlPad.apk"), "rb") as f:
+            self.assertEqual(f.read(), b"alpha")
+        # 정식이 이미 더 새 빌드면 올리지 않는다
+        self.write("version.json", {"versionCode": 48, "versionName": "1.22"})
+        self.assertIn("이미 정식", panel.evaluate("[정식 요청] 빌드 1.21", "owner", "Owner", self.dir, snap)[2])
+
     def test_real_release_files_are_consistent(self):
         release = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "release")
         labs = panel.load(os.path.join(release, "labs.json"))
