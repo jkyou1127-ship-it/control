@@ -3,6 +3,9 @@
 package main
 
 import (
+	"os"
+	"os/exec"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -11,7 +14,38 @@ var (
 	user32        = syscall.NewLazyDLL("user32.dll")
 	procSendInput = user32.NewProc("SendInput")
 	kernel32      = syscall.NewLazyDLL("kernel32.dll")
+	shell32       = syscall.NewLazyDLL("shell32.dll")
 )
+
+// isAdmin 은 관리자 권한으로 실행 중인지 알려 준다.
+func isAdmin() bool {
+	r, _, _ := shell32.NewProc("IsUserAnAdmin").Call()
+	return r != 0
+}
+
+// relaunchAsAdmin 은 같은 프로그램을 관리자 권한으로 다시 실행한다(권한 요청 창이 뜬다).
+// 새로 실행되면 참을 돌려주고, 이 프로그램은 끝내면 된다. 사용자가 거절하면 거짓.
+func relaunchAsAdmin(args []string) bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	quoted := make([]string, len(args))
+	for i, a := range args {
+		quoted[i] = syscall.EscapeArg(a)
+	}
+	verb, _ := syscall.UTF16PtrFromString("runas")
+	file, _ := syscall.UTF16PtrFromString(exe)
+	params, _ := syscall.UTF16PtrFromString(strings.Join(quoted, " "))
+	r, _, _ := shell32.NewProc("ShellExecuteW").Call(0, uintptr(unsafe.Pointer(verb)), uintptr(unsafe.Pointer(file)),
+		uintptr(unsafe.Pointer(params)), 0, 1) // SW_SHOWNORMAL
+	return r > 32
+}
+
+// openBrowser 는 기본 브라우저로 주소를 연다.
+func openBrowser(url string) {
+	exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+}
 
 // 64비트 Windows 의 INPUT 구조체(40바이트)를 종류별로 풀어 쓴 것.
 type keybdInput struct {

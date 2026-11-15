@@ -14,7 +14,7 @@ import (
 )
 
 // 이 프로그램의 버전. 올릴 때는 scripts/build-receiver.sh 를 다시 실행해 release/receiver.json 도 맞춘다.
-const version = 3
+const version = 4
 
 const updateBase = "https://raw.githubusercontent.com/jkyou1127-ship-it/control/claude/vibrant-ramanujan-pdzsly/release/"
 

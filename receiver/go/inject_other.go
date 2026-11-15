@@ -9,3 +9,7 @@ func newInjector() (Injector, error) {
 }
 
 func setupConsole() {}
+
+func isAdmin() bool                      { return true }
+func relaunchAsAdmin(args []string) bool { return false }
+func openBrowser(url string)             {}

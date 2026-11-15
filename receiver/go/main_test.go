@@ -3,10 +3,12 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"unsafe"
 )
@@ -197,5 +199,44 @@ func TestDiscoveryReply(t *testing.T) {
 	}
 	if discoveryReply(keyPacket(1), "pc") != nil || discoveryReply([]byte{'C', 'D', 2}, "pc") != nil {
 		t.Fatal("non-discovery packet answered")
+	}
+}
+
+func TestUIStateAndKeyNames(t *testing.T) {
+	if keyName(0x04) != "A" || keyName(0x1E) != "1" || keyName(0x27) != "0" || keyName(0x3A) != "F1" || keyName(0x90) != "한/영" {
+		t.Fatal("key names")
+	}
+	s := &uiState{}
+	r := &recorder{}
+	u := uiInjector{inner: r, state: s}
+	for i := 0; i < 15; i++ {
+		u.Key(0x04, true)
+		u.Key(0x04, false)
+	}
+	u.Button(1, true)
+	if s.Presses != 16 || len(s.Recent) != 12 || s.Recent[11] != "우클릭" || len(r.events) != 31 {
+		t.Fatalf("state %+v events %d", s, len(r.events))
+	}
+	var back map[string]any
+	if err := json.Unmarshal(s.snapshot(), &back); err != nil || back["presses"].(float64) != 16 {
+		t.Fatal("snapshot")
+	}
+}
+
+func TestStatusServer(t *testing.T) {
+	st := &uiState{Version: 4, Port: 34555}
+	url := startUI(st)
+	if url == "" {
+		t.Skip("port in use")
+	}
+	resp, err := http.Get(url + "status")
+	if err != nil || resp.StatusCode != 200 {
+		t.Fatal(err)
+	}
+	page, _ := http.Get(url)
+	b := make([]byte, 200)
+	n, _ := page.Body.Read(b)
+	if !strings.Contains(string(b[:n]), "<!doctype html>") {
+		t.Fatal("page")
 	}
 }

@@ -267,8 +267,18 @@ func main() {
 	port := flag.Int("port", defaultPort, "받을 UDP 포트")
 	dry := flag.Bool("dry-run", false, "입력을 넣지 않고 받은 내용만 출력")
 	noUpdate := flag.Bool("no-update", false, "시작할 때 새 버전을 확인하지 않음")
+	noAdmin := flag.Bool("no-admin", false, "관리자 권한을 요청하지 않음")
+	noUI := flag.Bool("no-ui", false, "상태 화면(브라우저)을 열지 않음")
 	flag.Parse()
 	setupConsole()
+	// 관리자 권한으로 실행된 게임에는 일반 프로그램이 입력을 넣을 수 없다(Windows 의 보안 규칙).
+	// 그래서 처음부터 관리자 권한으로 다시 실행한다. 사용자가 거절하면 그대로 계속한다.
+	if !*dry && !*noAdmin && !isAdmin() {
+		if relaunchAsAdmin(os.Args[1:]) {
+			return
+		}
+		fmt.Println("관리자 권한 없이 실행합니다. 관리자 권한으로 실행된 게임에는 입력이 들어가지 않을 수 있습니다.")
+	}
 	if !*noUpdate && !*dry {
 		selfUpdate()
 	}
@@ -288,15 +298,37 @@ func main() {
 	}
 	defer conn.Close()
 
-	fmt.Printf("ControlPad 수신 프로그램 버전 %d\n", version)
-	fmt.Printf("ControlPad 수신 대기 중. 태블릿 앱의 '연결 설정'에서 'PC 자동으로 찾기'를 누르세요.\n")
-	fmt.Printf("찾지 못하면 아래 주소를 직접 입력하세요 (포트 %d):\n", *port)
-	for _, a := range localAddresses() {
-		fmt.Println("   ", a)
-	}
-	fmt.Println("끝내려면 이 창을 닫으세요.")
-
 	hostname, _ := os.Hostname()
+	state := &uiState{
+		Version: version, Hostname: hostname, Addresses: localAddresses(), Port: *port,
+		Admin: isAdmin(), Started: time.Now().UnixMilli(),
+	}
+	inj = uiInjector{inner: inj, state: state}
+
+	fmt.Println("┌──────────────────────────────────────────────┐")
+	fmt.Printf("│  Control Pad 수신 프로그램  ·  버전 %-9d│\n", version)
+	fmt.Println("└──────────────────────────────────────────────┘")
+	if state.Admin {
+		fmt.Println("  ● 관리자 권한으로 실행 중 (모든 창에 입력 가능)")
+	} else {
+		fmt.Println("  ○ 관리자 권한 없음 (관리자 권한 게임에는 입력이 안 들어갈 수 있음)")
+	}
+	fmt.Println()
+	fmt.Println("  태블릿 앱: 설정 → Wi-Fi / USB 테더링 → PC 자동으로 찾기")
+	fmt.Printf("  찾지 못하면 아래 주소를 직접 입력하세요 (포트 %d)\n", *port)
+	for _, a := range state.Addresses {
+		fmt.Println("     ", a)
+	}
+	if url := startUI(state); url != "" {
+		fmt.Println()
+		fmt.Println("  상태 화면:", url)
+		if !*noUI {
+			openBrowser(url)
+		}
+	}
+	fmt.Println()
+	fmt.Println("  끝내려면 이 창을 닫으세요.")
+
 	keys := &Keys{inj: inj, down: map[int]bool{}}
 	mouse := &Mouse{inj: inj}
 	last := time.Now()
@@ -318,7 +350,8 @@ func main() {
 				conn.WriteToUDP([]byte{'C', 'A', p[3], p[4], p[5], p[6]}, from)
 				if ip := from.IP.String(); ip != connected {
 					connected = ip
-					fmt.Println("연결됨:", ip)
+					state.connected(ip)
+					fmt.Println("  ● 태블릿 연결됨:", ip)
 				}
 			}
 		}
