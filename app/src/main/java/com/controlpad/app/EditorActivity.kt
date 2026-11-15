@@ -206,6 +206,7 @@ class EditorActivity : BaseActivity() {
         view.coordsOn = Labs.isOn("editor-coords")
         view.divisions = GridSize.divisions[Link.gridSize]
         view.guidesOn = Labs.isOn("center-guides")
+        if (Labs.isOn("big-handle")) view.handleScale = 1.8f
         view.longPressOn = Labs.isOn("long-press-edit")
         val alignOn = Labs.isOn("align")
         val distributeOn = Labs.isOn("distribute")
@@ -311,15 +312,22 @@ class EditorActivity : BaseActivity() {
             if (sel.isEmpty()) hint()
             else {
                 checkpoint()
-                val copies = sel.map { it.copy().apply { x = min(x + 0.03f, 1f - w); y = min(y + 0.03f, 1f - h) } }
+                // 제자리 복제(실험실 기능)면 같은 자리에, 아니면 조금 비켜 놓는다.
+                val shift = if (Labs.isOn("dup-in-place")) 0f else 0.03f
+                val copies = sel.map { it.copy().apply { x = min(x + shift, 1f - w); y = min(y + shift, 1f - h) } }
                 pad.buttons += copies
                 view.selection.clear(); view.selection += copies
                 view.invalidate()
             }
         }
         tool("삭제") {
+            fun remove() { checkpoint(); pad.buttons.removeAll(view.selection); view.selection.clear(); view.invalidate() }
             if (view.selection.isEmpty()) hint()
-            else { checkpoint(); pad.buttons.removeAll(view.selection); view.selection.clear(); view.invalidate() }
+            else if (Labs.isOn("confirm-delete")) AlertDialog.Builder(this)
+                .setMessage("선택한 ${view.selection.size}개를 지울까요?")
+                .setPositiveButton("삭제") { _, _ -> remove() }
+                .setNegativeButton("취소", null).show()
+            else remove()
         }
         tool("실행") {
             LayoutStore.save(this, pad)
@@ -1363,7 +1371,10 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         setBackgroundColor(theme.bg)
     }
 
-    private val handle = ctx.dp(22).toFloat()
+    private val baseHandle = ctx.dp(22).toFloat()
+    /** 큰 크기 조절 손잡이(실험실 기능)면 1.8배. */
+    var handleScale = 1f
+    private val handle get() = baseHandle * handleScale
     private val minSize = ctx.dp(36).toFloat()
     private val slop = ctx.dp(8).toFloat()
 

@@ -261,8 +261,14 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val history = ArrayDeque<String>()          // 최근에 누른 버튼의 키들
     private val audio = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
 
+    private val labFlash = Labs.isOn("edge-flash")
+    private val labBottom = Labs.isOn("status-bottom")
+    private var flashAt = 0L
+    private val flashPaint = Paint().apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(8).toFloat() }
+
     private fun notePress(b: PadButton) {
         val now = SystemClock.uptimeMillis()
+        if (labFlash) flashAt = now
         if (countKps) pressTimes.addLast(now)
         combo = Combo.next(combo, lastPress, now)
         lastPress = now
@@ -847,15 +853,28 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             if (n > 0) postInvalidateDelayed(200)       // 손을 떼도 숫자가 0 으로 내려가게
         }
         if (labBattery) { parts += battery(); postInvalidateDelayed(1000) }
-        if (parts.isNotEmpty()) c.drawText(parts.joinToString(" · "), statusPaint.textSize, statusPaint.textSize * 1.6f, statusPaint)
+        // 상태 표시를 아래로(실험실 기능)면 왼쪽 아래에, 아니면 왼쪽 위에 쓴다.
+        val line1 = if (labBottom) height - statusPaint.textSize * (if (labHistory && history.isNotEmpty()) 2.0f else 0.8f) else statusPaint.textSize * 1.6f
+        val line2 = if (labBottom) height - statusPaint.textSize * 0.8f else statusPaint.textSize * 3.1f
+        if (parts.isNotEmpty()) c.drawText(parts.joinToString(" · "), statusPaint.textSize, line1, statusPaint)
         if (labHistory && history.isNotEmpty()) {
-            c.drawText(history.joinToString("  ›  "), statusPaint.textSize, statusPaint.textSize * 3.1f, statusPaint)
+            c.drawText(history.joinToString("  ›  "), statusPaint.textSize, line2, statusPaint)
         }
         drawLabOverlays(c)
+        if (labFlash) {
+            val age = SystemClock.uptimeMillis() - flashAt
+            if (age < FLASH_MS) {
+                flashPaint.color = theme.text and 0x00FFFFFF or ((0xCC * (FLASH_MS - age) / FLASH_MS).toInt() shl 24)
+                val half = flashPaint.strokeWidth / 2
+                c.drawRect(half, half, width - half, height - half, flashPaint)
+                postInvalidateDelayed(16)
+            }
+        }
     }
 
     companion object {
         const val TAP_MS = 40L
+        const val FLASH_MS = 150L            // 누를 때 화면 테두리 번쩍(실험실 기능)이 사라지는 데 걸리는 시간
         const val DIM_AFTER_MS = 30000L      // 이만큼 아무것도 누르지 않으면 어둡게(실험실 기능)
         const val MACRO_GAP_MS = 40L         // 매크로: 한 조합을 뗀 뒤 다음 조합을 누르기까지
         const val PRESSED_LINGER_MS = 600L   // 키를 뗀 뒤 표시를 남겨 두는 시간

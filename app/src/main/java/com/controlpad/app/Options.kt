@@ -21,7 +21,7 @@ object Options {
     /** 실행 중에 바꿔서 의미가 있는 실험실 기능들. */
     val labIds = listOf(
         "kps", "battery", "exit-guard", "hide-status", "press-sound", "key-history",
-        "touch-dots", "hold-time", "auto-dim",
+        "touch-dots", "hold-time", "auto-dim", "edge-flash", "status-bottom",
     )
 
     val all: List<Option>
