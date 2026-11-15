@@ -143,24 +143,22 @@ const (
 	idRelease
 	idTop
 	idAuto
+	idThemePrev
+	idThemeNext
 )
 
 // 색(0x00BBGGRR)
 func rgb(c uint32) uintptr { return uintptr((c>>16)&0xFF | (c & 0xFF00) | (c&0xFF)<<16) }
 
-var (
-	cBg         = rgb(0x0F1115)
-	cCard       = rgb(0x181B22)
-	cCardHover  = rgb(0x20242D)
-	cLine       = rgb(0x262B35)
-	cText       = rgb(0xE8EBF2)
-	cSub        = rgb(0x9AA3B5)
-	cOk         = rgb(0x4ADE80)
-	cWarn       = rgb(0xFBBF24)
-	cAccent     = rgb(0x4FC3F7)
-	cAccentDark = rgb(0x05202C)
-	cChip       = rgb(0x262B35)
-)
+// 지금 테마의 색들. useTheme 이 바꾼다.
+var cBg, cCard, cCardHover, cLine, cText, cSub, cOk, cWarn, cAccent, cAccentDark, cChip, cBarOld uintptr
+
+func useTheme(t windowTheme) {
+	cBg, cCard, cCardHover, cLine = rgb(t.Bg), rgb(t.Card), rgb(t.Hover), rgb(t.Line)
+	cText, cSub, cOk, cWarn = rgb(t.Text), rgb(t.Sub), rgb(t.Ok), rgb(t.Warn)
+	cAccent, cAccentDark, cChip = rgb(t.Accent), rgb(t.OnAccent), rgb(t.Line)
+	cBarOld = rgb(mix(t.Accent, t.Card, 0.45)) // 그래프의 지난 초 막대
+}
 
 type hit struct {
 	r  rect
@@ -306,7 +304,11 @@ func (w *window) toggle(dc uintptr, r rect, label, sub string, on bool, id int) 
 	if on {
 		knob = sx + sw - sh/2
 	}
-	circle(dc, knob, sy+sh/2, sh/2-w.px(3), cText)
+	knobColor := cText
+	if themeAt(w.set.Theme).Light {
+		knobColor = rgb(0xFFFFFF) // 밝은 테마에서는 흰 손잡이
+	}
+	circle(dc, knob, sy+sh/2, sh/2-w.px(3), knobColor)
 	w.hits = append(w.hits, hit{r, id})
 }
 
@@ -396,7 +398,7 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 		x := gx + int32(i)*bar
 		color := cAccent
 		if i < len(v.History)-1 {
-			color = rgb(0x2F7FA6)
+			color = cBarOld
 		}
 		roundRect(dc, rect{x + 1, gy + gh - bh, x + bar - 1, gy + gh}, w.px(2), color, color)
 	}
@@ -470,12 +472,21 @@ func (w *window) paint(dc uintptr, width int32) int32 {
 	w.button(dc, rect{pad + bw + gap, y, pad + inner, y + bh}, "모든 키 떼기", idRelease, false)
 	y += bh + gap
 
-	h = w.px(8) + w.px(52)*2 + w.px(8)
+	h = w.px(8) + w.px(52)*3 + w.px(8)
 	w.card(dc, pad, y, inner, h, cLine)
 	ty := y + w.px(8)
 	w.toggle(dc, rect{pad + w.px(4), ty, pad + inner - w.px(4), ty + w.px(52)}, "항상 위에 표시", "게임 위에 이 창을 띄워 둡니다", w.set.OnTop, idTop)
 	ty += w.px(52)
 	w.toggle(dc, rect{pad + w.px(4), ty, pad + inner - w.px(4), ty + w.px(52)}, "Windows 시작 시 자동 실행", "로그인하면 관리자 권한으로 바로 켜집니다", w.autostart, idAuto)
+	ty += w.px(52)
+	// 테마: ◀ 이름 ▶
+	th := themeAt(w.set.Theme)
+	text(dc, "테마", rect{pad + w.px(16), ty + w.px(6), pad + inner - w.px(180), ty + w.px(26)}, w.bold(14), cText, dtSingleLine)
+	text(dc, th.Name+"  ("+strconv.Itoa(w.set.Theme+1)+"/"+strconv.Itoa(len(windowThemes))+")", rect{pad + w.px(16), ty + w.px(26), pad + inner - w.px(110), ty + w.px(48)}, w.normal(12), cSub, dtSingleLine|dtEllipsis)
+	sw := w.px(40)
+	bx := pad + inner - w.px(16) - sw*2 - w.px(6)
+	w.button(dc, rect{bx, ty + w.px(8), bx + sw, ty + w.px(44)}, "◀", idThemePrev, false)
+	w.button(dc, rect{bx + sw + w.px(6), ty + w.px(8), bx + sw*2 + w.px(6), ty + w.px(44)}, "▶", idThemeNext, false)
 	y += h + w.px(10)
 
 	// 바닥글(알림이 있으면 알림)
@@ -537,6 +548,15 @@ func (w *window) click(id int) {
 		w.set.OnTop = !w.set.OnTop
 		w.applyOnTop()
 		saveSettings(w.setPath, w.set)
+	case idThemePrev, idThemeNext:
+		step := 1
+		if id == idThemePrev {
+			step = len(windowThemes) - 1
+		}
+		w.set.Theme = (w.set.Theme + step) % len(windowThemes)
+		w.applyTheme()
+		saveSettings(w.setPath, w.set)
+		w.say("테마: " + themeAt(w.set.Theme).Name)
 	case idAuto:
 		if err := setAutostart(!w.autostart); err != nil {
 			w.say("자동 실행을 바꾸지 못했습니다 (관리자 권한 필요)")
@@ -549,6 +569,18 @@ func (w *window) click(id int) {
 			}
 		}
 	}
+	pInvalidateRect.Call(w.hwnd, 0, 0)
+}
+
+// applyTheme 은 고른 테마의 색을 쓰고, 제목줄도 밝게/어둡게 맞춘다(Windows 10 2004 이상, 11).
+func (w *window) applyTheme() {
+	t := themeAt(w.set.Theme)
+	useTheme(t)
+	dark := int32(1)
+	if t.Light {
+		dark = 0
+	}
+	syscall.NewLazyDLL("dwmapi.dll").NewProc("DwmSetWindowAttribute").Call(w.hwnd, 20, uintptr(unsafe.Pointer(&dark)), 4)
 	pInvalidateRect.Call(w.hwnd, 0, 0)
 }
 
@@ -668,6 +700,7 @@ func runWindow(a *app) {
 	}
 	w := &window{a: a, scale: 1, fonts: map[string]uintptr{}, setPath: settingsPath()}
 	w.set = loadSettings(w.setPath)
+	useTheme(themeAt(w.set.Theme))
 	w.autostart = autostartEnabled()
 	win = w
 

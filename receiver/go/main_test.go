@@ -267,6 +267,25 @@ func TestAckCarriesPauseFlagAndGraph(t *testing.T) {
 	}
 }
 
+func TestWindowThemes(t *testing.T) {
+	if len(windowThemes) != 12 {
+		t.Fatalf("themes %d", len(windowThemes))
+	}
+	seen := map[string]bool{}
+	for _, th := range windowThemes {
+		if seen[th.Name] || th.Name == "" || th.Text == th.Bg || th.Accent == th.OnAccent {
+			t.Fatalf("theme %+v", th)
+		}
+		seen[th.Name] = true
+	}
+	if themeAt(99).Name != windowThemes[0].Name || themeAt(-1).Name != windowThemes[0].Name {
+		t.Fatal("out of range falls back to default")
+	}
+	if mix(0x000000, 0xFFFFFF, 0.5) != 0x808080 || mix(0x123456, 0xABCDEF, 0) != 0x123456 {
+		t.Fatal("mix")
+	}
+}
+
 func TestSettingsRoundTrip(t *testing.T) {
 	path := t.TempDir() + "/sub/receiver.json"
 	if loadSettings(path).OnTop {

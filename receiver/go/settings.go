@@ -13,6 +13,7 @@ type settings struct {
 	X     int32 `json:"x"`     // 창을 닫을 때의 위치(다음에 같은 자리에 연다)
 	Y     int32 `json:"y"`
 	Saved bool  `json:"saved"` // 위치를 기억해 둔 적이 있는지
+	Theme int   `json:"theme"` // 창 테마 번호(windowThemes)
 }
 
 func settingsPath() string {
