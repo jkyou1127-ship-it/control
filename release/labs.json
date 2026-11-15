@@ -25,7 +25,9 @@
     "list-kinds"
   ],
   "graduated": [],
-  "hidden": [],
+  "hidden": [
+    "hide-labels"
+  ],
   "alpha": [
     "big-handle",
     "kps",
