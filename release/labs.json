@@ -12,6 +12,10 @@
     "play-clock-big",
     "list-last-played",
     "big-pressed-text",
+    "status-center",
+    "timer-beep",
+    "status-wifi",
+    "edge-guard",
     "disconnect-border"
   ],
   "graduated": [],

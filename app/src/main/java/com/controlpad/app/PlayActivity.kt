@@ -359,6 +359,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labSound = Labs.isOn("press-sound")
     private val labHistory = Labs.isOn("key-history")
     private val labDim = Labs.isOn("auto-dim")
+    private val labStatusCenter = Labs.isOn("status-center")
+    private val labTimerBeep = Labs.isOn("timer-beep")
+    private val labStatusWifi = Labs.isOn("status-wifi")
+    private val labEdgeGuard = Labs.isOn("edge-guard")
+
     private var lastTouch = SystemClock.uptimeMillis()
     private val dimPaint = Paint().apply { color = 0xB0000000.toInt() }
 
@@ -571,6 +576,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     private fun hit(x: Float, y: Float): Int {
         if (width == 0 || height == 0) return -1
+        if (labEdgeGuard && (x < width * 0.03f || x > width * 0.97f)) return -1    // 화면 가장자리 터치 무시(실험실 기능)
         val nx = x / width
         val ny = y / height
         for (i in buttons.indices.reversed()) {
@@ -1017,6 +1023,10 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                             // 끝: 멈추고 길게 진동, 알림
                             timerRun[i] = false; timerAcc[i] = total; timerDone[i] = true
                             timerEndedAt = now
+                            if (labTimerBeep) runCatching {         // 타이머 끝나면 소리(실험실 기능)
+                                android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 90)
+                                    .startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 600)
+                            }
                             performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS, android.view.HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
                             android.widget.Toast.makeText(context, "타이머가 끝났습니다", android.widget.Toast.LENGTH_SHORT).show()
                         }
@@ -1107,7 +1117,14 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         // 상태 표시를 아래로(실험실 기능)면 왼쪽 아래에, 아니면 왼쪽 위에 쓴다.
         val line1 = if (labBottom) height - statusPaint.textSize * (if (labHistory && history.isNotEmpty()) 2.0f else 0.8f) else statusPaint.textSize * 1.6f
         val line2 = if (labBottom) height - statusPaint.textSize * 0.8f else statusPaint.textSize * 3.1f
-        if (parts.isNotEmpty()) c.drawText(parts.joinToString(" · "), statusPaint.textSize, line1, statusPaint)
+        if (labStatusWifi && Link.mode == Link.MODE_UDP) Link.wifiRssi().takeIf { it != 0 }?.let { r ->
+            parts += "Wi-Fi " + WifiBars.of(r) + " ${r}dBm"; postInvalidateDelayed(2000)
+        }
+        if (parts.isNotEmpty()) {
+            // 상태 줄 가운데 위(실험실 기능)
+            if (labStatusCenter) { statusPaint.textAlign = Paint.Align.CENTER; c.drawText(parts.joinToString(" · "), width / 2f, line1, statusPaint); statusPaint.textAlign = Paint.Align.LEFT }
+            else c.drawText(parts.joinToString(" · "), statusPaint.textSize, line1, statusPaint)
+        }
         if (labHistory && history.isNotEmpty()) {
             c.drawText(history.joinToString("  ›  "), statusPaint.textSize, line2, statusPaint)
         }

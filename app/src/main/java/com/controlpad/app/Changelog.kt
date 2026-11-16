@@ -21,6 +21,10 @@ object Changelog {
     }
 
     val entries = listOf(
+        Entry("APU", listOf(
+            "실험실 기능 4개 추가: 상태 줄 가운데 위, 타이머 끝나면 소리, 상태 줄에 Wi-Fi 신호 세기, 화면 가장자리 터치 무시",
+            "업데이트 내역에서 실험실 관련 내용(실험실 기능 추가 · 삭제)은 알파 채널에서만 보임",
+        ), build = "APU"),
         Entry("PIV", listOf(
             "앱 아이콘 아래쪽에 버전명 배지가 들어감: 버전마다 배지 색(그라데이션 10가지)이 달라지고, 업데이트하면 새 버전명 · 새 색으로 바뀜",
         ), build = "PIV"),
@@ -199,18 +203,29 @@ object Changelog {
         Entry("BETA 1.0", listOf("첫 버전: 버튼을 직접 그리는 편집 화면, 블루투스 키보드 연결, Wi-Fi 연결")),
     )
 
-    /** 화면에 보여 줄 글. latestOnly 면 가장 최신 버전의 내용만. */
-    fun text(latestOnly: Boolean = false): String =
-        (if (latestOnly) entries.take(1) else entries).joinToString("\n\n") { e ->
-            e.label + "\n" + e.notes.joinToString("\n") { "  · $it" }
-        }
+    /** 실험실 관련 내역(실험실 기능 추가 · 삭제 등). 알파 채널에서만 보여 준다. */
+    fun isLabNote(note: String) = note.startsWith("실험실")
+
+    /** 이 채널에서 보여 줄 바뀐 점. 최신 채널(labs = false)에서는 실험실 관련 줄을 뺀다. */
+    fun visibleNotes(e: Entry, labs: Boolean): List<String> = if (labs) e.notes else e.notes.filterNot { isLabNote(it) }
+
+    /** 이 채널에서 보여 줄 버전들(보여 줄 줄이 하나도 없는 버전은 뺀다). */
+    fun visibleEntries(labs: Boolean): List<Entry> = entries.filter { visibleNotes(it, labs).isNotEmpty() }
+
+    /** 화면에 보여 줄 글. latestOnly 면 가장 최신 버전의 내용만. labs 가 거짓이면 실험실 관련 줄은 뺀다. */
+    fun text(latestOnly: Boolean = false, labs: Boolean = true): String {
+        val list = if (latestOnly) entries.take(1).filter { visibleNotes(it, labs).isNotEmpty() } else visibleEntries(labs)
+        return list.joinToString("\n\n") { e -> e.label + "\n" + visibleNotes(e, labs).joinToString("\n") { "  · $it" } }
+    }
 }
 
 /** 업데이트 내역을 창으로 보여 준다. */
 fun showChangelog(a: Activity, latestOnly: Boolean = false) {
     val pad = a.dp(20)
+    val shown = Changelog.text(latestOnly, labs = Updater.alpha)     // 실험실 관련 내역은 알파 채널에서만
+    if (latestOnly && shown.isEmpty()) return                         // 최신 채널에 보여 줄 바뀐 점이 없으면 띄우지 않는다
     val view = TextView(a).apply {
-        text = Changelog.text(latestOnly); textSize = 15f; setLineSpacing(0f, 1.2f)
+        text = shown; textSize = 15f; setLineSpacing(0f, 1.2f)
         setPadding(pad, a.dp(12), pad, 0); setTextIsSelectable(true)
     }
     AlertDialog.Builder(a)

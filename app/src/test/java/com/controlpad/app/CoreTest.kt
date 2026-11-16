@@ -185,6 +185,16 @@ class CoreTest {
         assertTrue(Labs.feature("disconnect-border") != null)
         for (id in listOf("status-fingers", "status-session-total", "list-random-play", "editor-numbers")) assertEquals(null, Labs.feature(id))   // 지운 기능
         assertEquals(Labs.features.size, Labs.features.map { it.id }.toSet().size)
+        // 실험실 기능 4개 더(APU) — '10초 쉬면 모든 키 떼기'는 넣지 않기로 함
+        for (id in listOf("status-center", "timer-beep", "status-wifi", "edge-guard")) assertTrue(Labs.feature(id) != null)
+        assertEquals(null, Labs.feature("idle-release"))
+        assertEquals("▂▄▆█", WifiBars.of(-50))
+        assertEquals("▂___", WifiBars.of(-85))
+        // 업데이트 내역: 실험실 관련 줄은 알파 채널에서만 보인다
+        val e = Changelog.Entry("x", listOf("실험실 기능 추가: 무엇", "일반 기능 고침"))
+        assertEquals(2, Changelog.visibleNotes(e, labs = true).size)
+        assertEquals(listOf("일반 기능 고침"), Changelog.visibleNotes(e, labs = false))
+        assertTrue(Changelog.visibleEntries(labs = false).all { en -> Changelog.visibleNotes(en, false).none { it.startsWith("실험실") } })
         assertEquals(15, OffsetPresets.all.size)
         assertEquals(15, OffsetPresets.all.map { it.name }.toSet().size)
         assertTrue(OffsetPresets.all.all { kotlin.math.abs(it.x) <= Link.OFFSET_MAX && kotlin.math.abs(it.y) <= Link.OFFSET_MAX && it.delay in 0..Link.DELAY_MAX })

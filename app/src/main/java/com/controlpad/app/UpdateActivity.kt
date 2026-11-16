@@ -94,9 +94,10 @@ class UpdateActivity : BaseActivity() {
         val more = Button(this)
         fun fillHistory() {
             history.removeAllViews()
-            val list = if (showAll) Changelog.entries else Changelog.entries.take(6)
+            val all = Changelog.visibleEntries(Updater.alpha)     // 실험실 관련 내역은 알파 채널에서만
+            val list = if (showAll) all else all.take(6)
             list.forEachIndexed { i, e -> history.addView(entryView(e, i == 0, i == list.size - 1)) }
-            more.visibility = if (showAll || Changelog.entries.size <= 6) View.GONE else View.VISIBLE
+            more.visibility = if (showAll || all.size <= 6) View.GONE else View.VISIBLE
         }
         more.text = "이전 내역 모두 보기"
         more.setOnClickListener { showAll = true; fillHistory(); Ui.restyle(history) }
@@ -134,7 +135,7 @@ class UpdateActivity : BaseActivity() {
             textSize = 16f; typeface = Typeface.DEFAULT_BOLD
             setTextColor(if (first) Ui.accent() else t.text)
         })
-        for (n in e.notes) body.addView(TextView(this).apply {
+        for (n in Changelog.visibleNotes(e, Updater.alpha)) body.addView(TextView(this).apply {
             text = "· $n"; textSize = 14f; setLineSpacing(0f, 1.15f)
             setTextColor(t.text and 0x00FFFFFF or 0xCC000000.toInt())
             setPadding(0, dp(2), 0, 0)

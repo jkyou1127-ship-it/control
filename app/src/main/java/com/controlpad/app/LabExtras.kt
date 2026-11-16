@@ -22,3 +22,13 @@ object LastPlayed {
         }
     }
 }
+
+/** 실험실 기능 '상태 줄에 Wi-Fi 신호 세기': 신호 세기(dBm)를 막대 네 칸으로. */
+object WifiBars {
+    fun of(rssi: Int): String = when {
+        rssi >= -55 -> "▂▄▆█"
+        rssi >= -65 -> "▂▄▆_"
+        rssi >= -75 -> "▂▄__"
+        else -> "▂___"
+    }
+}

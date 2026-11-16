@@ -1,6 +1,6 @@
 {
-  "versionCode": 93,
-  "versionName": "PIV",
-  "build": "PIV",
-  "notes": "PIV: 앱 아이콘의 버전명 배지가 버전마다 다른 색으로 바뀝니다."
+  "versionCode": 94,
+  "versionName": "APU",
+  "build": "APU",
+  "notes": "APU: 실험실 기능 4개(상태 줄 가운데 위, 타이머 끝나면 소리, Wi-Fi 신호 세기, 화면 가장자리 터치 무시), 업데이트 내역의 실험실 관련 내용은 알파 채널에서만 보입니다."
 }
