@@ -25,7 +25,9 @@
     "status-autohide",
     "timer-flash"
   ],
-  "hidden": [],
+  "hidden": [
+    "press-scale"
+  ],
   "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
