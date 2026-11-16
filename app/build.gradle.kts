@@ -11,8 +11,10 @@ android {
         applicationId = "com.controlpad.app"
         minSdk = 28
         targetSdk = 34
-        versionCode = 88
+        versionCode = 89
         versionName = "ENN BACK"
+        // 앱 아이콘 밑 이름 = 버전명(코드명). 앱 정보 화면 등의 앱 이름은 'Control Pad' 그대로.
+        resValue("string", "launcher_label", versionName ?: "Control Pad")
     }
 
     // 저장소에 포함된 고정 키. 비밀이 아니며, 어디서 빌드하든 같은 서명이 되어

@@ -23,6 +23,7 @@ object Changelog {
     val entries = listOf(
         Entry("ENN BACK", listOf(
             "업데이트 탭을 ENN 이전 디자인으로 되돌림 (채널 이름 '알파' · '최신'은 그대로)",
+            "앱 아이콘 밑에 버전명이 나옴 (업데이트하면 새 버전명으로 바뀜)",
         ), build = "ENN BACK"),
         Entry("ENN", listOf(
             "업데이트 탭 새 디자인: 지금 빌드를 크게 보여 주는 카드, 알파 · 최신 채널 카드(눌러서 받을 채널 고르기), 버전마다 카드로 된 업데이트 내역",

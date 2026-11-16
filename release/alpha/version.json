@@ -1,6 +1,6 @@
 {
-  "versionCode": 88,
+  "versionCode": 89,
   "versionName": "ENN BACK",
   "build": "ENN BACK",
-  "notes": "ENN BACK: 업데이트 탭을 예전 디자인으로 되돌렸습니다(채널 이름 '알파' · '최신'은 그대로)."
+  "notes": "ENN BACK: 바탕화면 앱 아이콘 밑에 버전명이 나옵니다(업데이트하면 새 버전명으로 바뀜)."
 }
