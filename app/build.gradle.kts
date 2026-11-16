@@ -11,7 +11,7 @@ android {
         applicationId = "com.controlpad.app"
         minSdk = 28
         targetSdk = 34
-        versionCode = 91
+        versionCode = 92
         versionName = "PIV"
     }
 

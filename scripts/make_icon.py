@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""앱 아이콘(바탕 + 앞면)을 그린다. 앞면 아래쪽에 버전명이 들어간다.
+"""앱 아이콘 아래쪽에 들어갈 버전명 배지를 그린다(아이콘의 나머지는 res/drawable/ic_launcher_fg.xml).
 
     python3 scripts/make_icon.py "PIV"
 
-쓰는 파일(둘 다 432×432, 108dp × 4):
-  app/src/main/res/drawable-nodpi/ic_launcher_bg.png   바탕: 남색 → 보라 대각선 그라데이션, 은은한 빛
-  app/src/main/res/drawable-nodpi/ic_launcher_ver.png  앞면: 둥근 버튼 세 개(빛 · 그림자) + 버전명 알약
-런처는 가운데 지름 66dp 원 밖을 잘라 낼 수 있으므로, 그림과 글자는 그 안에 둔다. publish.sh 가 빌드 전에 부른다.
+app/src/main/res/drawable-nodpi/ic_launcher_ver.png (432×432 = 108dp × 4, 투명 바탕)를 쓴다.
+런처가 가운데 지름 66dp 원 밖을 잘라 낼 수 있으므로 배지는 가운데 아래(y 약 70~78dp), 폭 약 41dp 안에 둔다.
+publish.sh 가 빌드 전에 부른다.
 """
 import os
 import sys
@@ -40,51 +39,12 @@ def dp(v):
     return int(v * SCALE * SS)
 
 
-def background():
-    big = SIZE * SS
-    img = Image.new("RGBA", (big, big))
-    top, bottom = hexrgb("#1B2A4E"), hexrgb("#3B1D5E")
-    px = img.load()
-    for y in range(0, big, SS):
-        for x in range(0, big, SS):
-            t = (x + y) / (2 * big)
-            c = tuple(int(top[i] * (1 - t) + bottom[i] * t) for i in range(3)) + (255,)
-            for yy in range(SS):
-                for xx in range(SS):
-                    px[x + xx, y + yy] = c
-    # 왼쪽 위에서 번지는 은은한 빛
-    glow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).ellipse((dp(-10), dp(-10), dp(70), dp(70)), fill=(120, 200, 255, 70))
-    glow = glow.filter(ImageFilter.GaussianBlur(dp(14)))
-    img.alpha_composite(glow)
-    return img.resize((SIZE, SIZE), Image.LANCZOS)
-
-
-def key(layer, box, color, radius):
-    """둥근 버튼 하나: 아래 그림자, 본체, 위쪽 밝은 띠."""
-    x0, y0, x1, y1 = box
-    shadow = Image.new("RGBA", layer.size, (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + dp(1.5), x1, y1 + dp(1.5)), radius, fill=(0, 0, 0, 110))
-    layer.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(dp(1.6))))
-    d = ImageDraw.Draw(layer)
-    d.rounded_rectangle(box, radius, fill=hexrgb(color))
-    # 위쪽 절반에 흰 빛을 살짝 얹어 입체감
-    shine = Image.new("RGBA", layer.size, (0, 0, 0, 0))
-    ImageDraw.Draw(shine).rounded_rectangle((x0 + dp(1), y0 + dp(1), x1 - dp(1), y0 + (y1 - y0) * 0.48), radius, fill=(255, 255, 255, 60))
-    layer.alpha_composite(shine)
-
-
-def foreground(text):
+def badge(text):
+    """버전명 배지: 하늘색→보라 그라데이션 알약, 은은한 빛 번짐, 위쪽 반짝임, 흰 굵은 글자(살짝 그림자)."""
     big = SIZE * SS
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    r = dp(4)
-    key(img, (dp(31), dp(31), dp(52), dp(47)), "#4FC3F7", r)
-    key(img, (dp(56), dp(31), dp(77), dp(47)), "#FFB74D", r)
-    key(img, (dp(31), dp(51), dp(77), dp(64)), "#81C784", r)
-
-    # 버전명 알약: 반투명 흰 테두리의 어두운 알약 + 흰 글자
     d = ImageDraw.Draw(img)
-    max_w, max_h = dp(36), dp(7)
+    max_w, max_h = dp(34), dp(6.5)
     size = max_h
     while size > dp(2):
         f = font(size)
@@ -94,19 +54,49 @@ def foreground(text):
         size -= SS
     l, t, rr, b = d.textbbox((0, 0), text, font=f)
     w, h = rr - l, b - t
-    cx, cy = big // 2, dp(73)
-    px, py = dp(3.2), dp(2)
-    pill = (cx - w // 2 - px, cy - h // 2 - py, cx + w // 2 + px, cy + h // 2 + py)
-    d.rounded_rectangle(pill, radius=(h // 2 + py), fill=(10, 12, 28, 170), outline=(255, 255, 255, 90), width=dp(0.5))
-    d.text((cx - w // 2 - l, cy - h // 2 - t), text, font=f, fill=(255, 255, 255, 255))
+    cx, cy = big // 2, dp(74)
+    px, py = dp(3.6), dp(2.2)
+    box = (cx - w // 2 - px, cy - h // 2 - py, cx + w // 2 + px, cy + h // 2 + py)
+    radius = (box[3] - box[1]) // 2
+
+    # 빛 번짐(배지 둘레에 하늘색 빛)
+    glow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    ImageDraw.Draw(glow).rounded_rectangle(box, radius, fill=(79, 195, 247, 150))
+    img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(dp(2.2))))
+
+    # 그라데이션 알약: 왼쪽 하늘색 → 오른쪽 보라
+    grad = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(grad)
+    left, right = hexrgb("#29B6F6"), hexrgb("#7E57C2")
+    for x in range(box[0], box[2] + 1):
+        k = (x - box[0]) / max(1, box[2] - box[0])
+        gd.line((x, box[1], x, box[3]), fill=tuple(int(left[i] * (1 - k) + right[i] * k) for i in range(3)) + (255,))
+    mask = Image.new("L", (big, big), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(box, radius, fill=255)
+    pill = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    pill.paste(grad, (0, 0), mask)
+    img.alpha_composite(pill)
+
+    # 위쪽 절반 반짝임과 얇은 흰 테두리
+    shine = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    ImageDraw.Draw(shine).rounded_rectangle(
+        (box[0] + dp(0.8), box[1] + dp(0.6), box[2] - dp(0.8), box[1] + (box[3] - box[1]) // 2), radius, fill=(255, 255, 255, 55))
+    img.alpha_composite(shine)
+    ImageDraw.Draw(img).rounded_rectangle(box, radius, outline=(255, 255, 255, 140), width=dp(0.45))
+
+    # 글자: 아래로 살짝 그림자를 깔고 흰 글자
+    tx, ty = cx - w // 2 - l, cy - h // 2 - t
+    shadow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).text((tx, ty + dp(0.5)), text, font=f, fill=(20, 10, 60, 160))
+    img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(dp(0.4))))
+    ImageDraw.Draw(img).text((tx, ty), text, font=f, fill=(255, 255, 255, 255))
     return img.resize((SIZE, SIZE), Image.LANCZOS)
 
 
 def render(text):
     os.makedirs(RES, exist_ok=True)
-    background().save(os.path.join(RES, "ic_launcher_bg.png"))
     out = os.path.join(RES, "ic_launcher_ver.png")
-    foreground(text).save(out)
+    badge(text).save(out)
     return out
 
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 앱 아이콘 앞면: 버튼 그림 + 아래쪽 버전명 배지(scripts/make_icon.py 가 빌드할 때 그린다) -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/ic_launcher_fg" />
+    <item android:drawable="@drawable/ic_launcher_ver" />
+</layer-list>
