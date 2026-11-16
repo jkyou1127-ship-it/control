@@ -179,7 +179,8 @@ class CoreTest {
         assertEquals("3분 전 실행", LastPlayed.describe(1_000_000, 1_000_000 + 180_000))
         assertEquals("2일 전 실행", LastPlayed.describe(1, 1 + 2 * 86_400_000L))
         // 실험실 기능 5개 더(NII apend+)
-        for (id in listOf("status-fingers", "status-session-total", "disconnect-border", "list-random-play", "editor-numbers")) assertTrue(Labs.feature(id) != null)
+        assertTrue(Labs.feature("disconnect-border") != null)
+        for (id in listOf("status-fingers", "status-session-total", "list-random-play", "editor-numbers")) assertEquals(null, Labs.feature(id))   // 지운 기능
         assertEquals(Labs.features.size, Labs.features.map { it.id }.toSet().size)
         assertEquals(15, OffsetPresets.all.size)
         assertEquals(15, OffsetPresets.all.map { it.name }.toSet().size)

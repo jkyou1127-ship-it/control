@@ -344,10 +344,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labLayoutName = Labs.isOn("status-layout-name")
     private val labVignette = Labs.isOn("play-vignette")
     private val labRipple = Labs.isOn("tap-ripple")
-    private val labFingers = Labs.isOn("status-fingers")
-    private val labSessionTotal = Labs.isOn("status-session-total")
     private val labDisconnectBorder = Labs.isOn("disconnect-border")
-    private var fingers = 0
     private val borderPaint = Paint().apply { style = Paint.Style.STROKE; color = 0xCCEF5350.toInt() }
     private val labRttColor = Labs.isOn("status-rtt-color")
     private val labBigClock = Labs.isOn("play-clock-big")
@@ -420,15 +417,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     private fun trackTouches(e: MotionEvent) {
         if (labDim) lastTouch = SystemClock.uptimeMillis()
-        // 상태 줄에 닿은 손가락 수(실험실 기능)
-        if (labFingers) {
-            val n = when (e.actionMasked) {
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> 0
-                MotionEvent.ACTION_POINTER_UP -> e.pointerCount - 1
-                else -> e.pointerCount
-            }
-            if (n != fingers) { fingers = n; invalidate() }
-        }
         // 누른 자리에 물결(실험실 기능): 손가락이 닿는 순간의 자리와 시각을 적어 둔다.
         if (labRipple && (e.actionMasked == MotionEvent.ACTION_DOWN || e.actionMasked == MotionEvent.ACTION_POINTER_DOWN)) {
             val idx = e.actionIndex
@@ -1108,8 +1096,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         if (labAutoHide && connected && !autoHidden) postInvalidateDelayed(5100 - (SystemClock.uptimeMillis() - startedAt))
         if (!labHideStatus && !autoHidden) parts += (if (connected) "● " else "○ ") + status
         if (labLayoutName && layout.name.isNotEmpty()) parts += layout.name
-        if (labFingers) parts += "손가락 $fingers"
-        if (labSessionTotal) parts += "누른 횟수 $total"
         if (labFps) {
             val t = SystemClock.uptimeMillis()
             frameTimes.addLast(t)

@@ -98,14 +98,6 @@ class MainActivity : BaseActivity() {
                 }
             }
         })
-        // 목록에 🎲 아무거나 실행(실험실 기능)
-        if (Labs.isOn("list-random-play")) header.addView(Button(this).apply {
-            text = "🎲 아무거나"
-            setOnClickListener {
-                val all = LayoutStore.list(this@MainActivity)
-                if (all.isEmpty()) toast("레이아웃이 없습니다") else open(PlayActivity::class.java, all.random().id)
-            }
-        })
         root.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(header) })
 
         search = android.widget.EditText(this).apply {

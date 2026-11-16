@@ -17,11 +17,7 @@
     "play-clock-big",
     "list-last-played",
     "big-pressed-text",
-    "status-fingers",
-    "status-session-total",
-    "disconnect-border",
-    "list-random-play",
-    "editor-numbers"
+    "disconnect-border"
   ],
   "graduated": [],
   "hidden": [],
