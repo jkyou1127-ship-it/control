@@ -162,6 +162,15 @@ class CoreTest {
         // 실험실 기능 5개(TM!)
         for (id in listOf("play-fps", "status-autohide", "timer-flash", "kps-color", "list-greeting")) assertTrue(Labs.feature(id) != null)
         assertTrue(Greeting.now(8).contains("아침") && Greeting.now(2).contains("밤") && Greeting.now(19).contains("저녁"))
+        // 실험실 기능 5개 더: 왼손 모드는 좌우만 뒤집고 원본은 그대로
+        for (id in listOf("press-scale", "play-grid", "status-layout-name", "play-vignette", "mirror-play")) assertTrue(Labs.feature(id) != null)
+        val src = PadLayout(name = "m", buttons = mutableListOf(PadButton(0.1f, 0.2f, 0.3f, 0.4f)))
+        assertEquals(null, Labs.feature("combo-buzz"))                        // 콤보 진동은 넣지 않기로 함
+        val flipped = Mirror.flip(src)
+        assertEquals(0.6f, flipped.buttons[0].x, 1e-5f)
+        assertEquals(0.2f, flipped.buttons[0].y, 1e-5f)
+        assertEquals(0.1f, src.buttons[0].x, 1e-5f)
+        assertEquals(src.id, flipped.id)
         assertEquals(15, OffsetPresets.all.size)
         assertEquals(15, OffsetPresets.all.map { it.name }.toSet().size)
         assertTrue(OffsetPresets.all.all { kotlin.math.abs(it.x) <= Link.OFFSET_MAX && kotlin.math.abs(it.y) <= Link.OFFSET_MAX && it.delay in 0..Link.DELAY_MAX })

@@ -130,8 +130,10 @@ class PlayActivity : BaseActivity() {
 
     private var current: PadLayout? = null
 
-    private fun show(layout: PadLayout) {
-        current = layout
+    private fun show(original: PadLayout) {
+        current = original
+        // 왼손 모드(실험실 기능): 실행 화면에서만 좌우를 뒤집는다.
+        val layout = if (Labs.isOn("mirror-play")) Mirror.flip(original) else original
         Link.prefs.edit().putString("lastLayout", layout.id).apply()     // '마지막 레이아웃 바로 실행'(실험실 기능)용
         val frame = android.widget.FrameLayout(this)
         view = PlayView(this, layout).also {
@@ -337,6 +339,13 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labAutoHide = Labs.isOn("status-autohide")
     private val labTimerFlash = Labs.isOn("timer-flash")
     private val labKpsColor = Labs.isOn("kps-color")
+    private val labPressScale = Labs.isOn("press-scale")
+    private val labGrid = Labs.isOn("play-grid")
+    private val labLayoutName = Labs.isOn("status-layout-name")
+    private val labVignette = Labs.isOn("play-vignette")
+    private var vignette: Paint? = null
+    private var vignetteSize = 0L          // 화면 크기가 바뀌면 다시 만든다
+    private val gridLinePaint = Paint().apply { strokeWidth = 1f }
     private val frameTimes = ArrayDeque<Long>()          // 화면 FPS 표시(실험실 기능): 최근 1초의 그린 시각
     private var timerEndedAt = 0L                        // 마지막으로 카운트다운이 끝난 시각(화면 번쩍용)
     private val flashPaint = Paint()
@@ -349,6 +358,16 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     /** 실험실 표시들: 터치 위치, 누른 시간, 쉬는 동안 어둡게. */
     private fun drawLabOverlays(c: Canvas) {
         val now = SystemClock.uptimeMillis()
+        // 화면 가장자리 어둡게(실험실 기능): 가운데는 투명, 가장자리로 갈수록 어둡게
+        if (labVignette) {
+            val size = width.toLong() shl 32 or height.toLong()
+            if (size != vignetteSize) { vignette = null; vignetteSize = size }
+            val p = vignette ?: Paint().apply {
+                shader = android.graphics.RadialGradient(width / 2f, height / 2f, maxOf(width, height) * 0.7f,
+                    intArrayOf(0x00000000, 0x00000000, 0x88000000.toInt()), floatArrayOf(0f, 0.55f, 1f), android.graphics.Shader.TileMode.CLAMP)
+            }.also { vignette = it }
+            c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), p)
+        }
         // 타이머 끝나면 화면 번쩍(실험실 기능): 1.5초 동안 세 번 깜빡인다.
         if (labTimerFlash && timerEndedAt != 0L && now - timerEndedAt < 1500) {
             if ((now - timerEndedAt) / 250 % 2 == 0L) {
@@ -923,6 +942,15 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     override fun onDraw(c: Canvas) {
         if (width == 0 || height == 0) return
         c.drawBitmap(idleLayer(), 0f, 0f, if (labDimButtons) dimLayer else null)
+        // 실행 화면 배경 격자(실험실 기능): 화면을 가로 16칸 정도로 나누는 옅은 선
+        if (labGrid) {
+            gridLinePaint.color = theme.text and 0x00FFFFFF or 0x18000000
+            val step = width / 16f
+            var x = step
+            while (x < width) { c.drawLine(x, 0f, x, height.toFloat(), gridLinePaint); x += step }
+            var y = step
+            while (y < height) { c.drawLine(0f, y, width.toFloat(), y, gridLinePaint); y += step }
+        }
         for (i in buttons.indices) {
             val b = buttons[i]
             if (!groupVisible(b.group)) continue
@@ -996,7 +1024,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
             if (!lit && parts == 0 && knobAngle[i] == 0f) continue    // 미리 그린 모습 그대로
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
+            // 누르면 버튼이 살짝 커짐(실험실 기능)
+            val grow = labPressScale && lit && !b.isKnob
+            if (grow) { c.save(); c.scale(1.06f, 1.06f, rect.centerX(), rect.centerY()) }
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)
+            if (grow) c.restore()
         }
         if (labCount) {
             countPaint.color = theme.text and 0x00FFFFFF or 0xAA000000.toInt()
@@ -1025,6 +1057,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         val autoHidden = labAutoHide && connected && SystemClock.uptimeMillis() - startedAt > 5000
         if (labAutoHide && connected && !autoHidden) postInvalidateDelayed(5100 - (SystemClock.uptimeMillis() - startedAt))
         if (!labHideStatus && !autoHidden) parts += (if (connected) "● " else "○ ") + status
+        if (labLayoutName && layout.name.isNotEmpty()) parts += layout.name
         if (labFps) {
             val t = SystemClock.uptimeMillis()
             frameTimes.addLast(t)

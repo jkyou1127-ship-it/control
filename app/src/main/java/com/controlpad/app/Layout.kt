@@ -782,6 +782,14 @@ object Timers {
     }
 }
 
+/** 왼손 모드(실험실 기능): 레이아웃을 좌우로 뒤집은 복사본(원본은 그대로). */
+object Mirror {
+    fun flip(l: PadLayout): PadLayout = PadLayout(
+        id = l.id, name = l.name, slide = l.slide,
+        buttons = l.buttons.map { b -> b.copy().apply { x = (1f - b.x - b.w).coerceIn(0f, 1f) } }.toMutableList(),
+    )
+}
+
 /** 그림 에디터에서 그린 그림으로 만들 수 있는 요소들. 그림이 그 요소의 면이 된다. */
 object SketchKind {
     const val BUTTON = 0

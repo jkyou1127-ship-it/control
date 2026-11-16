@@ -6,7 +6,12 @@
     "status-autohide",
     "timer-flash",
     "kps-color",
-    "list-greeting"
+    "list-greeting",
+    "press-scale",
+    "play-grid",
+    "status-layout-name",
+    "play-vignette",
+    "mirror-play"
   ],
   "graduated": [],
   "hidden": [],
