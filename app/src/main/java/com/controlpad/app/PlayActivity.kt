@@ -339,7 +339,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labAutoHide = Labs.isOn("status-autohide")
     private val labTimerFlash = Labs.isOn("timer-flash")
     private val labKpsColor = Labs.isOn("kps-color")
-    private val labPressScale = Labs.isOn("press-scale")
     private val labGrid = Labs.isOn("play-grid")
     private val labLayoutName = Labs.isOn("status-layout-name")
     private val labVignette = Labs.isOn("play-vignette")
@@ -1060,11 +1059,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
             if (!lit && parts == 0 && knobAngle[i] == 0f) continue    // 미리 그린 모습 그대로
             rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
-            // 누르면 버튼이 살짝 커짐(실험실 기능)
-            val grow = labPressScale && lit && !b.isKnob
-            if (grow) { c.save(); c.scale(1.06f, 1.06f, rect.centerX(), rect.centerY()) }
             painter.draw(c, b, rect, lit, false, knobAngle[i], parts, if (hangul) 1 else 0)
-            if (grow) c.restore()
         }
         if (labCount) {
             countPaint.color = theme.text and 0x00FFFFFF or 0xAA000000.toInt()

@@ -163,7 +163,10 @@ class CoreTest {
         for (id in listOf("play-fps", "status-autohide", "timer-flash", "kps-color", "list-greeting")) assertTrue(Labs.feature(id) != null)
         assertTrue(Greeting.now(8).contains("아침") && Greeting.now(2).contains("밤") && Greeting.now(19).contains("저녁"))
         // 실험실 기능 5개 더: 왼손 모드는 좌우만 뒤집고 원본은 그대로
-        for (id in listOf("press-scale", "play-grid", "status-layout-name", "play-vignette", "mirror-play")) assertTrue(Labs.feature(id) != null)
+        for (id in listOf("play-grid", "status-layout-name", "play-vignette", "mirror-play")) assertTrue(Labs.feature(id) != null)
+        assertEquals(null, Labs.feature("press-scale"))                       // 평가단이 숨긴 기능은 지움
+        // 평가단이 정식으로 올린 기능은 실험실에서 내리고 늘 있는 기능으로
+        for (id in listOf("kps-color", "list-greeting", "status-autohide", "timer-flash")) assertTrue(Labs.permanent.any { it.id == id } && Labs.features.none { it.id == id })
         val src = PadLayout(name = "m", buttons = mutableListOf(PadButton(0.1f, 0.2f, 0.3f, 0.4f)))
         assertEquals(null, Labs.feature("combo-buzz"))                        // 콤보 진동은 넣지 않기로 함
         val flipped = Mirror.flip(src)

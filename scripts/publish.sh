@@ -63,4 +63,4 @@ if [ "$fix" = 1 ]; then
     cp release/alpha/version.json release/alpha/ControlPad.apk release/   # 버그 수정은 정식에도 바로
 fi
 done_ok=1
-echo "알파: $build / $name ($code) / 정식: $(sed -n 's/.*"versionName": *"\(.*\)".*/\1/p' release/version.json)"
+echo "알파: $build / $name ($code) / 최신: $(sed -n 's/.*"versionName": *"\(.*\)".*/\1/p' release/version.json)"

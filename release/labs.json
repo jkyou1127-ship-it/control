@@ -3,11 +3,6 @@
     "release-haptic",
     "list-count",
     "play-fps",
-    "status-autohide",
-    "timer-flash",
-    "kps-color",
-    "list-greeting",
-    "press-scale",
     "play-grid",
     "status-layout-name",
     "play-vignette",
@@ -19,15 +14,8 @@
     "big-pressed-text",
     "disconnect-border"
   ],
-  "graduated": [
-    "kps-color",
-    "list-greeting",
-    "status-autohide",
-    "timer-flash"
-  ],
-  "hidden": [
-    "press-scale"
-  ],
+  "graduated": [],
+  "hidden": [],
   "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
 }
