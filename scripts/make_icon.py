@@ -39,8 +39,32 @@ def dp(v):
     return int(v * SCALE * SS)
 
 
+# 버전마다 다른 배지 색(왼쪽 → 오른쪽 그라데이션). 버전명으로 하나를 고르므로 같은 버전은 늘 같은 색이다.
+PALETTES = [
+    ("#29B6F6", "#7E57C2"),   # 하늘 → 보라
+    ("#FF7043", "#EC407A"),   # 주황 → 분홍
+    ("#66BB6A", "#26A69A"),   # 초록 → 청록
+    ("#FFCA28", "#FF7043"),   # 노랑 → 주황
+    ("#AB47BC", "#5C6BC0"),   # 보라 → 남색
+    ("#26C6DA", "#66BB6A"),   # 청록 → 초록
+    ("#EF5350", "#AB47BC"),   # 빨강 → 보라
+    ("#42A5F5", "#26C6DA"),   # 파랑 → 하늘
+    ("#EC407A", "#FFA726"),   # 분홍 → 주황
+    ("#9CCC65", "#FFEE58"),   # 연두 → 노랑
+]
+
+
+def palette(text):
+    """버전명으로 배지 색 한 쌍을 고른다(파이썬 실행마다 바뀌는 hash() 대신 글자 코드 합을 쓴다)."""
+    n = 0
+    for ch in text:
+        n = (n * 31 + ord(ch)) % 1_000_003
+    return PALETTES[n % len(PALETTES)]
+
+
 def badge(text):
-    """버전명 배지: 하늘색→보라 그라데이션 알약, 은은한 빛 번짐, 위쪽 반짝임, 흰 굵은 글자(살짝 그림자)."""
+    """버전명 배지: 버전마다 다른 그라데이션 알약, 같은 색의 은은한 빛 번짐, 위쪽 반짝임, 흰 굵은 글자(살짝 그림자)."""
+    c_left, c_right = palette(text)
     big = SIZE * SS
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -61,13 +85,13 @@ def badge(text):
 
     # 빛 번짐(배지 둘레에 하늘색 빛)
     glow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).rounded_rectangle(box, radius, fill=(79, 195, 247, 150))
+    ImageDraw.Draw(glow).rounded_rectangle(box, radius, fill=hexrgb(c_left, 150))
     img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(dp(2.2))))
 
     # 그라데이션 알약: 왼쪽 하늘색 → 오른쪽 보라
     grad = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     gd = ImageDraw.Draw(grad)
-    left, right = hexrgb("#29B6F6"), hexrgb("#7E57C2")
+    left, right = hexrgb(c_left), hexrgb(c_right)
     for x in range(box[0], box[2] + 1):
         k = (x - box[0]) / max(1, box[2] - box[0])
         gd.line((x, box[1], x, box[3]), fill=tuple(int(left[i] * (1 - k) + right[i] * k) for i in range(3)) + (255,))
@@ -87,9 +111,12 @@ def badge(text):
     # 글자: 아래로 살짝 그림자를 깔고 흰 글자
     tx, ty = cx - w // 2 - l, cy - h // 2 - t
     shadow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).text((tx, ty + dp(0.5)), text, font=f, fill=(20, 10, 60, 160))
+    # 밝은 배지(노랑 · 연두 등)에는 진한 글자, 어두운 배지에는 흰 글자
+    lum = sum((0.299, 0.587, 0.114)[i] * (left[i] + right[i]) / 2 for i in range(3)) / 255
+    light = lum > 0.6
+    ImageDraw.Draw(shadow).text((tx, ty + dp(0.5)), text, font=f, fill=(255, 255, 255, 120) if light else (20, 10, 60, 160))
     img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(dp(0.4))))
-    ImageDraw.Draw(img).text((tx, ty), text, font=f, fill=(255, 255, 255, 255))
+    ImageDraw.Draw(img).text((tx, ty), text, font=f, fill=(30, 30, 36, 255) if light else (255, 255, 255, 255))
     return img.resize((SIZE, SIZE), Image.LANCZOS)
 
 

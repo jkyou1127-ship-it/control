@@ -1,6 +1,6 @@
 {
-  "versionCode": 92,
+  "versionCode": 93,
   "versionName": "PIV",
   "build": "PIV",
-  "notes": "PIV: 앱 아이콘은 원래대로 되돌리고, 아래쪽 버전명 배지를 그라데이션 알약으로 예쁘게 다듬었습니다."
+  "notes": "PIV: 앱 아이콘의 버전명 배지가 버전마다 다른 색으로 바뀝니다."
 }
