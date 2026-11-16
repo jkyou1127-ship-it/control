@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -41,12 +42,37 @@ class SettingsActivity : BaseActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val pad = dp(16)
-        val root = SectionedLayout(this).apply { setPadding(pad, pad, pad, pad) }
         fun title(t: String) = Ui.section(this, t)
         fun note(t: String) = TextView(this).apply { text = t; textSize = 14f; setLineSpacing(0f, 1.2f) }
 
-        root.addView(Ui.header(this, "설정", "연결 · 테마 · 오프셋 · 화면"))
-        root.addView(Ui.tabs(this))
+        // 설정은 카테고리별로 나눠 하나씩 보여 준다: 연결 · 테마 · 오프셋 · 화면
+        val outer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
+        outer.addView(Ui.header(this, "설정", "카테고리를 골라 바꿉니다"))
+        outer.addView(Ui.tabs(this))
+        val categories = listOf("🔌  연결", "🎨  테마", "🎯  오프셋", "🖥  화면")
+        val pages = categories.map { SectionedLayout(this) }
+        val bar = LinearLayout(this)
+        fun showCategory(i: Int) {
+            Link.prefs.edit().putInt("settingsCategory", i).apply()
+            pages.forEachIndexed { k, p -> p.visibility = if (k == i) View.VISIBLE else View.GONE }
+            for (k in 0 until bar.childCount) (bar.getChildAt(k) as TextView).apply {
+                val on = k == i
+                background = Ui.rounded(this@SettingsActivity, if (on) Ui.accent() else Ui.surface(), 20, if (on) 0 else Ui.line())
+                setTextColor(if (on) Ui.onAccent() else Themes.current.text)
+                typeface = if (on) android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
+            }
+        }
+        categories.forEachIndexed { i, name ->
+            bar.addView(TextView(this).apply {
+                text = name; textSize = 14f; gravity = android.view.Gravity.CENTER
+                setPadding(dp(16), dp(9), dp(16), dp(9)); isClickable = true
+                setOnClickListener { showCategory(i) }
+            }, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(8) })
+        }
+        outer.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(bar) })
+        for (p in pages) outer.addView(p)
+        var root: android.view.ViewGroup = pages[0]
+
         status = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
         root.addView(status)
 
@@ -135,6 +161,7 @@ class SettingsActivity : BaseActivity() {
         udpBox.addView(Button(this).apply { text = "저장하고 연결 확인"; setOnClickListener { saveAndTest() } })
         root.addView(udpBox)
 
+        root = pages[1]
         root.addView(title("테마"))
         root.addView(android.widget.Spinner(this).apply {
             adapter = android.widget.ArrayAdapter(
@@ -156,6 +183,7 @@ class SettingsActivity : BaseActivity() {
             setOnClickListener { startActivity(Intent(this@SettingsActivity, ThemeEditorActivity::class.java)) }
         })
 
+        root = pages[2]
         root.addView(title("오프셋"))
         root.addView(note("손가락이 닿는 자리와 버튼이 눌리는 자리가 어긋나거나, 다른 기기와 박자가 안 맞을 때 맞춥니다."))
         root.addView(Button(this).apply {
@@ -186,6 +214,7 @@ class SettingsActivity : BaseActivity() {
             -Link.OFFSET_MAX, Link.OFFSET_MAX, Link.touchOffsetY) { Link.touchOffsetY = it }
         offsetSlider({ "입력 지연: ${it}ms" + if (it == 0) " (바로 보냄)" else "" }, 0, Link.DELAY_MAX, Link.inputDelay) { Link.inputDelay = it }
 
+        root = pages[3]
         root.addView(title("화면"))
         fun choice(label: String, names: List<String>, selected: Int, set: (Int) -> Unit) {
             root.addView(TextView(this).apply { text = label; setPadding(0, dp(6), 0, 0) })
@@ -205,7 +234,8 @@ class SettingsActivity : BaseActivity() {
             setOnCheckedChangeListener { _, on -> Link.thumbnails = on }
         })
 
-        scroll = ScrollView(this).apply { addView(root) }
+        showCategory(Link.prefs.getInt("settingsCategory", 0).coerceIn(0, categories.lastIndex))
+        scroll = ScrollView(this).apply { addView(outer) }
         setContentView(scroll)
         if (keepScroll >= 0) scroll.post { scroll.scrollTo(0, keepScroll); keepScroll = -1 }
 

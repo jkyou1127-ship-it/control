@@ -1,6 +1,6 @@
 {
-  "versionCode": 78,
-  "versionName": "HotFIx2026.11.15.9.38",
-  "build": "lets Go V1",
-  "notes": "핫픽스(HotFIx2026.11.15.9.38): 에디터 화면에서 위쪽 버튼과 도구 모음 글자가 잘리던 문제를 고쳤습니다."
+  "versionCode": 79,
+  "versionName": "TM!",
+  "build": "TM!",
+  "notes": "TM! : 타이머 기능(스톱워치 · 카운트다운 패널)과 실험실 기능 5개(FPS 표시, 상태 줄 자동 숨김, 타이머 끝나면 번쩍, 초당 입력 수 색, 목록 인사말)."
 }

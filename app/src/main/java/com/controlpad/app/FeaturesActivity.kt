@@ -11,7 +11,7 @@ import android.widget.TextView
 
 /**
  * 기능 탭(UIUPV! 에서 새로 꾸밈): 레이아웃 목록처럼 카드 격자로 보여 준다.
- * 위쪽에 켜진 개수 요약과 검색, 그 아래 묶음(기능 · 모바일 · 기타)마다 제목과 카드들.
+ * 위쪽에 켜진 개수 요약과 검색, 그 아래 묶음(기능 · 모바일)마다 제목과 카드들.
  * 카드는 아이콘 · 스위치 · 제목 · 설명으로 되어 있고, 카드를 누르면 켜고 끈다.
  */
 class FeaturesActivity : BaseActivity() {
@@ -32,7 +32,7 @@ class FeaturesActivity : BaseActivity() {
 
     private fun groups(): List<Group> {
         val promoted = Labs.settingFeatures().map { f ->
-            Item("✨", f.title, f.description, { Labs.isOn(f.id) }, { Labs.set(f.id, it) }, if (f.id in Labs.graduated) null else "알파")
+            Item("✨", f.title, f.description, { Labs.isOn(f.id) }, { Labs.set(f.id, it) })
         }
         val etc = listOf(
             Item("⌨", "눌리고 있는 키 표시", "실행 화면 위쪽에 지금 입력 중인 키를 보여 줍니다", { Link.showPressed }, { Link.showPressed = it }),
@@ -41,10 +41,10 @@ class FeaturesActivity : BaseActivity() {
             Item("🔌", "연결이 끊기면 알림", "실행 중에 PC 연결이 끊기면 진동과 알림으로 알려 줍니다", { Link.disconnectAlert }, { Link.disconnectAlert = it }),
         )
         val mobile = Mobile.toggles.map { t -> Item(mobileIcons[t.key] ?: "📱", t.title, t.note, { Mobile.isOn(t.key) }, { Mobile.set(t.key, it) }) }
+        // '기능'과 '기타'는 한 묶음으로 합친다.
         return listOf(
-            Group("⚡", "기능", "평가단 건의로 실험실에서 올라온 기능", promoted),
+            Group("⚡", "기능", "표시 · 진동 · 알림과 평가단 건의로 올라온 기능", etc + promoted),
             Group("📱", "모바일", "태블릿을 쓰는 동안의 편의 기능", mobile),
-            Group("⚙", "기타", "표시와 진동, 알림", etc),
         )
     }
 
