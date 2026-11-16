@@ -148,6 +148,20 @@ class CoreTest {
     fun builtInThemesAreDistinctAndReadable() {
         assertEquals(30, Themes.all.size)
         // 오프셋 기본 프리셋 10개: 이름이 겹치지 않고, 값이 조절 범위 안에 있다
+        // 타이머 패널: 스톱워치 · 카운트다운
+        assertTrue(DisplayKind.interactive(DisplayKind.STOPWATCH) && DisplayKind.interactive(DisplayKind.COUNTDOWN))
+        assertFalse(DisplayKind.interactive(DisplayKind.TIMER))
+        assertEquals("1:05.3", Timers.stopwatch(65_300))
+        assertEquals("1:00:00", Timers.stopwatch(3_600_000))
+        assertEquals("3:00", Timers.countdown(180_000))
+        assertEquals("0:01", Timers.countdown(1))                              // 올림: 0 이 되는 순간이 끝
+        assertEquals("0:00", Timers.countdown(-5))
+        val cd = PadButton(0f, 0f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = DisplayKind.COUNTDOWN, rate = Timers.rateFor(4))
+        assertEquals(180_000L, Timers.durationMs(PadButton.fromJson(JSONObject(cd.toJson().toString()))))
+        assertEquals(10, Timers.durations.size)
+        // 실험실 기능 5개(TM!)
+        for (id in listOf("play-fps", "status-autohide", "timer-flash", "kps-color", "list-greeting")) assertTrue(Labs.feature(id) != null)
+        assertTrue(Greeting.now(8).contains("아침") && Greeting.now(2).contains("밤") && Greeting.now(19).contains("저녁"))
         assertEquals(15, OffsetPresets.all.size)
         assertEquals(15, OffsetPresets.all.map { it.name }.toSet().size)
         assertTrue(OffsetPresets.all.all { kotlin.math.abs(it.x) <= Link.OFFSET_MAX && kotlin.math.abs(it.y) <= Link.OFFSET_MAX && it.delay in 0..Link.DELAY_MAX })
@@ -713,8 +727,8 @@ class CoreTest {
 
     @Test
     fun everyStatusDisplayHasAPanel() {
-        assertEquals(8, DisplayKind.names.size)
-        for (k in listOf(DisplayKind.BATTERY, DisplayKind.HISTORY, DisplayKind.STATUS)) {
+        assertEquals(10, DisplayKind.names.size)                             // 스톱워치 · 카운트다운 포함
+        for (k in listOf(DisplayKind.BATTERY, DisplayKind.HISTORY, DisplayKind.STATUS, DisplayKind.STOPWATCH, DisplayKind.COUNTDOWN)) {
             val p = PadButton(0f, 0f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = k)
             assertEquals(k, DisplayKind.of(PadButton.fromJson(JSONObject(p.toJson().toString()))))
         }

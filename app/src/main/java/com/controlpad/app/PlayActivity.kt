@@ -234,6 +234,31 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     private val buttons = layout.buttons
     private val holds = IntArray(buttons.size)          // 버튼별로 올라가 있는 손가락 수
+    // 타이머 패널 상태(버튼 인덱스별): 도는 중인지, 멈춰 둔 동안 쌓인 시간, 마지막으로 시작한 시각, 누르기 시작한 시각, 카운트다운이 끝났는지
+    private val timerRun = BooleanArray(buttons.size)
+    private val timerAcc = LongArray(buttons.size)
+    private val timerStart = LongArray(buttons.size)
+    private val timerDown = LongArray(buttons.size)
+    private val timerDone = BooleanArray(buttons.size)
+
+    private fun timerElapsed(i: Int, now: Long) = timerAcc[i] + if (timerRun[i]) now - timerStart[i] else 0L
+
+    /** 타이머 패널을 뗐을 때: 짧게 누르면 시작 · 멈춤, 길게(0.6초) 누르면 처음으로. */
+    private fun timerTap(i: Int) {
+        val now = SystemClock.uptimeMillis()
+        if (now - timerDown[i] >= TIMER_RESET_MS) {
+            timerRun[i] = false; timerAcc[i] = 0; timerDone[i] = false
+            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        } else if (timerRun[i]) {
+            timerAcc[i] += now - timerStart[i]; timerRun[i] = false
+            if (haptic) performHapticFeedback(hapticKind)
+        } else {
+            if (timerDone[i]) { timerAcc[i] = 0; timerDone[i] = false }     // 끝난 카운트다운은 처음부터 다시
+            timerStart[i] = now; timerRun[i] = true
+            if (haptic) performHapticFeedback(hapticKind)
+        }
+        invalidate()
+    }
     private val toggled = BooleanArray(buttons.size)
     private val flash = BooleanArray(buttons.size)      // '한 번 입력' 버튼의 눌림 표시
     private val pointers = HashMap<Int, Int>()          // 포인터 id → 버튼 인덱스
@@ -308,6 +333,13 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     /** 버튼을 한 번 눌렀다고 기록한다(초당 입력 수, 콤보, 총 입력 수). */
     private val labHideStatus = Labs.isOn("hide-status")
+    private val labFps = Labs.isOn("play-fps")
+    private val labAutoHide = Labs.isOn("status-autohide")
+    private val labTimerFlash = Labs.isOn("timer-flash")
+    private val labKpsColor = Labs.isOn("kps-color")
+    private val frameTimes = ArrayDeque<Long>()          // 화면 FPS 표시(실험실 기능): 최근 1초의 그린 시각
+    private var timerEndedAt = 0L                        // 마지막으로 카운트다운이 끝난 시각(화면 번쩍용)
+    private val flashPaint = Paint()
     private val labSound = Labs.isOn("press-sound")
     private val labHistory = Labs.isOn("key-history")
     private val labDim = Labs.isOn("auto-dim")
@@ -317,6 +349,14 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     /** 실험실 표시들: 터치 위치, 누른 시간, 쉬는 동안 어둡게. */
     private fun drawLabOverlays(c: Canvas) {
         val now = SystemClock.uptimeMillis()
+        // 타이머 끝나면 화면 번쩍(실험실 기능): 1.5초 동안 세 번 깜빡인다.
+        if (labTimerFlash && timerEndedAt != 0L && now - timerEndedAt < 1500) {
+            if ((now - timerEndedAt) / 250 % 2 == 0L) {
+                flashPaint.color = Ui.accent() and 0x00FFFFFF or 0x66000000
+                c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), flashPaint)
+            }
+            postInvalidateDelayed(60)
+        }
         if (labDim) {
             val idle = now - lastTouch
             if (idle >= DIM_AFTER_MS) c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dimPaint)
@@ -479,7 +519,9 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         val ny = y / height
         for (i in buttons.indices.reversed()) {
             // 표시 패널과 사진은 누를 수 없으므로 건너뛴다(밑에 있는 버튼이 눌린다).
-            if (!buttons[i].isDisplay && !buttons[i].isImage && groupVisible(buttons[i].group) && buttons[i].contains(nx, ny)) return i
+            // 타이머 패널은 누를 수 있다(시작 · 멈춤 · 처음으로).
+            val pressable = !buttons[i].isDisplay || DisplayKind.interactive(DisplayKind.of(buttons[i]))
+            if (pressable && !buttons[i].isImage && groupVisible(buttons[i].group) && buttons[i].contains(nx, ny)) return i
         }
         return -1
     }
@@ -666,6 +708,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         if (i < 0) return
         val n = ++holds[i]
         val b = buttons[i]
+        if (b.isDisplay) { if (n == 1) timerDown[i] = SystemClock.uptimeMillis(); return }   // 타이머 패널
         if (b.isPad) {
             if (n == 1) { padStart[i] = SystemClock.uptimeMillis(); padTravel[i] = 0f; padFingers[i] = 1 }
             else padFingers[i] = maxOf(padFingers[i], n)
@@ -725,6 +768,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         if (i < 0 || holds[i] == 0) return
         val n = --holds[i]
         val b = buttons[i]
+        if (b.isDisplay) { if (n == 0) timerTap(i); return }
         if (b.isPad) {
             // 거의 움직이지 않고 짧게 뗐으면 탭: 한 손가락은 좌클릭, 두 손가락은 우클릭
             if (n == 0 && b.mode == PadButton.PAD_TAP && padTravel[i] < TAP_SLOP_DP * density * padFingers[i] &&
@@ -897,12 +941,39 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 val n = if (kind == DisplayKind.KPS) kps() else 0
                 rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
                 val shown = when (kind) {
+                    DisplayKind.STOPWATCH -> {
+                        val e = timerElapsed(i, now)
+                        if (timerRun[i]) postInvalidateDelayed(100)
+                        (if (!timerRun[i] && e == 0L) "▶ " else "") + Timers.stopwatch(e)
+                    }
+                    DisplayKind.COUNTDOWN -> {
+                        val total = Timers.durationMs(b)
+                        val left = total - timerElapsed(i, now)
+                        if (timerRun[i] && left <= 0) {
+                            // 끝: 멈추고 길게 진동, 알림
+                            timerRun[i] = false; timerAcc[i] = total; timerDone[i] = true
+                            timerEndedAt = now
+                            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS, android.view.HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
+                            android.widget.Toast.makeText(context, "타이머가 끝났습니다", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                        if (timerRun[i]) postInvalidateDelayed(200)
+                        when {
+                            timerDone[i] -> "끝!"
+                            !timerRun[i] && timerAcc[i] == 0L -> "▶ " + Timers.countdown(total)
+                            else -> Timers.countdown(left)
+                        }
+                    }
                     DisplayKind.BATTERY -> battery()
                     DisplayKind.HISTORY -> history.joinToString("  ›  ").ifEmpty { "—" }
                     DisplayKind.STATUS -> (if (connected) "● " else "○ ") + status
                     else -> DisplayKind.value(kind, n, combo, total, now - startedAt)
                 }
-                painter.drawDisplay(c, b, rect, false, shown, false)
+                val pausedTimer = DisplayKind.interactive(kind) && !timerRun[i] && timerElapsed(i, now) > 0 && !timerDone[i]
+                // 초당 입력 수 색 바꾸기(실험실 기능): 빠를수록 초록 → 노랑 → 빨강
+                val savedText = b.textColor
+                if (labKpsColor && kind == DisplayKind.KPS) b.textColor = kpsColor(n, savedText)
+                painter.drawDisplay(c, b, rect, holds[i] > 0, shown, pausedTimer)
+                b.textColor = savedText
                 when (kind) {
                     DisplayKind.KPS -> if (n > 0) postInvalidateDelayed(200)
                     DisplayKind.COMBO -> if (combo > 0) postInvalidateDelayed(250)
@@ -950,7 +1021,17 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         statusPaint.color = if (connected) 0x9981C784.toInt() else 0xFFFFB74D.toInt()
         // 왼쪽 위 한 줄: 연결 상태와, 켜 둔 실험실 표시들
         val parts = ArrayList<String>()
-        if (!labHideStatus) parts += (if (connected) "● " else "○ ") + status
+        // 상태 줄 자동 숨김(실험실 기능): 열고 5초 뒤부터는 연결돼 있는 동안 감춘다.
+        val autoHidden = labAutoHide && connected && SystemClock.uptimeMillis() - startedAt > 5000
+        if (labAutoHide && connected && !autoHidden) postInvalidateDelayed(5100 - (SystemClock.uptimeMillis() - startedAt))
+        if (!labHideStatus && !autoHidden) parts += (if (connected) "● " else "○ ") + status
+        if (labFps) {
+            val t = SystemClock.uptimeMillis()
+            frameTimes.addLast(t)
+            while (frameTimes.isNotEmpty() && t - frameTimes.first() > 1000) frameTimes.removeFirst()
+            parts += "${frameTimes.size} fps"
+            postInvalidateDelayed(1000)      // 아무것도 안 해도 1초마다 숫자를 새로 그린다
+        }
         if (labKps) {
             val n = kps()
             parts += "${n}회/초"
@@ -967,6 +1048,14 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         drawLabOverlays(c)
     }
 
+    /** 초당 입력 수에 따른 글자색(실험실 기능 '초당 입력 수 색 바꾸기'). 느릴 때는 원래 색. */
+    private fun kpsColor(n: Int, normal: Int): Int = when {
+        n >= 15 -> 0xFFEF5350.toInt()
+        n >= 10 -> 0xFFFFCA28.toInt()
+        n >= 5 -> 0xFF66BB6A.toInt()
+        else -> normal
+    }
+
     companion object {
         const val TAP_MS = 40L
         const val DIM_AFTER_MS = 30000L      // 이만큼 아무것도 누르지 않으면 어둡게(실험실 기능)
@@ -976,6 +1065,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         const val SCROLL_STEP_DP = 18f   // 트랙패드: 휠 한 칸에 해당하는 두 손가락 이동 거리
         const val TAP_SLOP_DP = 12f      // 트랙패드: 이보다 덜 움직여야 탭으로 본다
         const val TAP_TIMEOUT_MS = 250L
+        const val TIMER_RESET_MS = 600L      // 타이머 패널을 이만큼 누르고 있다 떼면 처음으로
         const val KEY_STEP_DEG = 2f    // 키 방식 노브: 이만큼 돌아가야 키를 누른다
         const val KEY_HOLD_MS = 150L   // 키 방식 노브: 회전이 멈춘 뒤 키를 떼기까지의 시간
         const val DEAD_ZONE = 0.12f    // 노브 중심 주변의 무시 구간(지름 대비 비율)

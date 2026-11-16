@@ -1,7 +1,12 @@
 {
   "features": [
     "release-haptic",
-    "list-count"
+    "list-count",
+    "play-fps",
+    "status-autohide",
+    "timer-flash",
+    "kps-color",
+    "list-greeting"
   ],
   "graduated": [],
   "hidden": [],

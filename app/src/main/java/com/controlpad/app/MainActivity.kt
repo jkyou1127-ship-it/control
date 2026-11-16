@@ -63,6 +63,11 @@ class MainActivity : BaseActivity() {
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         })
         root.addView(top)
+        // 목록 인사말(실험실 기능)
+        if (Labs.isOn("list-greeting")) root.addView(TextView(this).apply {
+            text = Greeting.now(java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY))
+            textSize = 14f; setTextColor(Ui.muted()); setPadding(dp(2), dp(4), 0, 0)
+        })
         val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(10), 0, dp(6)) }
         header.addView(Button(this).apply {
             text = "불러오기"

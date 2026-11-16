@@ -109,6 +109,7 @@ class EditorActivity : BaseActivity() {
             val t = PadButton(
                 if (wide) 0.3f else 0.4f, 0.03f, if (wide) 0.4f else 0.2f, 0.12f,
                 type = PadButton.TYPE_DISPLAY, mode = kind, color = PadButton.PALETTE[0],
+                rate = if (kind == DisplayKind.COUNTDOWN) Timers.rateFor(4) else 10,     // 카운트다운 기본 3분
             )
             pad.buttons += t; view.selected = t; view.invalidate()
             editButton(t, isNew = true)
@@ -855,8 +856,9 @@ class EditorActivity : BaseActivity() {
         val m = dp(20)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(m, dp(8), m, 0) }
         box.addView(TextView(this).apply {
-            text = "실행 화면에서 고른 내용을 이 자리에 보여 줍니다. 버튼처럼 옮기고 크기를 바꿀 수 있고, 누를 수는 없습니다.\n" +
-                "'눌리고 있는 키' 패널을 넣으면 화면 위쪽의 기본 키 표시는 나오지 않습니다."
+            text = "실행 화면에서 고른 내용을 이 자리에 보여 줍니다. 버튼처럼 옮기고 크기를 바꿀 수 있습니다.\n" +
+                "'눌리고 있는 키' 패널을 넣으면 화면 위쪽의 기본 키 표시는 나오지 않습니다.\n" +
+                "스톱워치 · 카운트다운 타이머는 실행 화면에서 눌러 시작 · 멈춤, 길게(0.6초) 눌러 처음으로 돌립니다."
         })
         box.addView(TextView(this).apply { text = "표시할 내용"; setPadding(0, dp(8), 0, 0) })
         val kind = Spinner(this).apply {
@@ -864,6 +866,23 @@ class EditorActivity : BaseActivity() {
             setSelection(DisplayKind.of(b))
         }
         box.addView(kind)
+        // 카운트다운 타이머일 때만 쓰는 시간
+        val durationLabel = TextView(this).apply { text = "카운트다운 시간"; setPadding(0, dp(8), 0, 0) }
+        val duration = Spinner(this).apply {
+            adapter = ArrayAdapter(this@EditorActivity, android.R.layout.simple_spinner_dropdown_item, Timers.names)
+            setSelection((b.rate - 1).coerceIn(0, Timers.durations.lastIndex))
+        }
+        box.addView(durationLabel); box.addView(duration)
+        fun showDuration() {
+            val on = kind.selectedItemPosition == DisplayKind.COUNTDOWN
+            durationLabel.visibility = if (on) View.VISIBLE else View.GONE
+            duration.visibility = if (on) View.VISIBLE else View.GONE
+        }
+        showDuration()
+        kind.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) = showDuration()
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
         val group = groupSpinner(b.group)
         box.addView(TextView(this).apply { text = "표시 조건"; setPadding(0, dp(8), 0, 0) })
         box.addView(group)
@@ -876,6 +895,7 @@ class EditorActivity : BaseActivity() {
             .setPositiveButton("확인") { _, _ ->
                 checkpoint()
                 b.mode = kind.selectedItemPosition
+                if (b.mode == DisplayKind.COUNTDOWN) b.rate = Timers.rateFor(duration.selectedItemPosition)
                 b.group = group.selectedItemPosition
                 b.color = color; b.textColor = textColor
                 view.invalidate()

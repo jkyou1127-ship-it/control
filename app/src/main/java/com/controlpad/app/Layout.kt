@@ -729,8 +729,14 @@ object DisplayKind {
     const val BATTERY = 5    // 배터리 · 시각
     const val HISTORY = 6    // 최근 입력 기록
     const val STATUS = 7     // 연결 상태
+    const val STOPWATCH = 8  // 스톱워치(눌러서 시작 · 멈춤, 길게 눌러 처음으로)
+    const val COUNTDOWN = 9  // 카운트다운 타이머(정한 시간에서 거꾸로 세고, 끝나면 진동)
 
-    val names = listOf("눌리고 있는 키", "초당 입력 수", "콤보", "총 입력 수", "실행 시간", "배터리 · 시각", "최근 입력 기록", "연결 상태")
+    val names = listOf("눌리고 있는 키", "초당 입력 수", "콤보", "총 입력 수", "실행 시간", "배터리 · 시각", "최근 입력 기록", "연결 상태",
+        "스톱워치", "카운트다운 타이머")
+
+    /** 누를 수 있는 패널(타이머들). */
+    fun interactive(kind: Int) = kind == STOPWATCH || kind == COUNTDOWN
 
     /** 예전 파일이나 엉뚱한 값은 '눌리고 있는 키'로 본다. */
     fun of(b: PadButton): Int = if (b.mode in names.indices) b.mode else KEYS
@@ -745,6 +751,34 @@ object DisplayKind {
         TOTAL -> "총 $total"
         TIMER -> Combo.format(elapsedMs)
         else -> ""
+    }
+}
+
+/**
+ * 타이머 패널(스톱워치 · 카운트다운). 카운트다운 시간은 버튼의 rate 값(1~10)이 durations 의 몇 번째인지로 저장한다.
+ */
+object Timers {
+    val durations = listOf(10, 30, 60, 120, 180, 300, 600, 900, 1200, 1800)   // 초
+    val names = durations.map { s -> if (s < 60) "${s}초" else "${s / 60}분" }
+
+    /** 패널에 저장된 카운트다운 시간(ms). */
+    fun durationMs(b: PadButton): Long = durations[(b.rate - 1).coerceIn(0, durations.lastIndex)] * 1000L
+
+    /** 고른 시간(목록 번호)을 패널에 저장할 값으로. */
+    fun rateFor(index: Int): Int = index.coerceIn(0, durations.lastIndex) + 1
+
+    /** 스톱워치 글자: 분:초.1/10초 (한 시간이 넘으면 시:분:초). */
+    fun stopwatch(ms: Long): String {
+        val t = ms.coerceAtLeast(0)
+        val s = t / 1000
+        return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60)
+        else "%d:%02d.%d".format(s / 60, s % 60, t % 1000 / 100)
+    }
+
+    /** 카운트다운 글자: 남은 시간을 분:초로(올림해서 0 이 되는 순간이 끝). */
+    fun countdown(remainingMs: Long): String {
+        val s = (remainingMs.coerceAtLeast(0) + 999) / 1000
+        return "%d:%02d".format(s / 60, s % 60)
     }
 }
 
