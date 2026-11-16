@@ -12,6 +12,7 @@ import android.widget.TextView
  * NCP#1.00.a, NCP#1.00.b … 처럼 업데이트할 때마다 끝 알파벳을 하나씩 올렸다.
  * NES2 에서는 빌드 번호 NES2, 코드명 NES1 을 썼다.
  * NWE 01 부터는 versionName 이 코드명(hd12, 버전 확인용)이고, 빌드 번호(NWE 01)는 화면 표시용으로 따로 둔다.
+ * 따로 정하지 않으면 코드명과 빌드 번호는 같게 한다. 실험실 기능만 더한 업데이트는 이름 끝에 + 를 붙인다.
  */
 object Changelog {
     /** version 은 코드명(versionName), build 는 화면에 보여 줄 빌드 번호(NWE 01 부터). */
@@ -20,7 +21,10 @@ object Changelog {
     }
 
     val entries = listOf(
-        Entry("NI20261116+", listOf(
+        Entry("NII apend", listOf(
+            "실험실 기능 5개 추가: 누른 자리에 물결, 지연에 따라 상태 줄 색, 화면 위 큰 시계, 목록에 마지막 실행 시각, 누르는 키 표시 크게",
+        ), build = "NII apend"),
+        Entry("NII+", listOf(
             "실험실 기능 5개 추가: 누르면 버튼이 살짝 커짐, 실행 화면 배경 격자, 상태 줄에 레이아웃 이름, 화면 가장자리 어둡게, 왼손 모드(좌우 뒤집기)",
             "콤보 표시 패널 삭제 (예전 레이아웃에 있던 콤보 패널은 자동으로 빠짐)",
             "버전 이름: 실험실 기능만 더한 업데이트는 이름 끝에 + 를 붙임 (NII.1 → NII+)",

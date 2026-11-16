@@ -134,7 +134,8 @@ class PlayActivity : BaseActivity() {
         current = original
         // 왼손 모드(실험실 기능): 실행 화면에서만 좌우를 뒤집는다.
         val layout = if (Labs.isOn("mirror-play")) Mirror.flip(original) else original
-        Link.prefs.edit().putString("lastLayout", layout.id).apply()     // '마지막 레이아웃 바로 실행'(실험실 기능)용
+        Link.prefs.edit().putString("lastLayout", layout.id).apply()
+        Link.prefs.edit().putLong("played_" + original.id, System.currentTimeMillis()).apply()   // 목록에 마지막 실행 시각(실험실 기능)용     // '마지막 레이아웃 바로 실행'(실험실 기능)용
         val frame = android.widget.FrameLayout(this)
         view = PlayView(this, layout).also {
             it.onSwitch = { id -> switchTo(id) }
@@ -342,6 +343,12 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labGrid = Labs.isOn("play-grid")
     private val labLayoutName = Labs.isOn("status-layout-name")
     private val labVignette = Labs.isOn("play-vignette")
+    private val labRipple = Labs.isOn("tap-ripple")
+    private val labRttColor = Labs.isOn("status-rtt-color")
+    private val labBigClock = Labs.isOn("play-clock-big")
+    private val ripples = ArrayDeque<FloatArray>()      // [x, y, 시각]
+    private val ripplePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val clockPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; isFakeBoldText = true }
     private var vignette: Paint? = null
     private var vignetteSize = 0L          // 화면 크기가 바뀌면 다시 만든다
     private val gridLinePaint = Paint().apply { strokeWidth = 1f }
@@ -357,6 +364,24 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     /** 실험실 표시들: 터치 위치, 누른 시간, 쉬는 동안 어둡게. */
     private fun drawLabOverlays(c: Canvas) {
         val now = SystemClock.uptimeMillis()
+        // 누른 자리에 물결(실험실 기능): 0.45초 동안 커지며 흐려진다.
+        if (labRipple && ripples.isNotEmpty()) {
+            while (ripples.isNotEmpty() && now - ripples.first()[2] > 450) ripples.removeFirst()
+            for (r in ripples) {
+                val t = (now - r[2]) / 450f
+                ripplePaint.color = Ui.accent() and 0x00FFFFFF or ((1f - t) * 200).toInt().coerceIn(0, 255).shl(24)
+                ripplePaint.strokeWidth = context.dp(3).toFloat()
+                c.drawCircle(r[0], r[1], context.dp(16) + t * context.dp(46), ripplePaint)
+            }
+            if (ripples.isNotEmpty()) postInvalidateDelayed(16)
+        }
+        // 화면 위 큰 시계(실험실 기능)
+        if (labBigClock) {
+            clockPaint.textSize = context.dp(40).toFloat()
+            clockPaint.color = theme.text and 0x00FFFFFF or 0x99000000.toInt()
+            c.drawText(java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA).format(java.util.Date()), width / 2f, clockPaint.textSize * 1.2f, clockPaint)
+            postInvalidateDelayed(10_000)
+        }
         // 화면 가장자리 어둡게(실험실 기능): 가운데는 투명, 가장자리로 갈수록 어둡게
         if (labVignette) {
             val size = width.toLong() shl 32 or height.toLong()
@@ -384,6 +409,13 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     private fun trackTouches(e: MotionEvent) {
         if (labDim) lastTouch = SystemClock.uptimeMillis()
+        // 누른 자리에 물결(실험실 기능): 손가락이 닿는 순간의 자리와 시각을 적어 둔다.
+        if (labRipple && (e.actionMasked == MotionEvent.ACTION_DOWN || e.actionMasked == MotionEvent.ACTION_POINTER_DOWN)) {
+            val idx = e.actionIndex
+            ripples.addLast(floatArrayOf(e.getX(idx), e.getY(idx), SystemClock.uptimeMillis().toFloat()))
+            while (ripples.size > 12) ripples.removeFirst()
+            invalidate()
+        }
     }
     /** 최근 입력 기록을 남겨야 하는지: 실험실 표시가 켜져 있거나, 최근 입력 기록 패널을 넣어 둔 경우. */
     private val recordHistory = labHistory || layout.buttons.any { it.isDisplay && DisplayKind.of(it) == DisplayKind.HISTORY }
@@ -625,7 +657,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private var pressedText = ""
     private var pressedAt = 0L          // 마지막으로 키가 눌려 있던 시각
     private val pressedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER; textSize = ctx.dp(22).toFloat(); isFakeBoldText = true
+        textAlign = Paint.Align.CENTER; textSize = ctx.dp(if (Labs.isOn("big-pressed-text")) 36 else 22).toFloat(); isFakeBoldText = true
     }
     private val pressedBack = Paint(Paint.ANTI_ALIAS_FLAG)
     private val theme = Themes.current
@@ -1047,6 +1079,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             }
         }
         statusPaint.color = if (connected) 0x9981C784.toInt() else 0xFFFFB74D.toInt()
+        // 지연에 따라 상태 줄 색(실험실 기능)
+        if (labRttColor && connected && Link.rttMs >= 0) statusPaint.color = RttColor.of(Link.rttMs)
         // 왼쪽 위 한 줄: 연결 상태와, 켜 둔 실험실 표시들
         val parts = ArrayList<String>()
         // 상태 줄 자동 숨김(실험실 기능): 열고 5초 뒤부터는 연결돼 있는 동안 감춘다.

@@ -11,7 +11,12 @@
     "play-grid",
     "status-layout-name",
     "play-vignette",
-    "mirror-play"
+    "mirror-play",
+    "tap-ripple",
+    "status-rtt-color",
+    "play-clock-big",
+    "list-last-played",
+    "big-pressed-text"
   ],
   "graduated": [],
   "hidden": [],

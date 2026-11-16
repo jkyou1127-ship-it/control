@@ -187,7 +187,9 @@ class MainActivity : BaseActivity() {
                 setPadding(dp(2), dp(10), dp(2), 0)
             })
             card.addView(TextView(this).apply {
-                text = "버튼 ${l.buttons.size}개" + if (kinds) " · " + LayoutKinds.describe(l) else ""
+                text = "버튼 ${l.buttons.size}개" + (if (kinds) " · " + LayoutKinds.describe(l) else "") +
+                    // 목록에 마지막 실행 시각(실험실 기능)
+                    (if (Labs.isOn("list-last-played")) " · " + LastPlayed.describe(Link.prefs.getLong("played_" + l.id, 0L), System.currentTimeMillis()) else "")
                 textSize = 12f; setSingleLine(); ellipsize = android.text.TextUtils.TruncateAt.END
                 setTextColor(Themes.current.text and 0x00FFFFFF or 0x99000000.toInt()); setPadding(dp(2), dp(2), dp(2), dp(8))
             })
