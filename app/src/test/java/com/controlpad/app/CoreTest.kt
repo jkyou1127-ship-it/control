@@ -632,10 +632,14 @@ class CoreTest {
     }
 
     @Test
-    fun comboCountsOnlyQuickFollowUps() {
-        assertEquals(1, Combo.next(0, 0, 5000))                 // 첫 입력
-        assertEquals(2, Combo.next(1, 5000, 5600))              // 1초 안에 이어서
-        assertEquals(1, Combo.next(7, 5000, 6500))              // 끊기면 다시 1부터
+    fun comboPanelIsRemovedAndTimeIsFormatted() {
+        // 콤보 세기와 콤보 패널은 없앴다: 예전 레이아웃의 콤보 패널은 읽을 때 빠진다
+        val old = PadLayout(name = "o", buttons = mutableListOf(
+            PadButton(0f, 0f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = DisplayKind.COMBO),
+            PadButton(0f, 0.2f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = DisplayKind.KPS)))
+        val back = PadLayout.fromJson(JSONObject(old.toJson().toString()))
+        assertEquals(listOf(DisplayKind.KPS), back.buttons.map { it.mode })
+        assertTrue(DisplayKind.COMBO !in DisplayKind.choices)
         assertEquals("0:05", Combo.format(5999))
         assertEquals("12:34", Combo.format(754000))
     }
@@ -665,10 +669,10 @@ class CoreTest {
         assertEquals(DisplayKind.KEYS, DisplayKind.of(PadButton(0f, 0f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY)))   // 예전 패널
         assertEquals(DisplayKind.KEYS, DisplayKind.of(PadButton(0f, 0f, 0.2f, 0.1f, type = PadButton.TYPE_DISPLAY, mode = 99)))
         assertEquals("초당 입력 수 표시", DisplayKind.editorLabel(kps))
-        assertEquals("12 회/초", DisplayKind.value(DisplayKind.KPS, 12, 0, 0, 0))
-        assertEquals("5 콤보", DisplayKind.value(DisplayKind.COMBO, 0, 5, 0, 0))
-        assertEquals("총 340", DisplayKind.value(DisplayKind.TOTAL, 0, 0, 340, 0))
-        assertEquals("1:05", DisplayKind.value(DisplayKind.TIMER, 0, 0, 0, 65000))
+        assertEquals("12 회/초", DisplayKind.value(DisplayKind.KPS, 12, 0, 0))
+        assertEquals("", DisplayKind.value(DisplayKind.COMBO, 0, 0, 0))            // 없앤 패널
+        assertEquals("총 340", DisplayKind.value(DisplayKind.TOTAL, 0, 340, 0))
+        assertEquals("1:05", DisplayKind.value(DisplayKind.TIMER, 0, 0, 65000))
     }
 
     @Test

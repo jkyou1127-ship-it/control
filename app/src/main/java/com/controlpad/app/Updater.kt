@@ -52,7 +52,7 @@ object Updater {
     }
 
     /** 이 앱의 빌드 번호(화면 표시용). 코드명은 versionName 이다. publish.sh 가 이 값을 version.json 에 적는다. */
-    const val BUILD = "NII.1"
+    const val BUILD = "NII+"
 
     fun parse(json: String): Info {
         val o = JSONObject(json)

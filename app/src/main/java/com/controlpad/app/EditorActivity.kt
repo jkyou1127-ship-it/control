@@ -104,7 +104,7 @@ class EditorActivity : BaseActivity() {
             editButton(t, isNew = true)
         }
         // 초당 입력 수처럼 화면에 놓는 표시 패널들. 실험실 기능을 켜지 않아도 쓸 수 있다.
-        for (kind in DisplayKind.names.indices.filter { it != DisplayKind.KEYS }) add(DisplayKind.names[kind] + " 패널") {
+        for (kind in DisplayKind.choices.filter { it != DisplayKind.KEYS }) add(DisplayKind.names[kind] + " 패널") {
             val wide = kind == DisplayKind.HISTORY || kind == DisplayKind.STATUS
             val t = PadButton(
                 if (wide) 0.3f else 0.4f, 0.03f, if (wide) 0.4f else 0.2f, 0.12f,
@@ -862,8 +862,8 @@ class EditorActivity : BaseActivity() {
         })
         box.addView(TextView(this).apply { text = "표시할 내용"; setPadding(0, dp(8), 0, 0) })
         val kind = Spinner(this).apply {
-            adapter = ArrayAdapter(this@EditorActivity, android.R.layout.simple_spinner_dropdown_item, DisplayKind.names)
-            setSelection(DisplayKind.of(b))
+            adapter = ArrayAdapter(this@EditorActivity, android.R.layout.simple_spinner_dropdown_item, DisplayKind.choices.map { DisplayKind.names[it] })
+            setSelection(DisplayKind.choices.indexOf(DisplayKind.of(b)).coerceAtLeast(0))
         }
         box.addView(kind)
         // 카운트다운 타이머일 때만 쓰는 시간
@@ -874,7 +874,7 @@ class EditorActivity : BaseActivity() {
         }
         box.addView(durationLabel); box.addView(duration)
         fun showDuration() {
-            val on = kind.selectedItemPosition == DisplayKind.COUNTDOWN
+            val on = DisplayKind.choices[kind.selectedItemPosition] == DisplayKind.COUNTDOWN
             durationLabel.visibility = if (on) View.VISIBLE else View.GONE
             duration.visibility = if (on) View.VISIBLE else View.GONE
         }
@@ -894,7 +894,7 @@ class EditorActivity : BaseActivity() {
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("확인") { _, _ ->
                 checkpoint()
-                b.mode = kind.selectedItemPosition
+                b.mode = DisplayKind.choices[kind.selectedItemPosition]
                 if (b.mode == DisplayKind.COUNTDOWN) b.rate = Timers.rateFor(duration.selectedItemPosition)
                 b.group = group.selectedItemPosition
                 b.color = color; b.textColor = textColor

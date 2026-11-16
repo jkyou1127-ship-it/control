@@ -182,7 +182,9 @@ class PadLayout(
             val bs = o.optJSONArray("buttons") ?: JSONArray()
             return PadLayout(
                 o.getString("id"), o.optString("name"), o.optBoolean("slide"),
-                MutableList(bs.length()) { PadButton.fromJson(bs.getJSONObject(it)) },
+                // 콤보 패널은 없앤 기능이라, 예전 레이아웃에 있던 것은 읽을 때 뺀다.
+                MutableList(bs.length()) { PadButton.fromJson(bs.getJSONObject(it)) }
+                    .filterNot { it.isDisplay && it.mode == DisplayKind.COMBO }.toMutableList(),
                 o.optBoolean("pinned"),
             )
         }
@@ -705,10 +707,8 @@ object LayoutList {
     }
 }
 
-/** 실행 화면의 연속 입력(콤보) 세기: 1초 안에 이어서 누르면 올라가고, 끊기면 다시 1부터. */
+/** 실행 화면 기록 도우미: 시간 글자와 최근 입력 기록. (콤보 세기는 NII+ 에서 없앴다.) */
 object Combo {
-    const val WINDOW_MS = 1000L
-    fun next(current: Int, lastPress: Long, now: Long): Int = if (lastPress != 0L && now - lastPress <= WINDOW_MS) current + 1 else 1
     fun format(ms: Long): String = "%d:%02d".format(ms / 60000, ms / 1000 % 60)
 
     /** 최근 입력 기록에 하나를 더하고, limit 개를 넘으면 오래된 것부터 버린다. */
@@ -723,7 +723,7 @@ object Combo {
 object DisplayKind {
     const val KEYS = 0       // 지금 눌리고 있는 키
     const val KPS = 1        // 초당 입력 수
-    const val COMBO = 2      // 콤보
+    const val COMBO = 2      // 콤보 — 없앤 패널(번호는 예전 파일 때문에 비워 둔다)
     const val TOTAL = 3      // 총 입력 수
     const val TIMER = 4      // 실행 시간
     const val BATTERY = 5    // 배터리 · 시각
@@ -735,6 +735,9 @@ object DisplayKind {
     val names = listOf("눌리고 있는 키", "초당 입력 수", "콤보", "총 입력 수", "실행 시간", "배터리 · 시각", "최근 입력 기록", "연결 상태",
         "스톱워치", "카운트다운 타이머")
 
+    /** 편집 화면에서 고를 수 있는 패널 종류(없앤 콤보는 빼고). */
+    val choices: List<Int> get() = names.indices.filter { it != COMBO }
+
     /** 누를 수 있는 패널(타이머들). */
     fun interactive(kind: Int) = kind == STOPWATCH || kind == COUNTDOWN
 
@@ -745,9 +748,8 @@ object DisplayKind {
     fun editorLabel(b: PadButton): String = names[of(b)] + " 표시"
 
     /** 실행 화면의 숫자 패널 글자. */
-    fun value(kind: Int, kps: Int, combo: Int, total: Int, elapsedMs: Long): String = when (kind) {
+    fun value(kind: Int, kps: Int, total: Int, elapsedMs: Long): String = when (kind) {
         KPS -> "$kps 회/초"
-        COMBO -> "$combo 콤보"
         TOTAL -> "총 $total"
         TIMER -> Combo.format(elapsedMs)
         else -> ""

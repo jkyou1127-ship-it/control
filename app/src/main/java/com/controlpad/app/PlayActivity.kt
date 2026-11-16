@@ -326,7 +326,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val pressTimes = ArrayDeque<Long>()         // 최근에 버튼을 누른 시각들(초당 입력 수 계산용)
     private val labBattery = Labs.isOn("battery")
     private val hapticKind = HapticFeedbackConstants.KEYBOARD_TAP
-    private var combo = 0
     private var lastPress = 0L
     private var total = 0
     private val startedAt = SystemClock.uptimeMillis()
@@ -416,7 +415,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         val now = SystemClock.uptimeMillis()
         buttons.indexOf(b).takeIf { it >= 0 }?.let { pressCount[it]++ }
         if (countKps) pressTimes.addLast(now)
-        combo = Combo.next(combo, lastPress, now)
         lastPress = now
         total++
         if (labSound) ClickSound.play()
@@ -965,7 +963,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 // 숫자 패널: 항상 보이고, 숫자가 바뀌는 동안 다시 그린다.
                 val kind = DisplayKind.of(b)
                 val now = SystemClock.uptimeMillis()
-                if (now - lastPress > Combo.WINDOW_MS) combo = 0
                 val n = if (kind == DisplayKind.KPS) kps() else 0
                 rect.set(b.x * width, b.y * height, (b.x + b.w) * width, (b.y + b.h) * height)
                 val shown = when (kind) {
@@ -994,7 +991,7 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                     DisplayKind.BATTERY -> battery()
                     DisplayKind.HISTORY -> history.joinToString("  ›  ").ifEmpty { "—" }
                     DisplayKind.STATUS -> (if (connected) "● " else "○ ") + status
-                    else -> DisplayKind.value(kind, n, combo, total, now - startedAt)
+                    else -> DisplayKind.value(kind, n, total, now - startedAt)
                 }
                 val pausedTimer = DisplayKind.interactive(kind) && !timerRun[i] && timerElapsed(i, now) > 0 && !timerDone[i]
                 // 초당 입력 수 색 바꾸기(실험실 기능): 빠를수록 초록 → 노랑 → 빨강
@@ -1004,7 +1001,6 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
                 b.textColor = savedText
                 when (kind) {
                     DisplayKind.KPS -> if (n > 0) postInvalidateDelayed(200)
-                    DisplayKind.COMBO -> if (combo > 0) postInvalidateDelayed(250)
                     DisplayKind.TIMER, DisplayKind.BATTERY -> postInvalidateDelayed(1000)
                 }
                 continue
