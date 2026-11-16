@@ -19,7 +19,9 @@
     "big-pressed-text",
     "disconnect-border"
   ],
-  "graduated": [],
+  "graduated": [
+    "status-autohide"
+  ],
   "hidden": [],
   "alpha": [],
   "relay": "https://controlpad-panel.jkyou1127.workers.dev"
