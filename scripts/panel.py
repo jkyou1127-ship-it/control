@@ -9,7 +9,7 @@
 환경 변수 REQUEST_KIND / REQUEST_TARGET 으로, GitHub 이슈로 온 요청은 ISSUE_TITLE / ISSUE_AUTHOR 로 받는다.
 
 요청은 이슈 제목으로 한다:
-    [정식 요청] 빌드 1.21        지금 알파 빌드를 정식 채널에 올린다
+    [정식 요청] 빌드 1.21        지금 알파 빌드를 최신 채널에 올린다
     [정식 요청] 실험실 kps       실험실 기능을 정식 기능으로 올린다
     [숨김 요청] 실험실 kps       실험실 기능을 숨긴다(누구에게도 켜지지 않는다)
     [복귀 요청] 실험실 kps       숨긴 기능, 또는 정식이 된 기능을 실험실로 되돌린다
@@ -67,7 +67,7 @@ def check_build(version, alpha, stable):
     if short_name(version) != short_name(alpha["versionName"]):
         return "요청한 빌드(%s)가 지금 알파 빌드(%s)가 아닙니다" % (version, alpha["versionName"])
     if alpha["versionCode"] <= stable["versionCode"]:
-        return "빌드 %s 은(는) 이미 정식 채널에 있습니다" % version
+        return "빌드 %s 은(는) 이미 최신 채널에 있습니다" % version
     return None
 
 
@@ -80,7 +80,7 @@ WAITS = {"lab": (0, 0), "build": (0, 0), "hide": (0, 0), "restore": (0, 0)}
 def plan(kind, target):
     """요청을 받았을 때 알려 줄 진행 계획."""
     return {
-        "build": "빌드 %s 을(를) 바로 정식 채널에 올립니다.",
+        "build": "빌드 %s 을(를) 바로 최신 채널에 올립니다.",
         "lab": "실험실 기능 '%s' 을(를) 바로 정식 기능으로 올립니다.",
         "hide": "실험실 기능 '%s' 을(를) 바로 숨깁니다.",
         "restore": "기능 '%s' 을(를) 바로 실험실로 되돌립니다.",
@@ -171,7 +171,7 @@ def summary(kind, target, stage=None):
     if kind == "lab" and stage == "alpha":
         return "실험실 기능 '%s' 을(를) 알파 사용자 모두에게" % target
     return {
-        "build": "빌드 %s 을(를) 정식 채널에",
+        "build": "빌드 %s 을(를) 최신 채널에",
         "lab": "실험실 기능 '%s' 을(를) 정식 기능으로",
         "hide": "실험실 기능 '%s' 을(를) 숨김으로",
         "restore": "기능 '%s' 을(를) 실험실로",

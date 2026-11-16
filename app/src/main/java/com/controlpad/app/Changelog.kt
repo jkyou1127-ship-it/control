@@ -21,6 +21,10 @@ object Changelog {
     }
 
     val entries = listOf(
+        Entry("ENN", listOf(
+            "업데이트 탭 새 디자인: 지금 빌드를 크게 보여 주는 카드, 알파 · 최신 채널 카드(눌러서 받을 채널 고르기), 버전마다 카드로 된 업데이트 내역",
+            "업데이트 채널 이름: 가장 새 빌드는 '알파', 한 단계 전 빌드는 '정식' 대신 '최신'",
+        ), build = "ENN"),
         Entry("NII apend+", listOf(
             "실험실 기능 추가: 연결 끊기면 화면 테두리 빨갛게",
         ), build = "NII apend+"),

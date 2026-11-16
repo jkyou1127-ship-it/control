@@ -156,7 +156,7 @@ object Labs {
 
     /** 건의를 보낸 뒤 알려 줄 진행 계획. scripts/panel.py 의 plan 과 같은 일정이다. */
     fun plan(kind: String): String = when (kind) {
-        "build" -> "요청했습니다. 1~2분 안에 정식 채널에 올라갑니다."
+        "build" -> "요청했습니다. 1~2분 안에 최신 채널에 올라갑니다."
         "lab" -> "요청했습니다. 1~2분 안에 정식 기능이 됩니다."
         "hide" -> "숨겼습니다. 다른 사람들에게도 1분쯤 안에 숨겨집니다."
         else -> "되돌렸습니다. 다른 사람들에게도 1분쯤 안에 반영됩니다."
@@ -323,12 +323,12 @@ class LabsActivity : BaseActivity() {
         val mineLabel = Updater.installedLabel(this)      // 화면에는 빌드 번호, 요청에는 코드명(mine)
         val versions = TextView(this).apply {
             textSize = 12.5f; setTextColor(Ui.muted()); setPadding(0, dp(4), 0, 0)
-            text = "지금 쓰는 빌드 $mineLabel\n정식 채널 확인 중…"
+            text = "지금 쓰는 빌드 $mineLabel\n최신 채널 확인 중…"
         }
         panel.addView(versions)
         Thread {
             val stable = runCatching { Updater.parse(Labs.get(Updater.BASE + "version.json")).label }.getOrNull()
-            runOnUiThread { versions.text = "지금 쓰는 빌드 $mineLabel\n정식 채널 " + (stable ?: "확인하지 못함") }
+            runOnUiThread { versions.text = "지금 쓰는 빌드 $mineLabel\n최신 채널 " + (stable ?: "확인하지 못함") }
         }.start()
         if (viaRelay) panel.addView(android.widget.EditText(this).apply {
             hint = "평가단 코드"; setSingleLine(); setText(Labs.code)
@@ -344,9 +344,9 @@ class LabsActivity : BaseActivity() {
             textSize = 12.5f; setTextColor(Ui.muted()); setPadding(0, dp(8), 0, 0)
         })
         panel.addView(android.widget.Button(this).apply {
-            text = "이 빌드를 정식에 추가 요청"; tag = Ui.PRIMARY
+            text = "이 빌드를 최신 채널에 추가 요청"; tag = Ui.PRIMARY
             setOnClickListener {
-                request("build", Labs.shortName(mine), Labs.buildTitle(Labs.shortName(mine)), "알파 빌드 $mineLabel 을(를) 써 보았고, 정식 채널에 올려 주세요.\n\n써 본 내용:\n")
+                request("build", Labs.shortName(mine), Labs.buildTitle(Labs.shortName(mine)), "알파 빌드 $mineLabel 을(를) 써 보았고, 최신 채널에 올려 주세요.\n\n써 본 내용:\n")
             }
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         root.addView(Ui.grid(this, listOf(master, panel), 300))

@@ -51,7 +51,7 @@ class PanelTest(unittest.TestCase):
             self.assertEqual(f.read(), b"alpha")
         with open(os.path.join(self.dir, "version.json")) as f:
             self.assertEqual(json.load(f)["versionName"], "1.21")
-        self.assertIn("이미 정식", self.evaluate("[정식 요청] 빌드 1.21")[2])               # 두 번 올리지 않는다
+        self.assertIn("이미 최신", self.evaluate("[정식 요청] 빌드 1.21")[2])               # 두 번 올리지 않는다
 
     def test_lab_feature_graduates_once(self):
         self.assertIn("없는 기능", self.evaluate("[정식 요청] 실험실 nope")[2])
@@ -123,7 +123,7 @@ class PanelTest(unittest.TestCase):
             self.assertEqual(f.read(), b"alpha")
         # 정식이 이미 더 새 빌드면 올리지 않는다
         self.write("version.json", {"versionCode": 48, "versionName": "1.22"})
-        self.assertIn("이미 정식", panel.evaluate("[정식 요청] 빌드 1.21", "owner", "Owner", self.dir, snap)[2])
+        self.assertIn("이미 최신", panel.evaluate("[정식 요청] 빌드 1.21", "owner", "Owner", self.dir, snap)[2])
 
     def test_lab_goes_to_all_alpha_users_first_then_stable(self):
         self.assertEqual(panel.WAITS["lab"], (0, 0))                        # 정식 추가도 바로
