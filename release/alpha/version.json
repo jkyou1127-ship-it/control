@@ -1,6 +1,6 @@
 {
-  "versionCode": 87,
-  "versionName": "ENN",
-  "build": "ENN",
-  "notes": "ENN: 업데이트 탭 새 디자인, 채널 이름 '최신', 평가단이 정식으로 올린 실험실 기능 4개를 기능 탭으로."
+  "versionCode": 88,
+  "versionName": "ENN BACK",
+  "build": "ENN BACK",
+  "notes": "ENN BACK: 업데이트 탭을 예전 디자인으로 되돌렸습니다(채널 이름 '알파' · '최신'은 그대로)."
 }

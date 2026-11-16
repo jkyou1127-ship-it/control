@@ -21,6 +21,9 @@ object Changelog {
     }
 
     val entries = listOf(
+        Entry("ENN BACK", listOf(
+            "업데이트 탭을 ENN 이전 디자인으로 되돌림 (채널 이름 '알파' · '최신'은 그대로)",
+        ), build = "ENN BACK"),
         Entry("ENN", listOf(
             "업데이트 탭 새 디자인: 지금 빌드를 크게 보여 주는 카드, 알파 · 최신 채널 카드(눌러서 받을 채널 고르기), 버전마다 카드로 된 업데이트 내역",
             "업데이트 채널 이름: 가장 새 빌드는 '알파', 한 단계 전 빌드는 '정식' 대신 '최신'",
