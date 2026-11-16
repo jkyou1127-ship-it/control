@@ -20,7 +20,8 @@
     "disconnect-border"
   ],
   "graduated": [
-    "status-autohide"
+    "status-autohide",
+    "timer-flash"
   ],
   "hidden": [],
   "alpha": [],
