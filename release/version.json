@@ -1,6 +1,6 @@
 {
-  "versionCode": 82,
-  "versionName": "NII+",
-  "build": "NII+",
-  "notes": "NII+: 실험실 기능 5개(누르면 버튼이 살짝 커짐, 배경 격자, 상태 줄에 레이아웃 이름, 화면 가장자리 어둡게, 왼손 모드)와 콤보 표시 패널 삭제."
+  "versionCode": 83,
+  "versionName": "NII apend",
+  "build": "NII apend",
+  "notes": "NII apend: 실험실 기능 5개 — 누른 자리에 물결, 지연에 따라 상태 줄 색, 화면 위 큰 시계, 목록에 마지막 실행 시각, 누르는 키 표시 크게."
 }

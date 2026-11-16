@@ -16,7 +16,12 @@
     "status-rtt-color",
     "play-clock-big",
     "list-last-played",
-    "big-pressed-text"
+    "big-pressed-text",
+    "status-fingers",
+    "status-session-total",
+    "disconnect-border",
+    "list-random-play",
+    "editor-numbers"
   ],
   "graduated": [],
   "hidden": [],

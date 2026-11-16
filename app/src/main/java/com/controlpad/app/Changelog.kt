@@ -21,6 +21,9 @@ object Changelog {
     }
 
     val entries = listOf(
+        Entry("NII apend+", listOf(
+            "실험실 기능 5개 추가: 상태 줄에 닿은 손가락 수, 상태 줄에 이번 실행 누른 횟수, 연결 끊기면 화면 테두리 빨갛게, 목록에 🎲 아무거나 실행, 편집 화면 버튼 번호",
+        ), build = "NII apend+"),
         Entry("NII apend", listOf(
             "실험실 기능 5개 추가: 누른 자리에 물결, 지연에 따라 상태 줄 색, 화면 위 큰 시계, 목록에 마지막 실행 시각, 누르는 키 표시 크게",
         ), build = "NII apend"),

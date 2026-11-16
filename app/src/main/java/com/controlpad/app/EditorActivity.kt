@@ -209,6 +209,7 @@ class EditorActivity : BaseActivity() {
         if (Labs.isOn("big-handle")) view.handleScale = 1.8f
         view.snapEdges = Labs.isOn("snap-edges")
         view.countOn = Labs.isOn("selection-count")
+        view.numbersOn = Labs.isOn("editor-numbers")
         view.outlineHidden = Labs.isOn("show-hidden-outline")
         view.longPressOn = Labs.isOn("long-press-edit")
         val alignOn = Labs.isOn("align")
@@ -1276,6 +1277,7 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
     // 실험실 기능들
     var snapEdges = false
     var countOn = false
+    var numbersOn = false        // 편집 화면 버튼 번호(실험실 기능)
     var outlineHidden = false
     private val dashPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = ctx.dp(1).toFloat()
@@ -1487,6 +1489,12 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
                 continue
             }
             painter.draw(c, b, rectOf(b), false, b in selection, alt = 2)
+            if (numbersOn) {
+                val r = rectOf(b)
+                hintPaint.textAlign = Paint.Align.LEFT
+                c.drawText("#" + (pad.buttons.indexOf(b) + 1), r.left + hintPaint.textSize * 0.3f, r.top + hintPaint.textSize * 1.1f, hintPaint)
+                hintPaint.textAlign = Paint.Align.CENTER
+            }
             val marks = listOfNotNull(if (b.group > 0) "그룹 ${b.group}" else null, if (lockOn && b.locked) "잠금" else null)
             if (marks.isNotEmpty()) painter.badge(c, rectOf(b), marks.joinToString(" · "))
         }

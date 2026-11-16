@@ -344,6 +344,11 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     private val labLayoutName = Labs.isOn("status-layout-name")
     private val labVignette = Labs.isOn("play-vignette")
     private val labRipple = Labs.isOn("tap-ripple")
+    private val labFingers = Labs.isOn("status-fingers")
+    private val labSessionTotal = Labs.isOn("status-session-total")
+    private val labDisconnectBorder = Labs.isOn("disconnect-border")
+    private var fingers = 0
+    private val borderPaint = Paint().apply { style = Paint.Style.STROKE; color = 0xCCEF5350.toInt() }
     private val labRttColor = Labs.isOn("status-rtt-color")
     private val labBigClock = Labs.isOn("play-clock-big")
     private val ripples = ArrayDeque<FloatArray>()      // [x, y, 시각]
@@ -364,6 +369,12 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
     /** 실험실 표시들: 터치 위치, 누른 시간, 쉬는 동안 어둡게. */
     private fun drawLabOverlays(c: Canvas) {
         val now = SystemClock.uptimeMillis()
+        // 연결 끊기면 화면 테두리 빨갛게(실험실 기능)
+        if (labDisconnectBorder && !connected) {
+            borderPaint.strokeWidth = context.dp(6).toFloat()
+            val h = borderPaint.strokeWidth / 2
+            c.drawRect(h, h, width - h, height - h, borderPaint)
+        }
         // 누른 자리에 물결(실험실 기능): 0.45초 동안 커지며 흐려진다.
         if (labRipple && ripples.isNotEmpty()) {
             while (ripples.isNotEmpty() && now - ripples.first()[2] > 450) ripples.removeFirst()
@@ -409,6 +420,15 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
 
     private fun trackTouches(e: MotionEvent) {
         if (labDim) lastTouch = SystemClock.uptimeMillis()
+        // 상태 줄에 닿은 손가락 수(실험실 기능)
+        if (labFingers) {
+            val n = when (e.actionMasked) {
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> 0
+                MotionEvent.ACTION_POINTER_UP -> e.pointerCount - 1
+                else -> e.pointerCount
+            }
+            if (n != fingers) { fingers = n; invalidate() }
+        }
         // 누른 자리에 물결(실험실 기능): 손가락이 닿는 순간의 자리와 시각을 적어 둔다.
         if (labRipple && (e.actionMasked == MotionEvent.ACTION_DOWN || e.actionMasked == MotionEvent.ACTION_POINTER_DOWN)) {
             val idx = e.actionIndex
@@ -1088,6 +1108,8 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
         if (labAutoHide && connected && !autoHidden) postInvalidateDelayed(5100 - (SystemClock.uptimeMillis() - startedAt))
         if (!labHideStatus && !autoHidden) parts += (if (connected) "● " else "○ ") + status
         if (labLayoutName && layout.name.isNotEmpty()) parts += layout.name
+        if (labFingers) parts += "손가락 $fingers"
+        if (labSessionTotal) parts += "누른 횟수 $total"
         if (labFps) {
             val t = SystemClock.uptimeMillis()
             frameTimes.addLast(t)
