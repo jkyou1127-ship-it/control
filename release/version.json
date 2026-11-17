@@ -1,6 +1,6 @@
 {
-  "versionCode": 97,
-  "versionName": "KDSKD",
-  "build": "KDSKD",
-  "notes": "KDSKD: 커뮤니티에 올린 레이아웃을 지울 수 있습니다(올린 기기에서만)."
+  "versionCode": 100,
+  "versionName": "HF2026.11.17.21.07",
+  "build": "HF2026.11.17.21.07",
+  "notes": "핫픽스: 커뮤니티에 올린 레이아웃 · 글이 안 보이던 문제를 고쳤고, 관리자 등급은 매니저로 고정했습니다."
 }

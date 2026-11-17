@@ -50,6 +50,8 @@ object Community {
             val o = JSONObject(body)
             val id = o.optString("id"); val key = o.optString("key")
             if (id.isNotEmpty() && key.isNotEmpty()) saveKey(id, key)
+            if (id.isNotEmpty()) addPending("post", o.optJSONObject("line") ?: JSONObject().put("id", id).put("title", title)
+                .put("text", text).put("author", author.ifEmpty { "익명" }).put("tier", myTier()).put("created", nowIso()))
             null
         }
     }.getOrElse { "커뮤니티 서버에 연결하지 못했습니다. 인터넷 연결을 확인하세요" }
@@ -60,7 +62,7 @@ object Community {
 
     /** 회원 등급: 이 기기에서 올린 레이아웃 수로 정한다(중계 서버의 tierOf 와 같다). */
     fun tierOf(uploads: Int, admin: Boolean = false): String = when {
-        admin -> "👑 관리자"
+        admin -> "👑 매니저"                     // 관리자 등급은 매니저로 고정
         uploads >= 30 -> "🏆 장인"
         uploads >= 10 -> "🌳 활동가"
         uploads >= 3 -> "🌿 일반"
@@ -71,6 +73,37 @@ object Community {
     fun toNextTier(uploads: Int): Int = listOf(3, 10, 30).firstOrNull { it > uploads }?.let { it - uploads } ?: 0
 
     fun isAdminName(name: String) = name.trim().equals(ADMIN_NAME, ignoreCase = true)
+
+    /** 화면에 보여 줄 등급: 관리자 닉네임은 늘 매니저(예전에 등급 없이 올라간 것도). */
+    fun shownTier(author: String, tier: String): String = if (isAdminName(author)) tierOf(0, true) else tier
+
+    // ── 목록에 반영되기 전에도 내가 올린 것을 바로 보여 준다 ──
+
+    /** 올리기에 성공한 줄을 적어 둔다(목록에 실리면 지운다, 하루가 지나도 지운다). */
+    fun addPending(kind: String, line: JSONObject) {
+        val a = runCatching { JSONArray(Link.prefs.getString("communityPending", "[]")) }.getOrDefault(JSONArray())
+        a.put(JSONObject().put("kind", kind).put("at", System.currentTimeMillis()).put("line", line))
+        Link.prefs.edit().putString("communityPending", a.toString()).apply()
+    }
+
+    /** 아직 목록에 없는 내 것들(kind: layout / post). 목록에 실린 것과 오래된 것은 지운다. */
+    fun pending(kind: String, listed: Set<String>, now: Long = System.currentTimeMillis()): List<JSONObject> {
+        val a = runCatching { JSONArray(Link.prefs.getString("communityPending", "[]")) }.getOrDefault(JSONArray())
+        val keep = JSONArray()
+        val out = ArrayList<JSONObject>()
+        for (i in 0 until a.length()) {
+            val o = a.optJSONObject(i) ?: continue
+            val line = o.optJSONObject("line") ?: continue
+            if (line.optString("id") in listed || now - o.optLong("at") > 86_400_000L) continue
+            keep.put(o)
+            if (o.optString("kind") == kind) out += line
+        }
+        Link.prefs.edit().putString("communityPending", keep.toString()).apply()
+        return out
+    }
+
+    fun nowIso(): String = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.ROOT)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.format(java.util.Date())
 
     var uploads: Int
         get() = Link.prefs.getInt("communityUploads", 0)
@@ -162,7 +195,7 @@ object Community {
     }
 
     /** 올리기. 잘 되면 지우기 열쇠를 이 기기에 적어 두고 null, 안 되면 이유. */
-    fun upload(name: String, author: String, layoutText: String): String? = runCatching {
+    fun upload(name: String, author: String, layoutText: String, buttons: Int = 0): String? = runCatching {
         if (Labs.relay.isEmpty()) return "커뮤니티 서버가 아직 준비되지 않았습니다"
         val (status, body) = post("/community", uploadBody(name, author, layoutText, uploads + 1, adminPassword))
         problem(status, body) ?: run {
@@ -170,6 +203,10 @@ object Community {
             val o = JSONObject(body)
             val id = o.optString("id"); val key = o.optString("key")
             if (id.isNotEmpty() && key.isNotEmpty()) saveKey(id, key)
+            // 목록에 실리기 전에도 바로 보이게(중계 서버가 준 줄, 없으면 직접 만든 줄)
+            if (id.isNotEmpty()) addPending("layout", o.optJSONObject("line") ?: JSONObject().put("id", id).put("name", name)
+                .put("author", author.ifEmpty { "익명" }).put("created", nowIso()).put("buttons", buttons)
+                .put("tier", myTier()).put("bytes", layoutText.length))
             null
         }
     }.getOrElse { "커뮤니티 서버에 연결하지 못했습니다. 인터넷 연결을 확인하세요" }
@@ -218,6 +255,7 @@ class CommunityActivity : BaseActivity() {
     private lateinit var actionButton: Button
     private var posts: List<Community.Post> = emptyList()
     private var showPosts = false            // false: 레이아웃, true: 글
+    private var waiting: Set<String> = emptySet()   // 올렸지만 아직 목록에 반영되지 않은 내 것
 
     /** 내 계정 줄: 닉네임 · 등급 · (관리자면) 비밀번호 바꾸기 · 로그아웃. */
     private fun fillAccount() {
@@ -345,7 +383,18 @@ class CommunityActivity : BaseActivity() {
             val got = runCatching { Labs.get(Community.BASE + "index.json") }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                got.onSuccess { entries = Community.parseIndex(it); posts = Community.parsePosts(it); fill() }
+                got.onSuccess { text ->
+                    val listedLayouts = Community.parseIndex(text)
+                    val listedPosts = Community.parsePosts(text)
+                    // 내가 올렸는데 아직 목록에 없는 것은 '반영 중'으로 맨 위에
+                    val ids = (listedLayouts.map { it.id } + listedPosts.map { it.id }).toSet()
+                    val waitingLayouts = Community.parseIndex(org.json.JSONObject().put("layouts", org.json.JSONArray(Community.pending("layout", ids))).toString())
+                    val waitingPosts = Community.parsePosts(org.json.JSONObject().put("posts", org.json.JSONArray(Community.pending("post", ids))).toString())
+                    waiting = (waitingLayouts.map { it.id } + waitingPosts.map { it.id }).toSet()
+                    entries = waitingLayouts + listedLayouts
+                    posts = waitingPosts + listedPosts
+                    fill()
+                }
                     .onFailure { info.text = "목록을 받지 못했습니다. 인터넷 연결을 확인하세요" }
             }
         }.start()
@@ -386,7 +435,9 @@ class CommunityActivity : BaseActivity() {
             text = p.title; textSize = 16f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Themes.current.text)
         })
         addView(TextView(this@CommunityActivity).apply {
-            text = (if (Community.mine(p.id)) "내가 씀 · " else "") + "by ${p.author}" + (if (p.tier.isNotEmpty()) " ${p.tier}" else "") +
+            val tier = Community.shownTier(p.author, p.tier)
+            text = (if (p.id in waiting) "⏳ 목록에 반영 중 · " else if (Community.mine(p.id)) "내가 씀 · " else "") +
+                "by ${p.author}" + (if (tier.isNotEmpty()) " $tier" else "") +
                 " · ${Community.date(p.created)}"
             textSize = 12f; setTextColor(Ui.muted()); setPadding(0, dp(3), 0, dp(8))
         })
@@ -438,7 +489,7 @@ class CommunityActivity : BaseActivity() {
                     val problem = Community.writePost(t, b, nick)
                     runOnUiThread {
                         if (isFinishing || isDestroyed) return@runOnUiThread
-                        android.app.AlertDialog.Builder(this).setMessage(problem ?: "올렸습니다! 1~2분 뒤 목록에 나타납니다.")
+                        android.app.AlertDialog.Builder(this).setMessage(problem ?: "올렸습니다! 내 화면에는 바로 보이고, 다른 사람에게는 곧 보입니다.")
                             .setPositiveButton("확인") { _, _ -> if (problem == null) load() }.show()
                     }
                 }.start()
@@ -470,8 +521,9 @@ class CommunityActivity : BaseActivity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
         })
         addView(TextView(this@CommunityActivity).apply {
-            text = (if (Community.mine(e.id)) "내가 올림 · " else "") +
-                "by ${e.author}" + (if (e.tier.isNotEmpty()) " ${e.tier}" else "") + " · 버튼 ${e.buttons}개 · ${Community.date(e.created)}" + if (e.bytes > 0) " · ${(e.bytes + 1023) / 1024}KB" else ""
+            val tier = Community.shownTier(e.author, e.tier)
+            text = (if (e.id in waiting) "⏳ 목록에 반영 중 · " else if (Community.mine(e.id)) "내가 올림 · " else "") +
+                "by ${e.author}" + (if (tier.isNotEmpty()) " $tier" else "") + " · 버튼 ${e.buttons}개 · ${Community.date(e.created)}" + if (e.bytes > 0) " · ${(e.bytes + 1023) / 1024}KB" else ""
             textSize = 12f; setTextColor(Ui.muted()); setPadding(0, dp(3), 0, dp(10))
         })
         val row = LinearLayout(this@CommunityActivity)
@@ -558,11 +610,11 @@ class CommunityActivity : BaseActivity() {
         if (text.length > Community.MAX_UPLOAD) { toast("레이아웃이 너무 큽니다(사진이 많으면 커집니다)"); return }
         toast("올리는 중…")
         Thread {
-            val problem = Community.upload(name, author, text)
+            val problem = Community.upload(name, author, text, l.buttons.size)
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 android.app.AlertDialog.Builder(this)
-                    .setMessage(problem ?: "올렸습니다! 1~2분 뒤 목록에 나타납니다.")
+                    .setMessage(problem ?: "올렸습니다! 내 화면에는 바로 보이고, 다른 사람에게는 곧 보입니다.")
                     .setPositiveButton("확인") { _, _ -> if (problem == null) { fillAccount(); load() } }
                     .show()
             }

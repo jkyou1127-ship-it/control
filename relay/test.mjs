@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COMMUNITY_MAX, cleanBody, postEntry, adminHash, base64Utf8, cleanText, communityEntry, handle, sameSecret, sha256Hex, tierOf, validId, validRequest } from "./worker.js";
+import { COMMUNITY_MAX, applyIndex, indexLine, cleanBody, postEntry, adminHash, base64Utf8, cleanText, communityEntry, handle, sameSecret, sha256Hex, tierOf, validId, validRequest } from "./worker.js";
 
 const env = { PANEL_CODE: "panel-code", GITHUB_TOKEN: "token" };
 const post = (body) => new Request("https://relay.example/", { method: "POST", body: JSON.stringify(body) });
@@ -135,7 +135,7 @@ test("tiers and the admin account", async () => {
   assert.equal(tierOf(3), "🌿 일반");
   assert.equal(tierOf(10), "🌳 활동가");
   assert.equal(tierOf(30), "🏆 장인");
-  assert.equal(tierOf(0, true), "👑 관리자");
+  assert.equal(tierOf(0, true), "👑 매니저");
   // 저장소의 처음 관리자 비밀번호(0000) 해시와 같은지
   const fs = await import("node:fs");
   const stored = JSON.parse(fs.readFileSync(new URL("../community/admin.json", import.meta.url), "utf8"));
@@ -160,9 +160,10 @@ test("tiers and the admin account", async () => {
   assert.equal((await call("/community", { name: "x", author: "CupomPu", layout: layoutText })).body.error, "admin_only_name");
   const up = await call("/community", { name: "x", author: "cupompu", adminPassword: "0000", layout: layoutText, uploads: 99 });
   assert.equal(up.status, 200);
-  assert.equal(JSON.parse(Buffer.from(JSON.parse(puts.at(-1).init.body).content, "base64").toString("utf8")).tier, "👑 관리자");
+  const lastLayout = () => JSON.parse(Buffer.from(JSON.parse(puts.filter((p) => p.url.includes("/community/layouts/")).at(-1).init.body).content, "base64").toString("utf8"));
+  assert.equal(lastLayout().tier, "👑 매니저");
   const user = await call("/community", { name: "x", author: "철수", layout: layoutText, uploads: 4 });
-  assert.equal(JSON.parse(Buffer.from(JSON.parse(puts.at(-1).init.body).content, "base64").toString("utf8")).tier, "🌿 일반");
+  assert.equal(lastLayout().tier, "🌿 일반");
   assert.equal(user.status, 200);
   // 비밀번호 바꾸기: 4자 이상, 지금 비밀번호가 맞아야
   assert.equal((await call("/community/admin/password", { password: "0000", newPassword: "abc" })).body.error, "weak_password");
@@ -199,4 +200,37 @@ test("community posts", async () => {
     async (url, init) => { calls.push(url); return init.method === "GET" ? new Response(JSON.stringify({ sha: "s", content }), { status: 200 }) : new Response("{}", { status: 200 }); });
   assert.equal(del.status, 200);
   assert.match(calls[0], /community\/posts\//);
+});
+
+test("uploads update the list right away", async () => {
+  // 목록 고치기: 같은 id 는 바꾸고, 새것부터
+  let idx = applyIndex({ layouts: [{ id: "a", created: "2026-11-16" }] }, "layout", { line: { id: "b", created: "2026-11-17" } });
+  assert.deepEqual(idx.layouts.map((e) => e.id), ["b", "a"]);
+  idx = applyIndex(idx, "layout", { remove: "a" });
+  assert.deepEqual(idx.layouts.map((e) => e.id), ["b"]);
+  idx = applyIndex(idx, "post", { line: { id: "p", created: "2026-11-17" } });
+  assert.equal(idx.posts.length, 1);
+  assert.equal(indexLine("layout", { id: "x", name: "n", author: "a", created: "c", layout: { buttons: [1, 2, 3] } }, 10).buttons, 3);
+
+  // 올리기 → 레이아웃 파일 PUT → 목록 GET → 목록 PUT(충돌 한 번 뒤 성공)
+  let index = { version: 1, layouts: [{ id: "old", name: "옛것", created: "2026-11-01T00:00:00Z" }], posts: [] };
+  const calls = [];
+  let conflicts = 1;
+  const fetcher = async (url, init) => {
+    calls.push(`${init.method} ${url.replace(/\?.*/, "")}`);
+    if (url.includes("community/index.json")) {
+      if (init.method === "GET") return new Response(JSON.stringify({ sha: "i1", content: Buffer.from(JSON.stringify(index)).toString("base64") }), { status: 200 });
+      if (conflicts-- > 0) return new Response("{}", { status: 409 });
+      index = JSON.parse(Buffer.from(JSON.parse(init.body).content, "base64").toString("utf8"));
+      return new Response("{}", { status: 200 });
+    }
+    return new Response("{}", { status: 201 });
+  };
+  const res = await handle(new Request("https://relay.example/community", { method: "POST", body: JSON.stringify({ name: "새 패드", author: "영희", layout: layoutText }) }), env, fetcher);
+  const out = await res.json();
+  assert.equal(out.ok, true);
+  assert.equal(out.listed, true);
+  assert.equal(out.line.name, "새 패드");
+  assert.deepEqual(index.layouts.map((e) => e.name), ["새 패드", "옛것"]);
+  assert.ok(calls.filter((c) => c.startsWith("PUT") && c.includes("index.json")).length === 2);   // 충돌 뒤 다시
 });

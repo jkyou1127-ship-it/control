@@ -115,6 +115,63 @@ function githubHeaders(env) {
   };
 }
 
+/** 목록(community/index.json)에 실릴 한 줄. scripts/community_index.py 와 같은 모양. */
+export function indexLine(kind, file, bytes = 0) {
+  if (kind === "post") {
+    return { id: file.id, title: file.title, text: file.text, author: file.author, tier: file.tier || "", created: file.created };
+  }
+  return { id: file.id, name: file.name, author: file.author, created: file.created,
+    buttons: (file.layout?.buttons || []).length, tier: file.tier || "", bytes };
+}
+
+/** 목록에 한 줄을 넣거나(line) 빼고(remove) 새것부터 정렬한다. */
+export function applyIndex(index, kind, { line = null, remove = null } = {}) {
+  const out = { version: 1, layouts: [...(index?.layouts || [])], posts: [...(index?.posts || [])] };
+  const key = kind === "post" ? "posts" : "layouts";
+  const id = line?.id ?? remove;
+  out[key] = out[key].filter((e) => e.id !== id);
+  if (line) out[key].push(line);
+  out[key].sort((a, b) => String(b.created).localeCompare(String(a.created)));
+  return out;
+}
+
+/**
+ * 올리기 · 지우기 뒤에 목록 파일을 바로 고친다(저장소 자동화를 기다리지 않게).
+ * 동시에 고쳐 충돌하면 몇 번 다시 해 보고, 그래도 안 되면 자동화(community.yml)가 곧 다시 만든다.
+ */
+async function updateIndex(env, fetcher, kind, change) {
+  const repo = env.REPO || DEFAULT_REPO;
+  const branch = env.BRANCH || DEFAULT_BRANCH;
+  const url = `https://api.github.com/repos/${repo}/contents/community/index.json`;
+  for (let i = 0; i < 3; i++) {
+    const got = await fetcher(url + "?ref=" + encodeURIComponent(branch), { method: "GET", headers: githubHeaders(env) });
+    let index = { version: 1, layouts: [], posts: [] };
+    let sha;
+    if (got.status === 200) {
+      const meta = await got.json();
+      sha = meta.sha;
+      try {
+        const bin = atob(String(meta.content || "").replace(/\s/g, ""));
+        index = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+      } catch { /* 망가진 목록은 새로 만든다 */ }
+    }
+    const next = applyIndex(index, kind, change);
+    const put = await fetcher(url, {
+      method: "PUT",
+      headers: githubHeaders(env),
+      body: JSON.stringify({
+        message: "Community: 목록 갱신",
+        branch,
+        ...(sha ? { sha } : {}),
+        content: base64Utf8(JSON.stringify(next, null, 1) + "\n"),
+      }),
+    });
+    if (put.status === 200 || put.status === 201) return true;
+    if (put.status !== 409 && put.status !== 422) return false;
+  }
+  return false;
+}
+
 /** 올린 레이아웃 지우기: 지우기 열쇠가 맞거나 평가단 코드가 맞을 때만. */
 async function communityDelete(request, env, fetcher) {
   if (!env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
@@ -152,6 +209,7 @@ async function communityDelete(request, env, fetcher) {
     body: JSON.stringify({ message: `Community: 지움 ${String(file.name || id).slice(0, 40)}`, sha: meta.sha, branch }),
   });
   if (del.status !== 200) return reply(502, { ok: false, error: "github_" + del.status });
+  await updateIndex(env, fetcher, folder === "posts" ? "post" : "layout", { remove: id }).catch(() => false);
   return reply(200, { ok: true });
 }
 
@@ -159,7 +217,7 @@ export const ADMIN_NAME = "cupompu";
 
 /** 회원 등급: 올린 레이아웃 수로 정한다. 관리자는 따로. */
 export function tierOf(uploads, admin = false) {
-  if (admin) return "👑 관리자";
+  if (admin) return "👑 매니저";        // 관리자 등급은 매니저로 고정
   const n = Number.isFinite(uploads) ? uploads : 0;
   if (n >= 30) return "🏆 장인";
   if (n >= 10) return "🌳 활동가";
@@ -267,7 +325,9 @@ async function communityPost(request, env, fetcher) {
     }),
   });
   if (res.status !== 201 && res.status !== 200) return reply(502, { ok: false, error: "github_" + res.status });
-  return reply(200, { ok: true, id: entry.id, key });
+  const line = indexLine("post", entry.file);
+  const listed = await updateIndex(env, fetcher, "post", { line }).catch(() => false);
+  return reply(200, { ok: true, id: entry.id, key, line, listed });
 }
 
 async function community(request, env, fetcher) {
@@ -304,7 +364,9 @@ async function community(request, env, fetcher) {
     }),
   });
   if (res.status !== 201 && res.status !== 200) return reply(502, { ok: false, error: "github_" + res.status });
-  return reply(200, { ok: true, id: entry.id, key });
+  const line = indexLine("layout", entry.file, JSON.stringify(entry.file).length);
+  const listed = await updateIndex(env, fetcher, "layout", { line }).catch(() => false);
+  return reply(200, { ok: true, id: entry.id, key, line, listed });
 }
 
 function reply(status, body) {

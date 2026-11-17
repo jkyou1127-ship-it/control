@@ -97,7 +97,9 @@ class ShapeFinderTest {
         assertEquals("🌿 일반", Community.tierOf(3))
         assertEquals("🌳 활동가", Community.tierOf(10))
         assertEquals("🏆 장인", Community.tierOf(30))
-        assertEquals("👑 관리자", Community.tierOf(0, true))
+        assertEquals("👑 매니저", Community.tierOf(0, true))
+        assertEquals("👑 매니저", Community.shownTier("cupompu", ""))          // 등급 없이 올라간 관리자 글도 매니저
+        assertEquals("🌿 일반", Community.shownTier("철수", "🌿 일반"))
         assertEquals(2, Community.toNextTier(1))
         assertEquals(0, Community.toNextTier(40))
         assertTrue(Community.isAdminName(" CupomPu "))
