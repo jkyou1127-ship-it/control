@@ -332,7 +332,7 @@ object Templates {
         "빈 레이아웃", "리듬게임 4키 (D F J K)", "리듬게임 7키 (S D F Space J K L)", "작업용 단축키",
         "사운드 볼텍스 · KSM (노브 2개)", "트랙패드 + 마우스 버튼", "숫자 키패드", "영문 키보드", "한글 키보드",
         "리듬게임 5키 (D F Space J K)", "리듬게임 6키 (S D F J K L)", "리듬게임 8키 (A S D F J K L ;)",
-        "방향키 + 액션 (Z X C V)", "방송 · 녹화 (F9~F12, 장면 1~4)",
+        "방향키 + 액션 (Z X C V)", "방송 · 녹화 (F9~F12, 장면 1~4)", "탭 게임 (Z X + 트랙패드)",
     )
 
     fun create(index: Int, name: String): PadLayout = when (index) {
@@ -352,6 +352,7 @@ object Templates {
         11 -> row(name, listOf("A" to 0x04, "S" to 0x16, "D" to 0x07, "F" to 0x09, "J" to 0x0D, "K" to 0x0E, "L" to 0x0F, ";" to 0x33))
         12 -> arrowsAndActions(name)
         13 -> streaming(name)
+        14 -> tapGame(name)
         else -> PadLayout(name = name)
     }
 
@@ -403,6 +404,16 @@ object Templates {
         listOf("Z" to 0x1D, "X" to 0x1B, "C" to 0x06, "V" to 0x19).forEachIndexed { i, (label, usage) ->
             l.buttons += PadButton(0.7f + (i % 2) * 0.145f, 0.2f + (i / 2) * 0.32f, 0.135f, 0.3f, label, mutableListOf(usage), color = p[i % 4])
         }
+        return l
+    }
+
+    /** 탭 게임: 왼쪽은 커서를 옮기는 트랙패드, 오른쪽은 크게 누르는 Z · X(누르고 있는 동안 입력). */
+    private fun tapGame(name: String): PadLayout {
+        val l = PadLayout(name = name)
+        val p = PadButton.PALETTE
+        l.buttons += PadButton(0.02f, 0.03f, 0.6f, 0.94f, type = PadButton.TYPE_TRACKPAD, color = p[7])
+        l.buttons += PadButton(0.64f, 0.03f, 0.165f, 0.94f, "Z", mutableListOf(0x1D), color = p[3])
+        l.buttons += PadButton(0.815f, 0.03f, 0.165f, 0.94f, "X", mutableListOf(0x1B), color = p[0])
         return l
     }
 

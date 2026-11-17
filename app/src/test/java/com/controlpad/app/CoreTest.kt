@@ -200,7 +200,7 @@ class CoreTest {
         assertTrue(OffsetPresets.all.all { kotlin.math.abs(it.x) <= Link.OFFSET_MAX && kotlin.math.abs(it.y) <= Link.OFFSET_MAX && it.delay in 0..Link.DELAY_MAX })
         assertEquals("기본", OffsetPresets.all[0].name)
         // 레이아웃 프리셋 14개(빈 레이아웃 포함), 새로 넣은 5개도 버튼이 있다
-        assertEquals(14, Templates.names.size)
+        assertEquals(15, Templates.names.size)
         for (i in 9..13) assertTrue(Templates.create(i, "t").buttons.size >= 5)
         // 모바일 기능: 토글 9개 + 카드 크기 = 10개
         assertEquals(17, Mobile.toggles.size)                                 // hd12 9개 + hd13 8개 (+ 카드 크기)

@@ -97,8 +97,14 @@ class ShapeFinderTest {
         assertEquals("🌿 일반", Community.tierOf(3))
         assertEquals("🌳 활동가", Community.tierOf(10))
         assertEquals("🏆 장인", Community.tierOf(30))
-        assertEquals("👑 매니저", Community.tierOf(0, true))
-        assertEquals("👑 매니저", Community.shownTier("cupompu", ""))          // 등급 없이 올라간 관리자 글도 매니저
+        assertEquals("매니저", Community.tierOf(0, true))
+        assertEquals("https://api.github.com/repos/jkyou1127-ship-it/control/contents/community/index.json?ref=claude%2Fvibrant-ramanujan-pdzsly",
+            Community.apiUrl("index.json"))
+        // 실제 목록 파일을 읽으면 올라온 레이아웃이 나온다
+        val real = java.io.File("../community/index.json").readText()
+        assertEquals(JSONObject(real).getJSONArray("layouts").length(), Community.parseIndex(real).size)
+        assertEquals("매니저", Community.shownTier("cupompu", ""))              // 등급 없이 올라간 관리자 글도 매니저
+        assertTrue(Community.isManager("매니저") && Community.isManager("👑 관리자") && !Community.isManager("🌱 새싹"))
         assertEquals("🌿 일반", Community.shownTier("철수", "🌿 일반"))
         assertEquals(2, Community.toNextTier(1))
         assertEquals(0, Community.toNextTier(40))

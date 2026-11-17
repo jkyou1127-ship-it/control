@@ -217,7 +217,7 @@ export const ADMIN_NAME = "cupompu";
 
 /** 회원 등급: 올린 레이아웃 수로 정한다. 관리자는 따로. */
 export function tierOf(uploads, admin = false) {
-  if (admin) return "👑 매니저";        // 관리자 등급은 매니저로 고정
+  if (admin) return "매니저";        // 관리자 등급은 매니저로 고정(앱이 검정 바탕 흰 M 아이콘을 붙인다)
   const n = Number.isFinite(uploads) ? uploads : 0;
   if (n >= 30) return "🏆 장인";
   if (n >= 10) return "🌳 활동가";

@@ -59,10 +59,28 @@ object Community {
     // ── 회원 등급 · 관리자 ──
 
     const val ADMIN_NAME = "cupompu"
+    const val MANAGER = "매니저"
+
+    /** 매니저는 등급 앞에 검정 바탕 흰색 M 아이콘을 붙여 보여 준다. 다른 등급은 글자 그대로. */
+    fun isManager(tier: String) = tier == MANAGER || tier.endsWith(" 매니저") || tier.endsWith("관리자")
+
+    /** 등급이 들어 있는 한 줄을 그린다: 매니저면 'M' 아이콘을 붙인다. */
+    fun styled(before: String, tier: String, after: String, density: Float): CharSequence {
+        val sb = android.text.SpannableStringBuilder(before)
+        if (tier.isNotEmpty()) {
+            if (isManager(tier)) {
+                val start = sb.length
+                sb.append("M")
+                sb.setSpan(ManagerBadge(density), start, sb.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                sb.append(" ").append(MANAGER)
+            } else sb.append(tier)
+        }
+        return sb.append(after)
+    }
 
     /** 회원 등급: 이 기기에서 올린 레이아웃 수로 정한다(중계 서버의 tierOf 와 같다). */
     fun tierOf(uploads: Int, admin: Boolean = false): String = when {
-        admin -> "👑 매니저"                     // 관리자 등급은 매니저로 고정
+        admin -> MANAGER                          // 관리자 등급은 매니저로 고정
         uploads >= 30 -> "🏆 장인"
         uploads >= 10 -> "🌳 활동가"
         uploads >= 3 -> "🌿 일반"
@@ -136,6 +154,33 @@ object Community {
     val BASE: String get() = Updater.BASE.removeSuffix("release/") + "community/"
 
     const val MAX_UPLOAD = 900_000          // 중계 서버의 COMMUNITY_MAX 와 같다
+
+    /** 같은 파일을 GitHub API 로 받는 주소(캐시 없이 최신). */
+    fun apiUrl(path: String): String {
+        val m = Regex("""raw\.githubusercontent\.com/([^/]+)/([^/]+)/(.+)/release/$""").find(Updater.BASE)!!
+        val (owner, repo, branch) = m.destructured
+        return "https://api.github.com/repos/$owner/$repo/contents/community/$path?ref=" + java.net.URLEncoder.encode(branch, "UTF-8")
+    }
+
+    /**
+     * community 폴더의 파일을 받는다. raw.githubusercontent.com 은 주소 끝을 바꿔도 5분 동안 옛 내용을 주므로
+     * 먼저 GitHub API(캐시 없음)로 받고, 안 되면(한 시간 60번 제한 등) raw 주소로 받는다.
+     */
+    fun fetch(path: String): String {
+        runCatching {
+            val c = URL(apiUrl(path)).openConnection() as HttpURLConnection
+            c.connectTimeout = 10000; c.readTimeout = 15000
+            c.useCaches = false
+            c.setRequestProperty("Accept", "application/vnd.github.raw")
+            c.setRequestProperty("User-Agent", "ControlPad")
+            try {
+                if (c.responseCode == 200) return c.inputStream.use { String(it.readBytes()) }
+            } finally {
+                c.disconnect()
+            }
+        }
+        return Labs.get(BASE + path)
+    }
 
     fun parseIndex(json: String): List<Entry> {
         val a = JSONObject(json).optJSONArray("layouts") ?: JSONArray()
@@ -263,8 +308,8 @@ class CommunityActivity : BaseActivity() {
         val nick = Link.prefs.getString("communityAuthor", "").orEmpty().ifEmpty { "익명" }
         val next = Community.toNextTier(Community.uploads)
         account.addView(TextView(this).apply {
-            text = "👤 $nick  ·  ${Community.myTier()}" +
-                if (Community.isAdmin) "" else "  ·  올린 레이아웃 ${Community.uploads}개" + if (next > 0) " (다음 등급까지 ${next}개)" else ""
+            text = Community.styled("👤 $nick  ·  ", Community.myTier(),
+                if (Community.isAdmin) "" else "  ·  올린 레이아웃 ${Community.uploads}개" + if (next > 0) " (다음 등급까지 ${next}개)" else "", resources.displayMetrics.density)
             textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Themes.current.text)
             setPadding(dp(14), dp(10), dp(14), dp(10))
             background = Ui.rounded(this@CommunityActivity, Ui.surface(), 16, if (Community.isAdmin) 0xFFFFC107.toInt() else Ui.line())
@@ -380,7 +425,7 @@ class CommunityActivity : BaseActivity() {
     private fun load() {
         info.text = "목록을 받는 중…"
         Thread {
-            val got = runCatching { Labs.get(Community.BASE + "index.json") }
+            val got = runCatching { Community.fetch("index.json") }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 got.onSuccess { text ->
@@ -436,9 +481,8 @@ class CommunityActivity : BaseActivity() {
         })
         addView(TextView(this@CommunityActivity).apply {
             val tier = Community.shownTier(p.author, p.tier)
-            text = (if (p.id in waiting) "⏳ 목록에 반영 중 · " else if (Community.mine(p.id)) "내가 씀 · " else "") +
-                "by ${p.author}" + (if (tier.isNotEmpty()) " $tier" else "") +
-                " · ${Community.date(p.created)}"
+            text = Community.styled((if (p.id in waiting) "⏳ 목록에 반영 중 · " else if (Community.mine(p.id)) "내가 씀 · " else "") +
+                "by ${p.author}" + (if (tier.isNotEmpty()) " " else ""), tier, " · ${Community.date(p.created)}", resources.displayMetrics.density)
             textSize = 12f; setTextColor(Ui.muted()); setPadding(0, dp(3), 0, dp(8))
         })
         addView(TextView(this@CommunityActivity).apply {
@@ -476,7 +520,7 @@ class CommunityActivity : BaseActivity() {
         box.addView(title); box.addView(text, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         val nick = Link.prefs.getString("communityAuthor", "").orEmpty()
         box.addView(TextView(this).apply {
-            this.text = "닉네임: " + nick.ifEmpty { "익명" } + " · ${Community.myTier()} — 올린 글은 누구나 볼 수 있습니다."
+            this.text = Community.styled("닉네임: " + nick.ifEmpty { "익명" } + " · ", Community.myTier(), " — 올린 글은 누구나 볼 수 있습니다.", resources.displayMetrics.density)
             textSize = 12.5f; setTextColor(Ui.muted()); setPadding(0, dp(8), 0, 0)
         })
         android.app.AlertDialog.Builder(this).setTitle("✏ 글쓰기")
@@ -522,8 +566,9 @@ class CommunityActivity : BaseActivity() {
         })
         addView(TextView(this@CommunityActivity).apply {
             val tier = Community.shownTier(e.author, e.tier)
-            text = (if (e.id in waiting) "⏳ 목록에 반영 중 · " else if (Community.mine(e.id)) "내가 올림 · " else "") +
-                "by ${e.author}" + (if (tier.isNotEmpty()) " $tier" else "") + " · 버튼 ${e.buttons}개 · ${Community.date(e.created)}" + if (e.bytes > 0) " · ${(e.bytes + 1023) / 1024}KB" else ""
+            text = Community.styled((if (e.id in waiting) "⏳ 목록에 반영 중 · " else if (Community.mine(e.id)) "내가 올림 · " else "") +
+                "by ${e.author}" + (if (tier.isNotEmpty()) " " else ""), tier,
+                " · 버튼 ${e.buttons}개 · ${Community.date(e.created)}" + (if (e.bytes > 0) " · ${(e.bytes + 1023) / 1024}KB" else ""), resources.displayMetrics.density)
             textSize = 12f; setTextColor(Ui.muted()); setPadding(0, dp(3), 0, dp(10))
         })
         val row = LinearLayout(this@CommunityActivity)
@@ -559,7 +604,7 @@ class CommunityActivity : BaseActivity() {
         toast("'${e.name}' 받는 중…")
         Thread {
             val result = runCatching {
-                val text = Community.layoutText(Labs.get(Community.BASE + "layouts/" + e.id + ".json"))
+                val text = Community.layoutText(Community.fetch("layouts/" + e.id + ".json"))
                 val l = LayoutFile.import(text) { name, bytes -> ImageStore.write(this, name, bytes) }
                 LayoutStore.save(this, l)
                 l
@@ -622,4 +667,22 @@ class CommunityActivity : BaseActivity() {
     }
 
     private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_SHORT).show()
+}
+
+/** 매니저 아이콘: 검정 둥근 사각형 안에 흰색 굵은 'M'. */
+class ManagerBadge(private val density: Float) : android.text.style.ReplacementSpan() {
+    override fun getSize(p: android.graphics.Paint, text: CharSequence?, start: Int, end: Int, fm: android.graphics.Paint.FontMetricsInt?): Int =
+        (p.textSize * 1.25f).toInt() + (2 * density).toInt()
+
+    override fun draw(c: android.graphics.Canvas, text: CharSequence?, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, p: android.graphics.Paint) {
+        val size = p.textSize * 1.25f
+        val cy = (top + bottom) / 2f
+        val box = android.graphics.RectF(x, cy - size / 2, x + size, cy + size / 2)
+        val bg = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF000000.toInt() }
+        c.drawRoundRect(box, size * 0.22f, size * 0.22f, bg)
+        val fg = android.graphics.Paint(p).apply {
+            color = 0xFFFFFFFF.toInt(); isFakeBoldText = true; textAlign = android.graphics.Paint.Align.CENTER; textSize = p.textSize * 0.9f
+        }
+        c.drawText("M", box.centerX(), cy - (fg.descent() + fg.ascent()) / 2, fg)
+    }
 }

@@ -135,7 +135,7 @@ test("tiers and the admin account", async () => {
   assert.equal(tierOf(3), "🌿 일반");
   assert.equal(tierOf(10), "🌳 활동가");
   assert.equal(tierOf(30), "🏆 장인");
-  assert.equal(tierOf(0, true), "👑 매니저");
+  assert.equal(tierOf(0, true), "매니저");
   // 저장소의 처음 관리자 비밀번호(0000) 해시와 같은지
   const fs = await import("node:fs");
   const stored = JSON.parse(fs.readFileSync(new URL("../community/admin.json", import.meta.url), "utf8"));
@@ -161,7 +161,7 @@ test("tiers and the admin account", async () => {
   const up = await call("/community", { name: "x", author: "cupompu", adminPassword: "0000", layout: layoutText, uploads: 99 });
   assert.equal(up.status, 200);
   const lastLayout = () => JSON.parse(Buffer.from(JSON.parse(puts.filter((p) => p.url.includes("/community/layouts/")).at(-1).init.body).content, "base64").toString("utf8"));
-  assert.equal(lastLayout().tier, "👑 매니저");
+  assert.equal(lastLayout().tier, "매니저");
   const user = await call("/community", { name: "x", author: "철수", layout: layoutText, uploads: 4 });
   assert.equal(lastLayout().tier, "🌿 일반");
   assert.equal(user.status, 200);
