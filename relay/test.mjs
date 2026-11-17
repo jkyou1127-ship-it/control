@@ -136,10 +136,10 @@ test("tiers and the admin account", async () => {
   assert.equal(tierOf(10), "🌳 활동가");
   assert.equal(tierOf(30), "🏆 장인");
   assert.equal(tierOf(0, true), "매니저");
-  // 저장소의 처음 관리자 비밀번호(0000) 해시와 같은지
+  // 저장소에는 관리자 비밀번호의 해시만 있다
   const fs = await import("node:fs");
   const stored = JSON.parse(fs.readFileSync(new URL("../community/admin.json", import.meta.url), "utf8"));
-  assert.equal(stored.hash, await adminHash("0000"));
+  assert.match(stored.hash, /^[0-9a-f]{64}$/);          // 비밀번호를 바꾸면 달라지므로 해시 모양만 본다
 
   let adminFile = { hash: await adminHash("0000") };
   const puts = [];

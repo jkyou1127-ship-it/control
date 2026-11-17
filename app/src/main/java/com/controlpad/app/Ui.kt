@@ -155,7 +155,8 @@ object Ui {
             line!!.addView(card, LinearLayout.LayoutParams(0, -1, 1f).apply { if (i % columns != 0) leftMargin = ctx.dp(12) })
         }
         val rest = (columns - cards.size % columns) % columns
-        repeat(rest) { line?.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f).apply { leftMargin = ctx.dp(12) }) }
+        // 빈칸도 높이를 '부모에 맞춤'으로 둔다. 1px 로 두면 줄 높이가 1px 로 잡혀, 덜 찬 줄의 카드가 안 보인다.
+        repeat(rest) { line?.addView(View(ctx), LinearLayout.LayoutParams(0, -1, 1f).apply { leftMargin = ctx.dp(12) }) }
     }
 
     /**
