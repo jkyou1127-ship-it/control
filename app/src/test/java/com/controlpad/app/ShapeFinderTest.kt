@@ -78,5 +78,8 @@ class ShapeFinderTest {
         assertEquals("controlpad-layout", JSONObject(Community.layoutText(file)).getString("format"))
         assertEquals(null, Community.problem(200, "{}"))
         assertTrue(Community.problem(400, "{\"error\":\"too_big\"}")!!.contains("너무 큽니다"))
+        assertTrue(Community.problem(403, "{\"error\":\"bad_key\"}")!!.contains("이 기기에서 올린"))
+        val del = JSONObject(Community.deleteBody("id1", "k"))
+        assertEquals("id1", del.getString("id")); assertEquals("k", del.getString("key"))
     }
 }

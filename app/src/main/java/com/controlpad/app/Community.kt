@@ -20,6 +20,7 @@ import java.net.URL
  *  · 올리기: 중계 서버(release/labs.json 의 relay) 의 /community 로 보낸다 → 저장소 community/layouts/ 에 저장
  *  · 목록: community/index.json (저장소 자동화가 만든다) 을 GitHub 에서 바로 읽는다
  *  · 받기: community/layouts/<id>.json 안의 레이아웃을 '파일로 불러오기'와 같은 방법으로 넣는다
+ *  · 지우기(KDSKD): 올릴 때 받은 '지우기 열쇠'를 이 기기에 적어 두었다가 /community/delete 로 보낸다
  */
 object Community {
     class Entry(val id: String, val name: String, val author: String, val created: String, val buttons: Int, val bytes: Int)
@@ -59,26 +60,54 @@ object Community {
             "no_name" -> "이름을 적어 주세요"
             "bad_layout" -> "레이아웃을 읽지 못했습니다"
             "relay_not_configured" -> "커뮤니티 서버가 아직 준비되지 않았습니다"
+            "bad_key" -> "이 기기에서 올린 레이아웃만 지울 수 있습니다"
+            "not_found" -> "이미 지워진 레이아웃입니다"
             else -> if (code.startsWith("github_")) "저장소에 올리지 못했습니다($code). 잠시 뒤 다시 해 보세요" else "올리지 못했습니다(HTTP $status)"
         }
     }
 
-    fun upload(name: String, author: String, layoutText: String): String? = runCatching {
-        val relay = Labs.relay
-        if (relay.isEmpty()) return "커뮤니티 서버가 아직 준비되지 않았습니다"
-        val c = URL(relay.trimEnd('/') + "/community").openConnection() as HttpURLConnection
+    /** 중계 서버에 보내고 (상태, 답) 을 돌려준다. */
+    private fun post(path: String, body: String): Pair<Int, String> {
+        val c = URL(Labs.relay.trimEnd('/') + path).openConnection() as HttpURLConnection
         c.connectTimeout = 10000; c.readTimeout = 30000
         c.requestMethod = "POST"; c.doOutput = true
         c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
         try {
-            c.outputStream.use { it.write(uploadBody(name, author, layoutText).toByteArray()) }
+            c.outputStream.use { it.write(body.toByteArray()) }
             val status = c.responseCode
-            val body = (if (status in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes()) }.orEmpty()
-            problem(status, body)
+            return status to (if (status in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes()) }.orEmpty()
         } finally {
             c.disconnect()
         }
+    }
+
+    /** 올리기. 잘 되면 지우기 열쇠를 이 기기에 적어 두고 null, 안 되면 이유. */
+    fun upload(name: String, author: String, layoutText: String): String? = runCatching {
+        if (Labs.relay.isEmpty()) return "커뮤니티 서버가 아직 준비되지 않았습니다"
+        val (status, body) = post("/community", uploadBody(name, author, layoutText))
+        problem(status, body) ?: run {
+            val o = JSONObject(body)
+            val id = o.optString("id"); val key = o.optString("key")
+            if (id.isNotEmpty() && key.isNotEmpty()) saveKey(id, key)
+            null
+        }
     }.getOrElse { "커뮤니티 서버에 연결하지 못했습니다. 인터넷 연결을 확인하세요" }
+
+    /** 지우기. 잘 되면 열쇠도 지우고 null, 안 되면 이유. */
+    fun delete(id: String): String? = runCatching {
+        if (Labs.relay.isEmpty()) return "커뮤니티 서버가 아직 준비되지 않았습니다"
+        val key = keyOf(id) ?: return "이 기기에서 올린 레이아웃만 지울 수 있습니다"
+        val (status, body) = post("/community/delete", deleteBody(id, key))
+        problem(status, body) ?: run { forgetKey(id); null }
+    }.getOrElse { "커뮤니티 서버에 연결하지 못했습니다. 인터넷 연결을 확인하세요" }
+
+    fun deleteBody(id: String, key: String): String = JSONObject().put("id", id).put("key", key).toString()
+
+    // 지우기 열쇠는 올린 기기에만 남는다(다른 기기 · 앱을 지우면 사라진다).
+    private fun saveKey(id: String, key: String) = Link.prefs.edit().putString("communityKey_$id", key).apply()
+    fun keyOf(id: String): String? = Link.prefs.getString("communityKey_$id", null)
+    private fun forgetKey(id: String) = Link.prefs.edit().remove("communityKey_$id").apply()
+    fun mine(id: String) = keyOf(id) != null
 }
 
 /** 커뮤니티 화면: 위쪽에 '내 레이아웃 올리기'와 검색, 아래는 올라온 레이아웃 카드 격자(⬇ 받기). */
@@ -147,11 +176,36 @@ class CommunityActivity : BaseActivity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
         })
         addView(TextView(this@CommunityActivity).apply {
-            text = "by ${e.author} · 버튼 ${e.buttons}개 · ${Community.date(e.created)}" + if (e.bytes > 0) " · ${(e.bytes + 1023) / 1024}KB" else ""
+            text = (if (Community.mine(e.id)) "내가 올림 · " else "") +
+                "by ${e.author} · 버튼 ${e.buttons}개 · ${Community.date(e.created)}" + if (e.bytes > 0) " · ${(e.bytes + 1023) / 1024}KB" else ""
             textSize = 12f; setTextColor(Ui.muted()); setPadding(0, dp(3), 0, dp(10))
         })
-        addView(Button(this@CommunityActivity).apply { text = "⬇ 받기"; tag = Ui.PRIMARY; setOnClickListener { download(e) } },
-            LinearLayout.LayoutParams(-1, -2))
+        val row = LinearLayout(this@CommunityActivity)
+        row.addView(Button(this@CommunityActivity).apply { text = "⬇ 받기"; tag = Ui.PRIMARY; setOnClickListener { download(e) } },
+            LinearLayout.LayoutParams(0, -2, 1f))
+        // 이 기기에서 올린 것은 지울 수 있다
+        if (Community.mine(e.id)) row.addView(Button(this@CommunityActivity).apply { text = "🗑 지우기"; setOnClickListener { confirmDelete(e) } },
+            LinearLayout.LayoutParams(0, -2, 1f))
+        addView(row, LinearLayout.LayoutParams(-1, -2))
+    }
+
+    private fun confirmDelete(e: Community.Entry) {
+        android.app.AlertDialog.Builder(this)
+            .setMessage("커뮤니티에서 '${e.name}' 을(를) 지울까요? 이미 받아 간 사람의 레이아웃은 그대로 남습니다.")
+            .setPositiveButton("지우기") { _, _ ->
+                toast("지우는 중…")
+                Thread {
+                    val problem = Community.delete(e.id)
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        if (problem == null) {
+                            entries = entries.filter { it.id != e.id }; fill()
+                            toast("지웠습니다. 1~2분 뒤 목록에서도 사라집니다")
+                        } else toast(problem)
+                    }
+                }.start()
+            }
+            .setNegativeButton("취소", null).show()
     }
 
     private fun download(e: Community.Entry) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COMMUNITY_MAX, base64Utf8, cleanText, communityEntry, handle, sameSecret, validRequest } from "./worker.js";
+import { COMMUNITY_MAX, base64Utf8, cleanText, communityEntry, handle, sameSecret, sha256Hex, validId, validRequest } from "./worker.js";
 
 const env = { PANEL_CODE: "panel-code", GITHUB_TOKEN: "token" };
 const post = (body) => new Request("https://relay.example/", { method: "POST", body: JSON.stringify(body) });
@@ -90,14 +90,42 @@ test("community uploads go to the contents API without the panel code", async ()
   const res = await handle(req, env, async (url, init) => { calls.push({ url, init }); return new Response("{}", { status: 201 }); });
   const out = await res.json();
   assert.equal(out.ok, true);
+  assert.match(out.key, /^[0-9a-f]{32}$/);
   assert.match(calls[0].url, /^https:\/\/api\.github\.com\/repos\/jkyou1127-ship-it\/control\/contents\/community\/layouts\/\d{8}T\d{6}-[0-9a-f]{6}\.json$/);
   assert.equal(calls[0].init.method, "PUT");
   const sent = JSON.parse(calls[0].init.body);
   assert.equal(sent.branch, "claude/vibrant-ramanujan-pdzsly");
   const file = JSON.parse(Buffer.from(sent.content, "base64").toString("utf8"));
   assert.equal(file.name, "패드");
+  assert.equal(file.deleteHash, await sha256Hex(out.key));        // 열쇠 대신 해시만 저장
+  assert.equal(JSON.stringify(file).includes(out.key), false);
   assert.equal(file.layout.format, "controlpad-layout");
   // 잘못된 레이아웃은 GitHub 까지 가지 않는다
   const bad = await handle(new Request("https://relay.example/community", { method: "POST", body: JSON.stringify({ name: "x", layout: "nope" }) }), env, async () => { throw new Error("called"); });
   assert.equal(bad.status, 400);
+});
+
+test("community delete needs the key or the panel code", async () => {
+  const key = "0123456789abcdef0123456789abcdef";
+  const stored = { id: "20261117T083000-abcdef", name: "패드", deleteHash: await sha256Hex(key), layout: { format: "controlpad-layout", buttons: [] } };
+  const content = Buffer.from(JSON.stringify(stored), "utf8").toString("base64");
+  const run = async (body) => {
+    const calls = [];
+    const res = await handle(new Request("https://relay.example/community/delete", { method: "POST", body: JSON.stringify(body) }), env, async (url, init) => {
+      calls.push({ url, init });
+      if (init.method === "GET") return new Response(JSON.stringify({ sha: "abc123", content }), { status: 200 });
+      return new Response("{}", { status: 200 });
+    });
+    return { status: res.status, calls };
+  };
+  const ok = await run({ id: stored.id, key });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.calls[1].init.method, "DELETE");
+  assert.match(ok.calls[1].url, /contents\/community\/layouts\/20261117T083000-abcdef\.json$/);
+  assert.equal(JSON.parse(ok.calls[1].init.body).sha, "abc123");
+  assert.equal((await run({ id: stored.id, key: "wrong" })).status, 403);
+  assert.equal((await run({ id: stored.id, code: "panel-code" })).status, 200);    // 관리용: 평가단 코드
+  assert.equal((await run({ id: stored.id, code: "nope" })).status, 403);
+  assert.equal((await run({ id: "../x", key })).status, 400);
+  assert.ok(validId("abc_1-2") && !validId("a/b"));
 });

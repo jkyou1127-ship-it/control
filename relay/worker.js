@@ -5,6 +5,8 @@
 // 평가단은 GitHub 계정이 없어도 된다. 설정 방법은 relay/README.md 에 있다.
 //
 // 레이아웃 커뮤니티(LOD): 주소 끝이 /community 인 요청은 누구나 레이아웃을 올릴 수 있다(평가단 코드 필요 없음).
+// 올리면 '지우기 열쇠'를 돌려준다. 저장소에는 열쇠의 SHA-256 만 남긴다. /community/delete 에 열쇠(또는 평가단 코드)를
+// 보내면 그 레이아웃을 지운다(KDSKD).
 // 올린 레이아웃은 저장소의 community/layouts/ 에 파일로 저장되고, 목록(community/index.json)은
 // 저장소의 자동화(.github/workflows/community.yml)가 만든다. 받기는 앱이 GitHub 에서 바로 한다.
 //
@@ -79,6 +81,70 @@ export function base64Utf8(s) {
   return btoa(bin);
 }
 
+/** 지우기 열쇠: 무작위 16바이트(16진수 32자). */
+export function newKey() {
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+export async function sha256Hex(s) {
+  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
+  return [...d].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+export function validId(id) {
+  return typeof id === "string" && /^[0-9A-Za-z_-]{1,64}$/.test(id);
+}
+
+function githubHeaders(env) {
+  return {
+    authorization: `Bearer ${env.GITHUB_TOKEN}`,
+    accept: "application/vnd.github+json",
+    "x-github-api-version": "2022-11-28",
+    "user-agent": "controlpad-panel-relay",
+    "content-type": "application/json",
+  };
+}
+
+/** 올린 레이아웃 지우기: 지우기 열쇠가 맞거나 평가단 코드가 맞을 때만. */
+async function communityDelete(request, env, fetcher) {
+  if (!env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return reply(400, { ok: false, error: "bad_request" });
+  }
+  const { id, key, code } = body ?? {};
+  if (!validId(id)) return reply(400, { ok: false, error: "bad_request" });
+  const repo = env.REPO || DEFAULT_REPO;
+  const branch = env.BRANCH || DEFAULT_BRANCH;
+  const url = `https://api.github.com/repos/${repo}/contents/community/layouts/${id}.json`;
+  const got = await fetcher(url + "?ref=" + encodeURIComponent(branch), { method: "GET", headers: githubHeaders(env) });
+  if (got.status === 404) return reply(404, { ok: false, error: "not_found" });
+  if (got.status !== 200) return reply(502, { ok: false, error: "github_" + got.status });
+  const meta = await got.json();
+  let file;
+  try {
+    const bin = atob(String(meta.content || "").replace(/\s/g, ""));
+    file = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+  } catch {
+    return reply(502, { ok: false, error: "bad_file" });
+  }
+  const byOwner = typeof key === "string" && key.length > 0 && typeof file.deleteHash === "string" &&
+    (await sameSecret(await sha256Hex(key), file.deleteHash));
+  const byPanel = typeof code === "string" && !!env.PANEL_CODE && (await sameSecret(code, env.PANEL_CODE));
+  if (!byOwner && !byPanel) return reply(403, { ok: false, error: "bad_key" });
+  const del = await fetcher(url, {
+    method: "DELETE",
+    headers: githubHeaders(env),
+    body: JSON.stringify({ message: `Community: 지움 ${String(file.name || id).slice(0, 40)}`, sha: meta.sha, branch }),
+  });
+  if (del.status !== 200) return reply(502, { ok: false, error: "github_" + del.status });
+  return reply(200, { ok: true });
+}
+
 async function community(request, env, fetcher) {
   if (!env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
   let body;
@@ -89,6 +155,8 @@ async function community(request, env, fetcher) {
   }
   const entry = communityEntry(body);
   if (entry.error) return reply(400, { ok: false, error: entry.error });
+  const key = newKey();
+  entry.file.deleteHash = await sha256Hex(key);       // 열쇠 자체는 저장하지 않는다
   const repo = env.REPO || DEFAULT_REPO;
   const res = await fetcher(`https://api.github.com/repos/${repo}/contents/${entry.path}`, {
     method: "PUT",
@@ -106,7 +174,7 @@ async function community(request, env, fetcher) {
     }),
   });
   if (res.status !== 201 && res.status !== 200) return reply(502, { ok: false, error: "github_" + res.status });
-  return reply(200, { ok: true, id: entry.id });
+  return reply(200, { ok: true, id: entry.id, key });
 }
 
 function reply(status, body) {
@@ -116,7 +184,9 @@ function reply(status, body) {
 export async function handle(request, env, fetcher = fetch) {
   if (request.method === "GET") return new Response("Control Pad panel relay");
   if (request.method !== "POST") return reply(405, { ok: false, error: "method" });
-  if (new URL(request.url).pathname.replace(/\/+$/, "") === "/community") return community(request, env, fetcher);
+  const path = new URL(request.url).pathname.replace(/\/+$/, "");
+  if (path === "/community") return community(request, env, fetcher);
+  if (path === "/community/delete") return communityDelete(request, env, fetcher);
   if (!env.PANEL_CODE || !env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
 
   let body;
