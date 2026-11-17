@@ -121,4 +121,17 @@ class ShapeFinderTest {
         assertEquals("제목", pb.getString("title")); assertEquals(2, pb.getInt("uploads"))
         assertEquals("post", JSONObject(Community.deleteBody("p1", "k", kind = "post")).getString("kind"))
     }
+
+    @Test
+    fun realCommunityLayoutImportsWithItsPicture() {
+        val dir = java.io.File("../community/layouts")
+        val files = dir.listFiles { f -> f.name.endsWith(".json") }.orEmpty()
+        for (f in files) {
+            val saved = HashMap<String, ByteArray>()
+            val l = LayoutFile.import(Community.layoutText(f.readText())) { name, bytes -> saved[name] = bytes }
+            assertTrue(l.buttons.isNotEmpty())
+            // 버튼이 쓰는 그림은 모두 파일 안에 함께 들어 있어 받아진다
+            for (b in l.buttons) if (b.image.isNotEmpty()) assertTrue("${f.name}: ${b.image}", b.image in saved)
+        }
+    }
 }

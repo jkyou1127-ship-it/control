@@ -193,6 +193,13 @@ object Community {
         }
     }
 
+    /**
+     * 올라온 레이아웃 파일 받기. 한 번 올라간 파일은 바뀌지 않으므로 raw 주소(캐시돼도 괜찮음)로 먼저 받고,
+     * 막 올라와 아직 raw 에 없으면 API 로 받는다(API 는 한 시간 60번 제한이 있어 목록에만 먼저 쓴다).
+     */
+    fun fetchLayoutFile(id: String): String =
+        runCatching { Labs.get(BASE + "layouts/$id.json") }.getOrElse { fetch("layouts/$id.json") }
+
     /** 받은 파일에서 레이아웃 글자(파일로 저장 형식)를 꺼낸다. */
     fun layoutText(file: String): String = JSONObject(file).getJSONObject("layout").toString()
 
@@ -560,6 +567,8 @@ class CommunityActivity : BaseActivity() {
         orientation = LinearLayout.VERTICAL
         background = Ui.rounded(this@CommunityActivity, Ui.surface(), 18, Ui.line())
         setPadding(dp(14), dp(14), dp(14), dp(12))
+        // 미리보기 그림(16:9 정도)
+        addView(preview(e), LinearLayout.LayoutParams(-1, dp(120)).apply { bottomMargin = dp(10) })
         addView(TextView(this@CommunityActivity).apply {
             text = e.name; textSize = 16f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Themes.current.text); setSingleLine()
             ellipsize = android.text.TextUtils.TruncateAt.END
@@ -600,20 +609,50 @@ class CommunityActivity : BaseActivity() {
             .setNegativeButton("취소", null).show()
     }
 
+    /** 받은 레이아웃 파일(미리보기와 받기에 같이 쓴다). */
+    private val files = HashMap<String, String>()
+
     private fun download(e: Community.Entry) {
         toast("'${e.name}' 받는 중…")
         Thread {
             val result = runCatching {
-                val text = Community.layoutText(Community.fetch("layouts/" + e.id + ".json"))
-                val l = LayoutFile.import(text) { name, bytes -> ImageStore.write(this, name, bytes) }
+                val file = files[e.id] ?: Community.fetchLayoutFile(e.id).also { files[e.id] = it }
+                val l = LayoutFile.import(Community.layoutText(file)) { name, bytes -> ImageStore.write(this, name, bytes) }
                 LayoutStore.save(this, l)
                 l
             }
             runOnUiThread {
-                result.onSuccess { toast("'${it.name}' 을(를) 내 레이아웃에 추가했습니다") }
-                    .onFailure { toast("받지 못했습니다. 잠시 뒤 다시 해 보세요") }
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                result.onSuccess {
+                    android.app.AlertDialog.Builder(this)
+                        .setMessage("'${it.name}' 을(를) 내 레이아웃에 추가했습니다.")
+                        .setPositiveButton("바로 실행") { _, _ -> startActivity(android.content.Intent(this, PlayActivity::class.java).putExtra("id", it.id)) }
+                        .setNeutralButton("편집") { _, _ -> startActivity(android.content.Intent(this, EditorActivity::class.java).putExtra("id", it.id)) }
+                        .setNegativeButton("닫기", null).show()
+                }.onFailure { err -> toast("받지 못했습니다: " + (err.message ?: err.javaClass.simpleName)) }
             }
         }.start()
+    }
+
+    /** 카드의 미리보기 칸: 레이아웃 파일을 받아 버튼 배치를 작은 그림으로 보여 준다. */
+    private fun preview(e: Community.Entry): View {
+        val box = android.widget.FrameLayout(this).apply {
+            background = Ui.rounded(this@CommunityActivity, Themes.current.bg, 12, Ui.line())
+        }
+        val wait = TextView(this).apply { text = "미리보기 불러오는 중…"; textSize = 12f; setTextColor(Ui.muted()); gravity = Gravity.CENTER }
+        box.addView(wait, android.widget.FrameLayout.LayoutParams(-1, -1))
+        Thread {
+            val got = runCatching {
+                val file = files[e.id] ?: Community.fetchLayoutFile(e.id).also { synchronized(files) { files[e.id] = it } }
+                LayoutFile.import(Community.layoutText(file))
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                got.onSuccess { l -> box.removeAllViews(); box.addView(LayoutThumb(this, l), android.widget.FrameLayout.LayoutParams(-1, -1)) }
+                    .onFailure { wait.text = "미리보기를 불러오지 못했습니다" }
+            }
+        }.start()
+        return box
     }
 
     /** 올릴 레이아웃 고르기 → 이름 · 만든 사람 확인 → 올리기. */
