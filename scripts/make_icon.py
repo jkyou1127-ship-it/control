@@ -47,15 +47,20 @@ PALETTES = [
     ("#FFCA28", "#FF7043"),   # 노랑 → 주황
     ("#AB47BC", "#5C6BC0"),   # 보라 → 남색
     ("#26C6DA", "#66BB6A"),   # 청록 → 초록
-    ("#EF5350", "#AB47BC"),   # 빨강 → 보라
+    ("#5C6BC0", "#26A69A"),   # 남색(빨강은 핫픽스 전용)
     ("#42A5F5", "#26C6DA"),   # 파랑 → 하늘
     ("#EC407A", "#FFA726"),   # 분홍 → 주황
     ("#9CCC65", "#FFEE58"),   # 연두 → 노랑
 ]
 
 
+HOTFIX = ("#E53935", "#E53935")   # 핫픽스(HF…) 배지는 빨강
+
+
 def palette(text):
-    """버전명으로 배지 색 한 쌍을 고른다(파이썬 실행마다 바뀌는 hash() 대신 글자 코드 합을 쓴다)."""
+    """버전명으로 배지 색 한 쌍을 고른다(파이썬 실행마다 바뀌는 hash() 대신 글자 코드 합을 쓴다). 핫픽스는 빨강."""
+    if text.startswith("HF") or text.lower().startswith("hotfix"):
+        return HOTFIX
     n = 0
     for ch in text:
         n = (n * 31 + ord(ch)) % 1_000_003

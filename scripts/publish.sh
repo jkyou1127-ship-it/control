@@ -18,6 +18,14 @@ needs_panel=0
 if [ "${1:-}" = "--alpha-only" ]; then promote=0; shift; fi
 if [ "${1:-}" = "--needs-panel" ]; then promote=0; needs_panel=1; shift; fi
 notes="${1:?바뀐 점을 적어 주세요}"
+# 핫픽스(--fix)의 버전명은 HF년.월.일.시.분(한국 시간)이어야 한다: scripts/hotfix_name.py 가 지금 시각으로 만들어 준다.
+if [ "$fix" = 1 ]; then
+    hf_name=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+    case "$hf_name" in
+        HF*) ;;
+        *) echo "핫픽스 버전명은 HF로 시작해야 합니다. 예: $(python3 scripts/hotfix_name.py)" >&2; exit 1 ;;
+    esac
+fi
 code=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
 name=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)        # 코드명(버전 확인용)
 build=$(sed -n 's/.*const val BUILD = "\(.*\)".*/\1/p' app/src/main/java/com/controlpad/app/Updater.kt)   # 빌드 번호(화면 표시용)
