@@ -64,6 +64,7 @@ PY
 
 python3 receiver/test_receiver.py
 python3 scripts/test_panel.py
+python3 scripts/test_community.py
 node --test relay/test.mjs > /dev/null
 python3 scripts/make_icon.py "$build" > /dev/null    # 앱 아이콘 아래쪽 버전명 글자
 ./gradlew testReleaseUnitTest assembleRelease -q

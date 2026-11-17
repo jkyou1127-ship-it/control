@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { handle, sameSecret, validRequest } from "./worker.js";
+import { COMMUNITY_MAX, base64Utf8, cleanText, communityEntry, handle, sameSecret, validRequest } from "./worker.js";
 
 const env = { PANEL_CODE: "panel-code", GITHUB_TOKEN: "token" };
 const post = (body) => new Request("https://relay.example/", { method: "POST", body: JSON.stringify(body) });
@@ -61,4 +61,43 @@ test("a GitHub failure is reported, not hidden", async () => {
   const res = await handle(post({ code: "panel-code", kind: "lab", target: "kps" }), env, async () => new Response("no", { status: 401 }));
   assert.equal(res.status, 502);
   assert.equal((await res.json()).error, "github_401");
+});
+
+const layoutText = JSON.stringify({ format: "controlpad-layout", version: 1, id: "x", name: "pad", buttons: [{ x: 0 }, { x: 0.5 }], images: {} });
+
+test("community entries are checked and cleaned", () => {
+  const now = new Date("2026-11-17T08:30:00Z");
+  const e = communityEntry({ name: " 내 패드\n", author: "누군가", layout: layoutText }, now, () => 0.5);
+  assert.equal(e.error, undefined);
+  assert.equal(e.id, "20261117T083000-7fffff");
+  assert.equal(e.path, "community/layouts/20261117T083000-7fffff.json");
+  assert.equal(e.file.name, "내 패드");
+  assert.equal(e.file.author, "누군가");
+  assert.equal(e.file.buttons, 2);
+  assert.equal(communityEntry({ name: "a", layout: layoutText }).file.author, "익명");
+  assert.equal(communityEntry({ name: "", layout: layoutText }).error, "no_name");
+  assert.equal(communityEntry({ name: "a", layout: "{" }).error, "bad_layout");
+  assert.equal(communityEntry({ name: "a", layout: JSON.stringify({ format: "other", buttons: [] }) }).error, "bad_layout");
+  assert.equal(communityEntry({ name: "a", layout: "x".repeat(COMMUNITY_MAX + 1) }).error, "too_big");
+  assert.equal(cleanText("a\u0000b", 10), "a b");
+  assert.equal(cleanText("가".repeat(50), 40).length, 40);
+  assert.equal(Buffer.from(base64Utf8("한글 ok"), "base64").toString("utf8"), "한글 ok");
+});
+
+test("community uploads go to the contents API without the panel code", async () => {
+  const calls = [];
+  const req = new Request("https://relay.example/community", { method: "POST", body: JSON.stringify({ name: "패드", author: "나", layout: layoutText }) });
+  const res = await handle(req, env, async (url, init) => { calls.push({ url, init }); return new Response("{}", { status: 201 }); });
+  const out = await res.json();
+  assert.equal(out.ok, true);
+  assert.match(calls[0].url, /^https:\/\/api\.github\.com\/repos\/jkyou1127-ship-it\/control\/contents\/community\/layouts\/\d{8}T\d{6}-[0-9a-f]{6}\.json$/);
+  assert.equal(calls[0].init.method, "PUT");
+  const sent = JSON.parse(calls[0].init.body);
+  assert.equal(sent.branch, "claude/vibrant-ramanujan-pdzsly");
+  const file = JSON.parse(Buffer.from(sent.content, "base64").toString("utf8"));
+  assert.equal(file.name, "패드");
+  assert.equal(file.layout.format, "controlpad-layout");
+  // 잘못된 레이아웃은 GitHub 까지 가지 않는다
+  const bad = await handle(new Request("https://relay.example/community", { method: "POST", body: JSON.stringify({ name: "x", layout: "nope" }) }), env, async () => { throw new Error("called"); });
+  assert.equal(bad.status, 400);
 });

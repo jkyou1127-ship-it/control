@@ -88,6 +88,10 @@ class MainActivity : BaseActivity() {
         })
         header.addView(Button(this).apply { text = "＋ 새 레이아웃"; tag = Ui.PRIMARY; setOnClickListener { newLayout() } })
         header.addView(Button(this).apply {
+            text = "🌐 커뮤니티"
+            setOnClickListener { startActivity(Intent(this@MainActivity, CommunityActivity::class.java)) }
+        })
+        header.addView(Button(this).apply {
             text = "📷 사진으로 만들기"
             setOnClickListener { startActivity(Intent(this@MainActivity, PhotoPadActivity::class.java)) }
         })

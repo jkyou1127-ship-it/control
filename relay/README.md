@@ -12,10 +12,10 @@
 1. GitHub에 로그인하고 `Settings > Developer settings > Personal access tokens > Fine-grained tokens`로 갑니다.
 2. `Generate new token`을 누릅니다.
 3. `Repository access`에서 `Only select repositories`를 고르고 `control` 저장소만 선택합니다.
-4. `Permissions > Repository permissions`에서 `Actions`를 `Read and write`로 바꿉니다. 다른 권한은 주지 않습니다.
+4. `Permissions > Repository permissions`에서 `Actions`와 `Contents`를 `Read and write`로 바꿉니다(Contents 는 레이아웃 커뮤니티에 올린 레이아웃을 저장할 때 씁니다). 다른 권한은 주지 않습니다.
 5. 만료 기간을 정하고 만든 뒤, 표시되는 토큰을 복사해 둡니다. 다시 볼 수 없습니다.
 
-이 토큰으로 할 수 있는 일은 이 저장소의 자동화를 실행하거나 취소하는 것뿐입니다.
+이 토큰으로 할 수 있는 일은 이 저장소의 자동화를 실행하는 것과, 이 저장소에 파일을 쓰는 것(커뮤니티 레이아웃 저장)뿐입니다.
 
 ## 2. Cloudflare Worker 만들기
 
@@ -48,3 +48,12 @@
 - **요청이 안 될 때**: 앱에 "저장소에 전달하지 못했습니다 (401)"이 뜨면 토큰이 만료되었거나 권한이 다른 것입니다. 1번을 다시 하고 `GITHUB_TOKEN`을 바꾸세요.
 - 저장소 이름이나 브랜치를 바꾸면 Worker에 `REPO`, `BRANCH` 변수를 추가해 맞춰 줍니다.
 - 토큰과 평가단 코드는 저장소나 앱에 적지 마세요. Worker의 Secret에만 둡니다.
+
+## 레이아웃 커뮤니티 켜기(LOD)
+
+커뮤니티의 '올리기'도 이 중계 서버를 씁니다(주소 끝 `/community`, 평가단 코드 필요 없음).
+
+1. 1번의 토큰에 `Contents: Read and write` 권한이 있는지 확인합니다(없으면 토큰 설정에서 추가).
+2. Worker 의 `Edit code`에서 새 `worker.js` 내용으로 바꿔 붙여 넣고 `Deploy`합니다.
+
+받기(목록 · 다운로드)는 저장소의 `community/` 폴더를 바로 읽으므로 따로 설정할 것이 없습니다.

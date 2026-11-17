@@ -4,9 +4,14 @@
 // 저장소의 자동화(.github/workflows/panel.yml)를 대신 실행하고, 바로 반영된다.
 // 평가단은 GitHub 계정이 없어도 된다. 설정 방법은 relay/README.md 에 있다.
 //
+// 레이아웃 커뮤니티(LOD): 주소 끝이 /community 인 요청은 누구나 레이아웃을 올릴 수 있다(평가단 코드 필요 없음).
+// 올린 레이아웃은 저장소의 community/layouts/ 에 파일로 저장되고, 목록(community/index.json)은
+// 저장소의 자동화(.github/workflows/community.yml)가 만든다. 받기는 앱이 GitHub 에서 바로 한다.
+//
 // 비밀 값(대시보드의 Variables and Secrets 에 넣는다. 코드나 저장소에 적지 않는다):
 //   PANEL_CODE    평가단에게 알려 줄 코드
-//   GITHUB_TOKEN  이 저장소의 Actions 를 실행할 수 있는 토큰
+//   GITHUB_TOKEN  이 저장소의 Actions 를 실행하고(Actions: Read and write),
+//                 커뮤니티 파일을 쓸 수 있는(Contents: Read and write) 토큰
 // 선택 값: REPO (기본 jkyou1127-ship-it/control), BRANCH (기본 claude/vibrant-ramanujan-pdzsly)
 
 const DEFAULT_REPO = "jkyou1127-ship-it/control";
@@ -34,6 +39,76 @@ export async function sameSecret(a, b) {
   return diff === 0;
 }
 
+/** 커뮤니티에 올릴 수 있는 레이아웃의 최대 크기(글자 수). GitHub 파일 API 로 무리 없이 쓸 수 있는 크기. */
+export const COMMUNITY_MAX = 900_000;
+
+/** 이름 · 만든 사람에서 줄바꿈 같은 제어 문자를 지우고 길이를 자른다. */
+export function cleanText(s, max) {
+  if (typeof s !== "string") return "";
+  return s.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max);
+}
+
+/**
+ * 커뮤니티에 올릴 레이아웃을 검사하고, 저장할 내용을 만든다. 안 되면 { error }.
+ * layout 은 앱의 '파일로 저장'과 같은 형식(format: controlpad-layout)의 JSON 글자.
+ */
+export function communityEntry(body, now = new Date(), rand = Math.random) {
+  const name = cleanText(body?.name, 40);
+  const author = cleanText(body?.author, 20) || "익명";
+  const text = body?.layout;
+  if (!name) return { error: "no_name" };
+  if (typeof text !== "string" || text.length === 0) return { error: "no_layout" };
+  if (text.length > COMMUNITY_MAX) return { error: "too_big" };
+  let layout;
+  try {
+    layout = JSON.parse(text);
+  } catch {
+    return { error: "bad_layout" };
+  }
+  if (!layout || layout.format !== "controlpad-layout" || !Array.isArray(layout.buttons)) return { error: "bad_layout" };
+  const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\..*/, "");      // 20261117T083000
+  const id = stamp + "-" + Math.floor(rand() * 0xffffff).toString(16).padStart(6, "0");
+  return { id, path: `community/layouts/${id}.json`, file: { id, name, author, created: now.toISOString(), buttons: layout.buttons.length, layout } };
+}
+
+/** 문자열을 UTF-8 바이트의 base64 로(GitHub 파일 API 가 받는 형식). */
+export function base64Utf8(s) {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+async function community(request, env, fetcher) {
+  if (!env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return reply(400, { ok: false, error: "bad_request" });
+  }
+  const entry = communityEntry(body);
+  if (entry.error) return reply(400, { ok: false, error: entry.error });
+  const repo = env.REPO || DEFAULT_REPO;
+  const res = await fetcher(`https://api.github.com/repos/${repo}/contents/${entry.path}`, {
+    method: "PUT",
+    headers: {
+      authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+      "user-agent": "controlpad-panel-relay",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      message: `Community: ${entry.file.name} (${entry.file.author})`,
+      branch: env.BRANCH || DEFAULT_BRANCH,
+      content: base64Utf8(JSON.stringify(entry.file)),
+    }),
+  });
+  if (res.status !== 201 && res.status !== 200) return reply(502, { ok: false, error: "github_" + res.status });
+  return reply(200, { ok: true, id: entry.id });
+}
+
 function reply(status, body) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 }
@@ -41,6 +116,7 @@ function reply(status, body) {
 export async function handle(request, env, fetcher = fetch) {
   if (request.method === "GET") return new Response("Control Pad panel relay");
   if (request.method !== "POST") return reply(405, { ok: false, error: "method" });
+  if (new URL(request.url).pathname.replace(/\/+$/, "") === "/community") return community(request, env, fetcher);
   if (!env.PANEL_CODE || !env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
 
   let body;

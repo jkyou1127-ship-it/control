@@ -42,6 +42,7 @@
         <activity android:name=".ThemeEditorActivity" />
         <activity android:name=".LabsActivity" />
         <activity android:name=".PhotoPadActivity" />
+        <activity android:name=".CommunityActivity" />
         <!-- 카메라 앱이 찍은 사진을 넣을 자리(사진으로 컨트롤러 만들기) -->
         <provider
             android:name=".PhotoProvider"

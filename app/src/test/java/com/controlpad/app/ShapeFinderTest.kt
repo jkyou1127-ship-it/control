@@ -60,4 +60,23 @@ class ShapeFinderTest {
         assertEquals(103, Mirror.flip(l).watermarkUntil)
         assertEquals("make by IMCP", Watermark.TEXT)
     }
+
+    @Test
+    fun communityIndexAndUploadBody() {
+        val idx = """{"version":1,"layouts":[
+            {"id":"20261117T083000-abcdef","name":"리듬 4키","author":"가나","created":"2026-11-17T08:30:00.000Z","buttons":4,"bytes":2048},
+            {"id":"../evil","name":"x"},
+            {"id":"b","name":"","author":""}]}"""
+        val list = Community.parseIndex(idx)
+        assertEquals(listOf("20261117T083000-abcdef", "b"), list.map { it.id })     // 주소를 벗어나는 id 는 버린다
+        assertEquals("익명", list[1].author)
+        assertEquals("2026.11.17", Community.date(list[0].created))
+        val body = JSONObject(Community.uploadBody("이름", "나", "{\"format\":\"controlpad-layout\"}"))
+        assertEquals("이름", body.getString("name"))
+        assertEquals("controlpad-layout", JSONObject(body.getString("layout")).getString("format"))
+        val file = """{"id":"x","name":"n","layout":{"format":"controlpad-layout","buttons":[]}}"""
+        assertEquals("controlpad-layout", JSONObject(Community.layoutText(file)).getString("format"))
+        assertEquals(null, Community.problem(200, "{}"))
+        assertTrue(Community.problem(400, "{\"error\":\"too_big\"}")!!.contains("너무 큽니다"))
+    }
 }
