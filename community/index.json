@@ -1,4 +1,13 @@
 {
  "version": 1,
- "layouts": []
+ "layouts": [
+  {
+   "id": "20261117T081721-968457",
+   "name": "사볼+키패드",
+   "author": "cupompu",
+   "created": "2026-11-17T08:17:21.585Z",
+   "buttons": 31,
+   "bytes": 31509
+  }
+ ]
 }
