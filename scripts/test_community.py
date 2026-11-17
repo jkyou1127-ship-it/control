@@ -26,6 +26,14 @@ class CommunityIndexTest(unittest.TestCase):
             self.assertEqual([e["id"] for e in idx["layouts"]], ["b", "a"])
             self.assertEqual(idx["layouts"][0]["author"], "익명")
             self.assertEqual(idx["layouts"][1]["buttons"], 2)
+            os.makedirs(os.path.join(d, "posts"))
+            with open(os.path.join(d, "posts", "p1.json"), "w", encoding="utf-8") as f:
+                json.dump({"title": "안녕", "text": "본문", "author": "가", "tier": "🌱 새싹", "created": "2026-11-17T00:00:00Z"}, f)
+            with open(os.path.join(d, "posts", "p2.json"), "w", encoding="utf-8") as f:
+                json.dump({"title": "", "text": "제목 없음"}, f)
+            posts = community_index.build(d)["posts"]
+            self.assertEqual([p["id"] for p in posts], ["p1"])
+            self.assertEqual(posts[0]["text"], "본문")
 
     def test_real_index_is_well_formed(self):
         with open(os.path.join(os.path.dirname(__file__), "..", "community", "index.json"), encoding="utf-8") as f:

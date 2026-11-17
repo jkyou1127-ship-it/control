@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COMMUNITY_MAX, adminHash, base64Utf8, cleanText, communityEntry, handle, sameSecret, sha256Hex, tierOf, validId, validRequest } from "./worker.js";
+import { COMMUNITY_MAX, cleanBody, postEntry, adminHash, base64Utf8, cleanText, communityEntry, handle, sameSecret, sha256Hex, tierOf, validId, validRequest } from "./worker.js";
 
 const env = { PANEL_CODE: "panel-code", GITHUB_TOKEN: "token" };
 const post = (body) => new Request("https://relay.example/", { method: "POST", body: JSON.stringify(body) });
@@ -172,4 +172,31 @@ test("tiers and the admin account", async () => {
   const saved = JSON.parse(Buffer.from(JSON.parse(puts.at(-1).init.body).content, "base64").toString("utf8"));
   assert.equal(saved.hash, await adminHash("long-enough-1"));
   assert.equal(JSON.stringify(saved).includes("long-enough-1"), false);     // 비밀번호 자체는 저장하지 않는다
+});
+
+test("community posts", async () => {
+  const now = new Date("2026-11-17T09:00:00Z");
+  const e = postEntry({ title: " 안녕\n", text: "첫 줄\r\n둘째 줄\u0000", author: "철수" }, now, () => 0);
+  assert.equal(e.path, "community/posts/20261117T090000-000000.json");
+  assert.equal(e.file.title, "안녕");
+  assert.equal(e.file.text, "첫 줄\n둘째 줄");
+  assert.equal(postEntry({ title: "", text: "x" }).error, "no_title");
+  assert.equal(postEntry({ title: "x", text: "  " }).error, "no_text");
+  assert.equal(cleanBody("a".repeat(3000), 2000).length, 2000);
+  const puts = [];
+  const res = await handle(new Request("https://relay.example/community/post", { method: "POST", body: JSON.stringify({ title: "t", text: "본문", author: "나", uploads: 3 }) }), env,
+    async (url, init) => { puts.push({ url, init }); return new Response("{}", { status: 201 }); });
+  const out = await res.json();
+  assert.equal(out.ok, true);
+  assert.match(puts[0].url, /contents\/community\/posts\/\d{8}T\d{6}-[0-9a-f]{6}\.json$/);
+  const file = JSON.parse(Buffer.from(JSON.parse(puts[0].init.body).content, "base64").toString("utf8"));
+  assert.equal(file.tier, "🌿 일반");
+  assert.equal(file.deleteHash, await sha256Hex(out.key));
+  // 글 지우기는 posts 폴더
+  const content = Buffer.from(JSON.stringify(file)).toString("base64");
+  const calls = [];
+  const del = await handle(new Request("https://relay.example/community/delete", { method: "POST", body: JSON.stringify({ id: file.id, key: out.key, kind: "post" }) }), env,
+    async (url, init) => { calls.push(url); return init.method === "GET" ? new Response(JSON.stringify({ sha: "s", content }), { status: 200 }) : new Response("{}", { status: 200 }); });
+  assert.equal(del.status, 200);
+  assert.match(calls[0], /community\/posts\//);
 });

@@ -1,6 +1,6 @@
 {
-  "versionCode": 98,
-  "versionName": "KDSKD",
-  "build": "KDSKD",
-  "notes": "KDSKD: 커뮤니티 회원 등급, 관리자 계정, 기본 레이아웃 올리기 막기."
+  "versionCode": 99,
+  "versionName": "jf",
+  "build": "jf",
+  "notes": "jf: 커뮤니티 글쓰기, 회원 등급, 관리자 계정, 기본 레이아웃 올리기 막기."
 }

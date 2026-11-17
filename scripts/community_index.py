@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """레이아웃 커뮤니티 목록(community/index.json)을 만든다.
 
-community/layouts/*.json (중계 서버가 올린 레이아웃) 을 읽어, 앱이 목록에 보여 줄 것만 모은다:
+community/layouts/*.json (중계 서버가 올린 레이아웃) 과 community/posts/*.json (글) 을 읽어, 앱이 목록에 보여 줄 것만 모은다:
 id · 이름 · 만든 사람 · 올린 때 · 버튼 수 · 파일 크기. 새것부터.
 .github/workflows/community.yml 이 레이아웃이 올라올 때마다 부른다.
 """
@@ -37,7 +37,28 @@ def build(root=ROOT):
         except (OSError, ValueError):
             continue
     entries.sort(key=lambda e: e["created"], reverse=True)
-    return {"version": 1, "layouts": entries}
+    posts = []
+    folder = os.path.join(root, "posts")
+    for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(folder, name), encoding="utf-8") as f:
+                d = json.load(f)
+            if not d.get("title") or not d.get("text"):
+                continue
+            posts.append({
+                "id": name[:-5],
+                "title": str(d["title"])[:60],
+                "text": str(d["text"])[:2000],
+                "author": str(d.get("author", ""))[:20] or "익명",
+                "tier": str(d.get("tier", ""))[:12],
+                "created": str(d.get("created", "")),
+            })
+        except (OSError, ValueError):
+            continue
+    posts.sort(key=lambda e: e["created"], reverse=True)
+    return {"version": 1, "layouts": entries, "posts": posts}
 
 
 def main():
@@ -46,7 +67,7 @@ def main():
     with open(out, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
         f.write("\n")
-    print("레이아웃 %d개" % len(data["layouts"]))
+    print("레이아웃 %d개 · 글 %d개" % (len(data["layouts"]), len(data["posts"])))
 
 
 if __name__ == "__main__":

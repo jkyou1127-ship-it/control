@@ -12,6 +12,9 @@
 // 관리자: 닉네임 cupompu 는 관리자 비밀번호가 맞아야 쓸 수 있다. 비밀번호의 해시는 저장소의
 // community/admin.json 에 있고(처음 0000), /community/admin/login 으로 확인, /community/admin/password 로 바꾼다.
 // 관리자는 어떤 레이아웃이든 지울 수 있다.
+//
+// 커뮤니티 글(jf): /community/post 로 글(제목 · 내용)을 올린다. community/posts/ 에 저장되고 목록에 함께 실린다.
+// 지우기는 레이아웃과 같고, 요청에 kind: "post" 를 붙인다.
 // 올린 레이아웃은 저장소의 community/layouts/ 에 파일로 저장되고, 목록(community/index.json)은
 // 저장소의 자동화(.github/workflows/community.yml)가 만든다. 받기는 앱이 GitHub 에서 바로 한다.
 //
@@ -123,9 +126,10 @@ async function communityDelete(request, env, fetcher) {
   }
   const { id, key, code } = body ?? {};
   if (!validId(id)) return reply(400, { ok: false, error: "bad_request" });
+  const folder = body?.kind === "post" ? "posts" : "layouts";
   const repo = env.REPO || DEFAULT_REPO;
   const branch = env.BRANCH || DEFAULT_BRANCH;
-  const url = `https://api.github.com/repos/${repo}/contents/community/layouts/${id}.json`;
+  const url = `https://api.github.com/repos/${repo}/contents/community/${folder}/${id}.json`;
   const got = await fetcher(url + "?ref=" + encodeURIComponent(branch), { method: "GET", headers: githubHeaders(env) });
   if (got.status === 404) return reply(404, { ok: false, error: "not_found" });
   if (got.status !== 200) return reply(502, { ok: false, error: "github_" + got.status });
@@ -222,6 +226,50 @@ async function adminPassword(request, env, fetcher) {
   return reply(200, { ok: true });
 }
 
+/** 글 내용: 줄바꿈은 남기고 나머지 제어 문자만 지운다. */
+export function cleanBody(s, max) {
+  if (typeof s !== "string") return "";
+  return s.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, " ").trim().slice(0, max);
+}
+
+/** 커뮤니티 글을 검사하고 저장할 내용을 만든다. 안 되면 { error }. */
+export function postEntry(body, now = new Date(), rand = Math.random) {
+  const title = cleanText(body?.title, 60);
+  const text = cleanBody(body?.text, 2000);
+  const author = cleanText(body?.author, 20) || "익명";
+  if (!title) return { error: "no_title" };
+  if (!text) return { error: "no_text" };
+  const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\..*/, "");
+  const id = stamp + "-" + Math.floor(rand() * 0xffffff).toString(16).padStart(6, "0");
+  return { id, path: `community/posts/${id}.json`, file: { id, title, text, author, created: now.toISOString() } };
+}
+
+async function communityPost(request, env, fetcher) {
+  if (!env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
+  const body = await request.json().catch(() => null);
+  if (!body) return reply(400, { ok: false, error: "bad_request" });
+  const entry = postEntry(body);
+  if (entry.error) return reply(400, { ok: false, error: entry.error });
+  const wantsAdmin = entry.file.author.toLowerCase() === ADMIN_NAME;
+  const admin = wantsAdmin && (await isAdmin(body?.adminPassword, env, fetcher));
+  if (wantsAdmin && !admin) return reply(403, { ok: false, error: "admin_only_name" });
+  entry.file.tier = tierOf(Number(body?.uploads) || 0, admin);
+  const key = newKey();
+  entry.file.deleteHash = await sha256Hex(key);
+  const repo = env.REPO || DEFAULT_REPO;
+  const res = await fetcher(`https://api.github.com/repos/${repo}/contents/${entry.path}`, {
+    method: "PUT",
+    headers: githubHeaders(env),
+    body: JSON.stringify({
+      message: `Community 글: ${entry.file.title} (${entry.file.author})`,
+      branch: env.BRANCH || DEFAULT_BRANCH,
+      content: base64Utf8(JSON.stringify(entry.file)),
+    }),
+  });
+  if (res.status !== 201 && res.status !== 200) return reply(502, { ok: false, error: "github_" + res.status });
+  return reply(200, { ok: true, id: entry.id, key });
+}
+
 async function community(request, env, fetcher) {
   if (!env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
   let body;
@@ -269,6 +317,7 @@ export async function handle(request, env, fetcher = fetch) {
   const path = new URL(request.url).pathname.replace(/\/+$/, "");
   if (path === "/community") return community(request, env, fetcher);
   if (path === "/community/delete") return communityDelete(request, env, fetcher);
+  if (path === "/community/post") return communityPost(request, env, fetcher);
   if (path === "/community/admin/login") return adminLogin(request, env, fetcher);
   if (path === "/community/admin/password") return adminPassword(request, env, fetcher);
   if (!env.PANEL_CODE || !env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });

@@ -105,5 +105,12 @@ class ShapeFinderTest {
         assertEquals(5, body.getInt("uploads")); assertEquals("pw", body.getString("adminPassword"))
         assertFalse(JSONObject(Community.uploadBody("n", "a", "{}")).has("adminPassword"))
         assertEquals("🏆 장인", Community.parseIndex("""{"layouts":[{"id":"a","tier":"🏆 장인"}]}""")[0].tier)
+        val posts = Community.parsePosts("""{"layouts":[],"posts":[{"id":"p1","title":"안녕","text":"본문\n둘째 줄","author":"","tier":"🌱 새싹","created":"2026-11-17T00:00:00Z"},{"id":"a/b","title":"x"}]}""")
+        assertEquals(1, posts.size)
+        assertEquals("익명", posts[0].author)
+        assertEquals("본문\n둘째 줄", posts[0].text)
+        val pb = JSONObject(Community.postBody("제목", "내용", "나", 2))
+        assertEquals("제목", pb.getString("title")); assertEquals(2, pb.getInt("uploads"))
+        assertEquals("post", JSONObject(Community.deleteBody("p1", "k", kind = "post")).getString("kind"))
     }
 }

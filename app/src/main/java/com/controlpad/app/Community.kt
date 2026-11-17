@@ -25,6 +25,35 @@ import java.net.URL
 object Community {
     class Entry(val id: String, val name: String, val author: String, val created: String, val buttons: Int, val bytes: Int, val tier: String = "")
 
+    class Post(val id: String, val title: String, val text: String, val author: String, val tier: String, val created: String)
+
+    fun parsePosts(json: String): List<Post> {
+        val a = JSONObject(json).optJSONArray("posts") ?: JSONArray()
+        return (0 until a.length()).mapNotNull { i ->
+            val o = a.optJSONObject(i) ?: return@mapNotNull null
+            val id = o.optString("id")
+            if (!Regex("^[0-9A-Za-z_-]{1,64}$").matches(id)) return@mapNotNull null
+            Post(id, o.optString("title").take(60), o.optString("text").take(2000), o.optString("author").take(20).ifEmpty { "익명" },
+                o.optString("tier").take(12), o.optString("created"))
+        }
+    }
+
+    fun postBody(title: String, text: String, author: String, uploads: Int = 0, adminPassword: String? = null): String =
+        JSONObject().put("title", title.take(60)).put("text", text.take(2000)).put("author", author.take(20)).put("uploads", uploads)
+            .apply { if (adminPassword != null) put("adminPassword", adminPassword) }.toString()
+
+    /** 글 올리기. 잘 되면 지우기 열쇠를 적어 두고 null. */
+    fun writePost(title: String, text: String, author: String): String? = runCatching {
+        if (Labs.relay.isEmpty()) return "커뮤니티 서버가 아직 준비되지 않았습니다"
+        val (status, body) = post("/community/post", postBody(title, text, author, uploads, adminPassword))
+        problem(status, body) ?: run {
+            val o = JSONObject(body)
+            val id = o.optString("id"); val key = o.optString("key")
+            if (id.isNotEmpty() && key.isNotEmpty()) saveKey(id, key)
+            null
+        }
+    }.getOrElse { "커뮤니티 서버에 연결하지 못했습니다. 인터넷 연결을 확인하세요" }
+
     // ── 회원 등급 · 관리자 ──
 
     const val ADMIN_NAME = "cupompu"
@@ -111,6 +140,8 @@ object Community {
             "admin_only_name" -> "'$ADMIN_NAME' 은(는) 관리자 닉네임입니다. 관리자로 접속한 뒤 쓸 수 있습니다"
             "bad_password" -> "비밀번호가 맞지 않습니다"
             "weak_password" -> "새 비밀번호는 4자 이상이어야 합니다"
+            "no_title" -> "제목을 적어 주세요"
+            "no_text" -> "내용을 적어 주세요"
             else -> if (code.startsWith("github_")) "저장소에 올리지 못했습니다($code). 잠시 뒤 다시 해 보세요" else "올리지 못했습니다(HTTP $status)"
         }
     }
@@ -144,17 +175,18 @@ object Community {
     }.getOrElse { "커뮤니티 서버에 연결하지 못했습니다. 인터넷 연결을 확인하세요" }
 
     /** 지우기. 잘 되면 열쇠도 지우고 null, 안 되면 이유. */
-    fun delete(id: String): String? = runCatching {
+    fun delete(id: String, kind: String = "layout"): String? = runCatching {
         if (Labs.relay.isEmpty()) return "커뮤니티 서버가 아직 준비되지 않았습니다"
         val key = keyOf(id)
         val admin = adminPassword
         if (key == null && admin == null) return "이 기기에서 올린 레이아웃만 지울 수 있습니다"
-        val (status, body) = post("/community/delete", deleteBody(id, key ?: "", admin))
+        val (status, body) = post("/community/delete", deleteBody(id, key ?: "", admin, kind))
         problem(status, body) ?: run { forgetKey(id); null }
     }.getOrElse { "커뮤니티 서버에 연결하지 못했습니다. 인터넷 연결을 확인하세요" }
 
-    fun deleteBody(id: String, key: String, adminPassword: String? = null): String =
-        JSONObject().put("id", id).put("key", key).apply { if (adminPassword != null) put("adminPassword", adminPassword) }.toString()
+    fun deleteBody(id: String, key: String, adminPassword: String? = null, kind: String = "layout"): String =
+        JSONObject().put("id", id).put("key", key).put("kind", kind)
+            .apply { if (adminPassword != null) put("adminPassword", adminPassword) }.toString()
 
     /** 관리자 접속: 맞으면 비밀번호를 이 기기에 적어 두고 null. */
     fun adminLogin(password: String): String? = runCatching {
@@ -182,6 +214,10 @@ class CommunityActivity : BaseActivity() {
     private lateinit var list: LinearLayout
     private lateinit var info: TextView
     private lateinit var account: LinearLayout
+    private lateinit var tabBar: LinearLayout
+    private lateinit var actionButton: Button
+    private var posts: List<Community.Post> = emptyList()
+    private var showPosts = false            // false: 레이아웃, true: 글
 
     /** 내 계정 줄: 닉네임 · 등급 · (관리자면) 비밀번호 바꾸기 · 로그아웃. */
     private fun fillAccount() {
@@ -273,8 +309,15 @@ class CommunityActivity : BaseActivity() {
         val pad = dp(16)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         root.addView(Ui.header(this, "🌐 레이아웃 커뮤니티", "레이아웃을 올려 나누고, 다른 사람이 올린 것을 받습니다"))
+        // 레이아웃 | 글 탭
+        tabBar = LinearLayout(this).apply {
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            background = Ui.rounded(this@CommunityActivity, Ui.surface(), 14, Ui.line())
+        }
+        root.addView(tabBar, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         val top = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        top.addView(Button(this).apply { text = "⬆ 내 레이아웃 올리기"; tag = Ui.PRIMARY; setOnClickListener { chooseUpload() } })
+        actionButton = Button(this).apply { tag = Ui.PRIMARY; setOnClickListener { if (showPosts) writePost() else chooseUpload() } }
+        top.addView(actionButton)
         top.addView(Button(this).apply { text = "새로고침"; setOnClickListener { load() } })
         top.addView(EditText(this).apply {
             hint = "🔍  이름 · 만든 사람 검색"; setSingleLine()
@@ -299,17 +342,114 @@ class CommunityActivity : BaseActivity() {
     private fun load() {
         info.text = "목록을 받는 중…"
         Thread {
-            val got = runCatching { Community.parseIndex(Labs.get(Community.BASE + "index.json")) }
+            val got = runCatching { Labs.get(Community.BASE + "index.json") }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
-                got.onSuccess { entries = it; fill() }
+                got.onSuccess { entries = Community.parseIndex(it); posts = Community.parsePosts(it); fill() }
                     .onFailure { info.text = "목록을 받지 못했습니다. 인터넷 연결을 확인하세요" }
             }
         }.start()
     }
 
+    private fun fillTabs() {
+        tabBar.removeAllViews()
+        listOf("📦  레이아웃" to false, "💬  글" to true).forEach { (label, posts) ->
+            val on = posts == showPosts
+            tabBar.addView(TextView(this).apply {
+                text = label; textSize = 15f; gravity = Gravity.CENTER
+                typeface = if (on) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                setTextColor(if (on) Ui.onAccent() else Themes.current.text)
+                if (on) background = Ui.rounded(this@CommunityActivity, Ui.accent(), 10)
+                setPadding(0, dp(9), 0, dp(9)); isClickable = true
+                setOnClickListener { showPosts = posts; fill() }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        actionButton.text = if (showPosts) "✏ 글쓰기" else "⬆ 내 레이아웃 올리기"
+    }
+
+    private fun fillPosts() {
+        val shown = posts.filter { query.isEmpty() || it.title.contains(query, true) || it.text.contains(query, true) || it.author.contains(query, true) }
+        info.text = when {
+            posts.isEmpty() -> "아직 글이 없습니다. 첫 글을 써 보세요!"
+            shown.isEmpty() -> "'$query' 에 맞는 글이 없습니다"
+            else -> "글 ${shown.size}개"
+        }
+        for (p in shown) list.addView(postCard(p), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        Ui.restyle(list)
+    }
+
+    private fun postCard(p: Community.Post): View = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = Ui.rounded(this@CommunityActivity, Ui.surface(), 16, Ui.line())
+        setPadding(dp(16), dp(14), dp(16), dp(12))
+        addView(TextView(this@CommunityActivity).apply {
+            text = p.title; textSize = 16f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Themes.current.text)
+        })
+        addView(TextView(this@CommunityActivity).apply {
+            text = (if (Community.mine(p.id)) "내가 씀 · " else "") + "by ${p.author}" + (if (p.tier.isNotEmpty()) " ${p.tier}" else "") +
+                " · ${Community.date(p.created)}"
+            textSize = 12f; setTextColor(Ui.muted()); setPadding(0, dp(3), 0, dp(8))
+        })
+        addView(TextView(this@CommunityActivity).apply {
+            text = p.text; textSize = 14.5f; setLineSpacing(0f, 1.25f); setTextColor(Themes.current.text); setTextIsSelectable(true)
+        })
+        if (Community.mine(p.id) || Community.isAdmin) addView(Button(this@CommunityActivity).apply {
+            text = if (Community.mine(p.id)) "🗑 지우기" else "🗑 지우기(관리자)"
+            setOnClickListener { confirmDeletePost(p) }
+        }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8) })
+    }
+
+    private fun confirmDeletePost(p: Community.Post) {
+        android.app.AlertDialog.Builder(this).setMessage("'${p.title}' 글을 지울까요?")
+            .setPositiveButton("지우기") { _, _ ->
+                Thread {
+                    val problem = Community.delete(p.id, "post")
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        if (problem == null) { posts = posts.filter { it.id != p.id }; fill(); toast("지웠습니다. 1~2분 뒤 목록에서도 사라집니다") }
+                        else toast(problem)
+                    }
+                }.start()
+            }
+            .setNegativeButton("취소", null).show()
+    }
+
+    /** 글쓰기: 제목 · 내용(닉네임은 계정 줄의 닉네임). */
+    private fun writePost() {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        val title = EditText(this).apply { hint = "제목"; setSingleLine() }
+        val text = EditText(this).apply {
+            hint = "내용(2000자까지)"; minLines = 5; gravity = Gravity.TOP or Gravity.START
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        box.addView(title); box.addView(text, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        val nick = Link.prefs.getString("communityAuthor", "").orEmpty()
+        box.addView(TextView(this).apply {
+            this.text = "닉네임: " + nick.ifEmpty { "익명" } + " · ${Community.myTier()} — 올린 글은 누구나 볼 수 있습니다."
+            textSize = 12.5f; setTextColor(Ui.muted()); setPadding(0, dp(8), 0, 0)
+        })
+        android.app.AlertDialog.Builder(this).setTitle("✏ 글쓰기")
+            .setView(box)
+            .setPositiveButton("올리기") { _, _ ->
+                val t = title.text.toString().trim(); val b = text.text.toString().trim()
+                if (t.isEmpty() || b.isEmpty()) { toast("제목과 내용을 적어 주세요"); return@setPositiveButton }
+                toast("올리는 중…")
+                Thread {
+                    val problem = Community.writePost(t, b, nick)
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        android.app.AlertDialog.Builder(this).setMessage(problem ?: "올렸습니다! 1~2분 뒤 목록에 나타납니다.")
+                            .setPositiveButton("확인") { _, _ -> if (problem == null) load() }.show()
+                    }
+                }.start()
+            }
+            .setNegativeButton("취소", null).show().wide()
+    }
+
     private fun fill() {
         list.removeAllViews()
+        fillTabs()
+        if (showPosts) { fillPosts(); return }
         val shown = entries.filter { query.isEmpty() || it.name.contains(query, true) || it.author.contains(query, true) }
         info.text = when {
             entries.isEmpty() -> "아직 올라온 레이아웃이 없습니다. 첫 번째로 올려 보세요!"
