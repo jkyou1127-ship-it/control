@@ -1519,7 +1519,11 @@ class EditorView(ctx: Context, private val pad: PadLayout) : View(ctx) {
         if (drag == Drag.DRAW) {
             c.drawRect(min(downX, curX), min(downY, curY), max(downX, curX), max(downY, curY), drawPaint)
         }
+        // 사진으로 만든 레이아웃의 워터마크
+        if (showWatermark) Watermark.draw(c, width, height, resources.displayMetrics.density, theme.text)
     }
+
+    private val showWatermark = Watermark.shown(pad, Updater.installedCode(ctx))
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (width == 0 || height == 0) return false

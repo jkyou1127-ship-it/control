@@ -1129,7 +1129,10 @@ class PlayView(ctx: Context, private val layout: PadLayout) : View(ctx) {
             c.drawText(history.joinToString("  ›  "), statusPaint.textSize, line2, statusPaint)
         }
         drawLabOverlays(c)
+        if (showWatermark) Watermark.draw(c, width, height, density, theme.text)   // 사진으로 만든 레이아웃
     }
+
+    private val showWatermark = Watermark.shown(layout, Updater.installedCode(ctx))
 
     /** 초당 입력 수에 따른 글자색(실험실 기능 '초당 입력 수 색 바꾸기'). 느릴 때는 원래 색. */
     private fun kpsColor(n: Int, normal: Int): Int = when {

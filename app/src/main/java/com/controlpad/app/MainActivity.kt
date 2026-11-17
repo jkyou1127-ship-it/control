@@ -88,6 +88,10 @@ class MainActivity : BaseActivity() {
         })
         header.addView(Button(this).apply { text = "＋ 새 레이아웃"; tag = Ui.PRIMARY; setOnClickListener { newLayout() } })
         header.addView(Button(this).apply {
+            text = "📷 사진으로 만들기"
+            setOnClickListener { startActivity(Intent(this@MainActivity, PhotoPadActivity::class.java)) }
+        })
+        header.addView(Button(this).apply {
             text = "✎ 그림 레이아웃"
             setOnClickListener {
                 // 빈 레이아웃을 만들고 그리기를 켠 편집 화면을 연다: 손으로 그린 그림이 그대로 버튼이 된다.
@@ -226,7 +230,7 @@ class MainActivity : BaseActivity() {
                     "이름 변경" -> askName("이름 변경", l.name) { l.name = it; LayoutStore.save(this@MainActivity, l); refresh() }
                     "복제" -> {
                         val c = PadLayout(name = l.name + " 복사본", slide = l.slide,
-                            buttons = l.buttons.map { it.copy() }.toMutableList())
+                            buttons = l.buttons.map { it.copy() }.toMutableList(), watermarkUntil = l.watermarkUntil)
                         LayoutStore.save(this@MainActivity, c); refresh()
                     }
                     "파일로 저장" -> {

@@ -172,9 +172,14 @@ class PadLayout(
     val buttons: MutableList<PadButton> = mutableListOf(),
     /** 목록 맨 위에 고정할지. */
     var pinned: Boolean = false,
+    /**
+     * 사진으로 만든 레이아웃의 'make by IMCP' 워터마크를 언제까지 보여 줄지(앱 versionCode).
+     * 만든 빌드 + 3 이 되면 사라진다. 0 이면 워터마크 없음.
+     */
+    var watermarkUntil: Int = 0,
 ) {
     fun toJson(): JSONObject = JSONObject()
-        .put("id", id).put("name", name).put("slide", slide).put("pinned", pinned)
+        .put("id", id).put("name", name).put("slide", slide).put("pinned", pinned).put("watermarkUntil", watermarkUntil)
         .put("buttons", JSONArray().also { a -> buttons.forEach { a.put(it.toJson()) } })
 
     companion object {
@@ -185,7 +190,7 @@ class PadLayout(
                 // 콤보 패널은 없앤 기능이라, 예전 레이아웃에 있던 것은 읽을 때 뺀다.
                 MutableList(bs.length()) { PadButton.fromJson(bs.getJSONObject(it)) }
                     .filterNot { it.isDisplay && it.mode == DisplayKind.COMBO }.toMutableList(),
-                o.optBoolean("pinned"),
+                o.optBoolean("pinned"), o.optInt("watermarkUntil", 0),
             )
         }
     }
@@ -789,7 +794,24 @@ object Mirror {
     fun flip(l: PadLayout): PadLayout = PadLayout(
         id = l.id, name = l.name, slide = l.slide,
         buttons = l.buttons.map { b -> b.copy().apply { x = (1f - b.x - b.w).coerceIn(0f, 1f) } }.toMutableList(),
+        watermarkUntil = l.watermarkUntil,
     )
+}
+
+/** 사진으로 만든 레이아웃의 워터마크: 아주 작은 'make by IMCP'. */
+object Watermark {
+    const val TEXT = "make by IMCP"
+    const val BUILDS = 3          // 만든 빌드에서 이만큼 지난 빌드부터 사라진다
+
+    fun shown(l: PadLayout, installedCode: Int) = l.watermarkUntil > installedCode
+
+    fun draw(c: android.graphics.Canvas, w: Int, h: Int, density: Float, color: Int) {
+        val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 9f * density; textAlign = android.graphics.Paint.Align.RIGHT
+            this.color = color and 0x00FFFFFF or 0x66000000
+        }
+        c.drawText(TEXT, w - 6f * density, h - 5f * density, p)
+    }
 }
 
 /** 그림 에디터에서 그린 그림으로 만들 수 있는 요소들. 그림이 그 요소의 면이 된다. */

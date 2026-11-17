@@ -39,7 +39,7 @@ def dp(v):
     return int(v * SCALE * SS)
 
 
-# 버전마다 다른 배지 색(왼쪽 → 오른쪽 그라데이션). 버전명으로 하나를 고르므로 같은 버전은 늘 같은 색이다.
+# 버전마다 다른 배지 색(앞의 색을 단색으로 쓴다). 버전명으로 하나를 고르므로 같은 버전은 늘 같은 색이다.
 PALETTES = [
     ("#29B6F6", "#7E57C2"),   # 하늘 → 보라
     ("#FF7043", "#EC407A"),   # 주황 → 분홍
@@ -63,7 +63,7 @@ def palette(text):
 
 
 def badge(text):
-    """버전명 배지: 버전마다 다른 그라데이션 알약, 같은 색의 은은한 빛 번짐, 위쪽 반짝임, 흰 굵은 글자(살짝 그림자)."""
+    """버전명 배지: 버전마다 다른 단색 알약(그라데이션 없음), 부드러운 그림자, 굵은 글자."""
     c_left, c_right = palette(text)
     big = SIZE * SS
     img = Image.new("RGBA", (big, big), (0, 0, 0, 0))
@@ -83,30 +83,12 @@ def badge(text):
     box = (cx - w // 2 - px, cy - h // 2 - py, cx + w // 2 + px, cy + h // 2 + py)
     radius = (box[3] - box[1]) // 2
 
-    # 빛 번짐(배지 둘레에 하늘색 빛)
-    glow = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).rounded_rectangle(box, radius, fill=hexrgb(c_left, 150))
-    img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(dp(2.2))))
-
-    # 그라데이션 알약: 왼쪽 하늘색 → 오른쪽 보라
-    grad = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(grad)
-    left, right = hexrgb(c_left), hexrgb(c_right)
-    for x in range(box[0], box[2] + 1):
-        k = (x - box[0]) / max(1, box[2] - box[0])
-        gd.line((x, box[1], x, box[3]), fill=tuple(int(left[i] * (1 - k) + right[i] * k) for i in range(3)) + (255,))
-    mask = Image.new("L", (big, big), 0)
-    ImageDraw.Draw(mask).rounded_rectangle(box, radius, fill=255)
-    pill = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    pill.paste(grad, (0, 0), mask)
-    img.alpha_composite(pill)
-
-    # 위쪽 절반 반짝임과 얇은 흰 테두리
-    shine = Image.new("RGBA", (big, big), (0, 0, 0, 0))
-    ImageDraw.Draw(shine).rounded_rectangle(
-        (box[0] + dp(0.8), box[1] + dp(0.6), box[2] - dp(0.8), box[1] + (box[3] - box[1]) // 2), radius, fill=(255, 255, 255, 55))
-    img.alpha_composite(shine)
-    ImageDraw.Draw(img).rounded_rectangle(box, radius, outline=(255, 255, 255, 140), width=dp(0.45))
+    # 단색 배지(그라데이션 없음): 아래로 부드러운 그림자 한 겹만 깔고, 버전 색으로 채운다.
+    shadow_b = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+    ImageDraw.Draw(shadow_b).rounded_rectangle((box[0], box[1] + dp(0.8), box[2], box[3] + dp(0.8)), radius, fill=(0, 0, 0, 110))
+    img.alpha_composite(shadow_b.filter(ImageFilter.GaussianBlur(dp(0.9))))
+    left = right = hexrgb(c_left)
+    ImageDraw.Draw(img).rounded_rectangle(box, radius, fill=left)
 
     # 글자: 아래로 살짝 그림자를 깔고 흰 글자
     tx, ty = cx - w // 2 - l, cy - h // 2 - t
