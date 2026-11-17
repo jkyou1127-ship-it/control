@@ -82,4 +82,28 @@ class ShapeFinderTest {
         val del = JSONObject(Community.deleteBody("id1", "k"))
         assertEquals("id1", del.getString("id")); assertEquals("k", del.getString("key"))
     }
+
+    @Test
+    fun builtInLayoutsCannotBeUploadedAndTiersMatchTheRelay() {
+        // 예시 레이아웃 그대로(이름만 바꿔도)는 기본 레이아웃, 고치면 내 것
+        val t = Templates.create(1, "리듬게임 4키").apply { name = "내 4키" }
+        assertTrue(Community.isBuiltIn(t))
+        assertTrue(Community.isBuiltIn(PadLayout(name = "빈 것")))
+        val edited = Templates.create(1, "x").apply { buttons[0].keys = mutableListOf(0x04) }
+        assertFalse(Community.isBuiltIn(edited))
+        assertEquals(Community.fingerprint(Templates.create(13, "a")), Community.fingerprint(Templates.create(13, "b")))
+        // 등급(중계 서버 tierOf 와 같은 기준)
+        assertEquals("🌱 새싹", Community.tierOf(0))
+        assertEquals("🌿 일반", Community.tierOf(3))
+        assertEquals("🌳 활동가", Community.tierOf(10))
+        assertEquals("🏆 장인", Community.tierOf(30))
+        assertEquals("👑 관리자", Community.tierOf(0, true))
+        assertEquals(2, Community.toNextTier(1))
+        assertEquals(0, Community.toNextTier(40))
+        assertTrue(Community.isAdminName(" CupomPu "))
+        val body = JSONObject(Community.uploadBody("n", "cupompu", "{}", 5, "pw"))
+        assertEquals(5, body.getInt("uploads")); assertEquals("pw", body.getString("adminPassword"))
+        assertFalse(JSONObject(Community.uploadBody("n", "a", "{}")).has("adminPassword"))
+        assertEquals("🏆 장인", Community.parseIndex("""{"layouts":[{"id":"a","tier":"🏆 장인"}]}""")[0].tier)
+    }
 }

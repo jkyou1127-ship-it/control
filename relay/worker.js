@@ -7,6 +7,11 @@
 // 레이아웃 커뮤니티(LOD): 주소 끝이 /community 인 요청은 누구나 레이아웃을 올릴 수 있다(평가단 코드 필요 없음).
 // 올리면 '지우기 열쇠'를 돌려준다. 저장소에는 열쇠의 SHA-256 만 남긴다. /community/delete 에 열쇠(또는 평가단 코드)를
 // 보내면 그 레이아웃을 지운다(KDSKD).
+//
+// 회원 등급: 올린 레이아웃 수(앱이 알려 준다)로 🌱 새싹 · 🌿 일반 · 🌳 활동가 · 🏆 장인, 관리자는 👑 관리자.
+// 관리자: 닉네임 cupompu 는 관리자 비밀번호가 맞아야 쓸 수 있다. 비밀번호의 해시는 저장소의
+// community/admin.json 에 있고(처음 0000), /community/admin/login 으로 확인, /community/admin/password 로 바꾼다.
+// 관리자는 어떤 레이아웃이든 지울 수 있다.
 // 올린 레이아웃은 저장소의 community/layouts/ 에 파일로 저장되고, 목록(community/index.json)은
 // 저장소의 자동화(.github/workflows/community.yml)가 만든다. 받기는 앱이 GitHub 에서 바로 한다.
 //
@@ -135,13 +140,85 @@ async function communityDelete(request, env, fetcher) {
   const byOwner = typeof key === "string" && key.length > 0 && typeof file.deleteHash === "string" &&
     (await sameSecret(await sha256Hex(key), file.deleteHash));
   const byPanel = typeof code === "string" && !!env.PANEL_CODE && (await sameSecret(code, env.PANEL_CODE));
-  if (!byOwner && !byPanel) return reply(403, { ok: false, error: "bad_key" });
+  const byAdmin = !byOwner && !byPanel && (await isAdmin(body?.adminPassword, env, fetcher));
+  if (!byOwner && !byPanel && !byAdmin) return reply(403, { ok: false, error: "bad_key" });
   const del = await fetcher(url, {
     method: "DELETE",
     headers: githubHeaders(env),
     body: JSON.stringify({ message: `Community: 지움 ${String(file.name || id).slice(0, 40)}`, sha: meta.sha, branch }),
   });
   if (del.status !== 200) return reply(502, { ok: false, error: "github_" + del.status });
+  return reply(200, { ok: true });
+}
+
+export const ADMIN_NAME = "cupompu";
+
+/** 회원 등급: 올린 레이아웃 수로 정한다. 관리자는 따로. */
+export function tierOf(uploads, admin = false) {
+  if (admin) return "👑 관리자";
+  const n = Number.isFinite(uploads) ? uploads : 0;
+  if (n >= 30) return "🏆 장인";
+  if (n >= 10) return "🌳 활동가";
+  if (n >= 3) return "🌿 일반";
+  return "🌱 새싹";
+}
+
+export function adminHash(password) {
+  return sha256Hex("controlpad-admin:" + password);
+}
+
+const ADMIN_PATH = "community/admin.json";
+
+/** 저장소의 관리자 비밀번호 해시를 읽는다. { hash, sha } 또는 null. */
+async function readAdmin(env, fetcher) {
+  const repo = env.REPO || DEFAULT_REPO;
+  const res = await fetcher(`https://api.github.com/repos/${repo}/contents/${ADMIN_PATH}?ref=${encodeURIComponent(env.BRANCH || DEFAULT_BRANCH)}`,
+    { method: "GET", headers: githubHeaders(env) });
+  if (res.status !== 200) return null;
+  const meta = await res.json();
+  try {
+    const bin = atob(String(meta.content || "").replace(/\s/g, ""));
+    const o = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+    return typeof o.hash === "string" ? { hash: o.hash, sha: meta.sha } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 관리자 비밀번호가 맞는지. */
+async function isAdmin(password, env, fetcher) {
+  if (typeof password !== "string" || password.length === 0) return false;
+  const admin = await readAdmin(env, fetcher);
+  return !!admin && (await sameSecret(await adminHash(password), admin.hash));
+}
+
+async function adminLogin(request, env, fetcher) {
+  if (!env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
+  const body = await request.json().catch(() => null);
+  if (!(await isAdmin(body?.password, env, fetcher))) return reply(403, { ok: false, error: "bad_password" });
+  return reply(200, { ok: true, tier: tierOf(0, true) });
+}
+
+/** 관리자 비밀번호 바꾸기: 지금 비밀번호가 맞아야 하고, 새 비밀번호는 4자 이상. */
+async function adminPassword(request, env, fetcher) {
+  if (!env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
+  const body = await request.json().catch(() => null);
+  const next = body?.newPassword;
+  if (typeof next !== "string" || next.length < 4 || next.length > 64) return reply(400, { ok: false, error: "weak_password" });
+  const admin = await readAdmin(env, fetcher);
+  if (!admin || !(await sameSecret(await adminHash(String(body?.password ?? "")), admin.hash))) return reply(403, { ok: false, error: "bad_password" });
+  const repo = env.REPO || DEFAULT_REPO;
+  const res = await fetcher(`https://api.github.com/repos/${repo}/contents/${ADMIN_PATH}`, {
+    method: "PUT",
+    headers: githubHeaders(env),
+    body: JSON.stringify({
+      message: "Community: 관리자 비밀번호 변경",
+      branch: env.BRANCH || DEFAULT_BRANCH,
+      sha: admin.sha,
+      content: base64Utf8(JSON.stringify({ hash: await adminHash(next) })),
+    }),
+  });
+  if (res.status !== 200 && res.status !== 201) return reply(502, { ok: false, error: "github_" + res.status });
   return reply(200, { ok: true });
 }
 
@@ -155,6 +232,11 @@ async function community(request, env, fetcher) {
   }
   const entry = communityEntry(body);
   if (entry.error) return reply(400, { ok: false, error: entry.error });
+  // 관리자 닉네임은 관리자 비밀번호가 맞을 때만
+  const wantsAdmin = entry.file.author.toLowerCase() === ADMIN_NAME;
+  const admin = wantsAdmin && (await isAdmin(body?.adminPassword, env, fetcher));
+  if (wantsAdmin && !admin) return reply(403, { ok: false, error: "admin_only_name" });
+  entry.file.tier = tierOf(Number(body?.uploads) || 0, admin);
   const key = newKey();
   entry.file.deleteHash = await sha256Hex(key);       // 열쇠 자체는 저장하지 않는다
   const repo = env.REPO || DEFAULT_REPO;
@@ -187,6 +269,8 @@ export async function handle(request, env, fetcher = fetch) {
   const path = new URL(request.url).pathname.replace(/\/+$/, "");
   if (path === "/community") return community(request, env, fetcher);
   if (path === "/community/delete") return communityDelete(request, env, fetcher);
+  if (path === "/community/admin/login") return adminLogin(request, env, fetcher);
+  if (path === "/community/admin/password") return adminPassword(request, env, fetcher);
   if (!env.PANEL_CODE || !env.GITHUB_TOKEN) return reply(500, { ok: false, error: "relay_not_configured" });
 
   let body;

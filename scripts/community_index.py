@@ -31,6 +31,7 @@ def build(root=ROOT):
                 "author": str(d.get("author", ""))[:20] or "익명",
                 "created": str(d.get("created", "")),
                 "buttons": len(layout.get("buttons") or []),
+                "tier": str(d.get("tier", ""))[:12],
                 "bytes": os.path.getsize(path),
             })
         except (OSError, ValueError):

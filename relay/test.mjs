@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COMMUNITY_MAX, base64Utf8, cleanText, communityEntry, handle, sameSecret, sha256Hex, validId, validRequest } from "./worker.js";
+import { COMMUNITY_MAX, adminHash, base64Utf8, cleanText, communityEntry, handle, sameSecret, sha256Hex, tierOf, validId, validRequest } from "./worker.js";
 
 const env = { PANEL_CODE: "panel-code", GITHUB_TOKEN: "token" };
 const post = (body) => new Request("https://relay.example/", { method: "POST", body: JSON.stringify(body) });
@@ -128,4 +128,48 @@ test("community delete needs the key or the panel code", async () => {
   assert.equal((await run({ id: stored.id, code: "nope" })).status, 403);
   assert.equal((await run({ id: "../x", key })).status, 400);
   assert.ok(validId("abc_1-2") && !validId("a/b"));
+});
+
+test("tiers and the admin account", async () => {
+  assert.equal(tierOf(0), "🌱 새싹");
+  assert.equal(tierOf(3), "🌿 일반");
+  assert.equal(tierOf(10), "🌳 활동가");
+  assert.equal(tierOf(30), "🏆 장인");
+  assert.equal(tierOf(0, true), "👑 관리자");
+  // 저장소의 처음 관리자 비밀번호(0000) 해시와 같은지
+  const fs = await import("node:fs");
+  const stored = JSON.parse(fs.readFileSync(new URL("../community/admin.json", import.meta.url), "utf8"));
+  assert.equal(stored.hash, await adminHash("0000"));
+
+  let adminFile = { hash: await adminHash("0000") };
+  const puts = [];
+  const fetcher = async (url, init) => {
+    if (init.method === "GET" && url.includes("community/admin.json")) {
+      return new Response(JSON.stringify({ sha: "s1", content: Buffer.from(JSON.stringify(adminFile)).toString("base64") }), { status: 200 });
+    }
+    puts.push({ url, init });
+    return new Response("{}", { status: 201 });
+  };
+  const call = async (path, body) => {
+    const res = await handle(new Request("https://relay.example" + path, { method: "POST", body: JSON.stringify(body) }), env, fetcher);
+    return { status: res.status, body: await res.json() };
+  };
+  assert.equal((await call("/community/admin/login", { password: "0000" })).status, 200);
+  assert.equal((await call("/community/admin/login", { password: "1234" })).status, 403);
+  // 관리자 닉네임은 비밀번호 없이 못 쓴다
+  assert.equal((await call("/community", { name: "x", author: "CupomPu", layout: layoutText })).body.error, "admin_only_name");
+  const up = await call("/community", { name: "x", author: "cupompu", adminPassword: "0000", layout: layoutText, uploads: 99 });
+  assert.equal(up.status, 200);
+  assert.equal(JSON.parse(Buffer.from(JSON.parse(puts.at(-1).init.body).content, "base64").toString("utf8")).tier, "👑 관리자");
+  const user = await call("/community", { name: "x", author: "철수", layout: layoutText, uploads: 4 });
+  assert.equal(JSON.parse(Buffer.from(JSON.parse(puts.at(-1).init.body).content, "base64").toString("utf8")).tier, "🌿 일반");
+  assert.equal(user.status, 200);
+  // 비밀번호 바꾸기: 4자 이상, 지금 비밀번호가 맞아야
+  assert.equal((await call("/community/admin/password", { password: "0000", newPassword: "abc" })).body.error, "weak_password");
+  assert.equal((await call("/community/admin/password", { password: "nope", newPassword: "long-enough-1" })).status, 403);
+  const ch = await call("/community/admin/password", { password: "0000", newPassword: "long-enough-1" });
+  assert.equal(ch.status, 200);
+  const saved = JSON.parse(Buffer.from(JSON.parse(puts.at(-1).init.body).content, "base64").toString("utf8"));
+  assert.equal(saved.hash, await adminHash("long-enough-1"));
+  assert.equal(JSON.stringify(saved).includes("long-enough-1"), false);     // 비밀번호 자체는 저장하지 않는다
 });
